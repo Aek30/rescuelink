@@ -7,14 +7,14 @@
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" tools:node="replace" />
     <!-- Both coarse and fine must be declared for Android 12 precise-location requests.
          API 32 is Android 12L; Nearby Wi-Fi runtime permission starts at API 33.
-         Replace library declarations so their uncapped permissions cannot leak in. -->
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="32" tools:node="replace" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="32" tools:node="replace" />
+         SOS captures foreground GPS on every supported Android version. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" tools:node="replace" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" tools:node="replace" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" />
-    <!-- Only bytes payloads and service checks: no storage/background location. -->
+    <!-- Foreground SOS location only: no storage/background location. -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" tools:node="remove" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:node="remove" />

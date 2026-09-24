@@ -5,6 +5,8 @@ import '../services/message_service.dart';
 import '../services/permission_service.dart';
 import '../widgets/device_tile.dart';
 import 'chat_screen.dart';
+import 'sos_screen.dart';
+import '../models/sos_alert.dart';
 
 class NearbyTestScreen extends StatefulWidget {
   const NearbyTestScreen({super.key});
@@ -262,6 +264,21 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
 
               children: [
                 _buildHeroCard(),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: !_messages.ready
+                      ? null
+                      : () => Navigator.push(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => SosScreen(service: _messages),
+                          ),
+                        ),
+                  icon: const Icon(Icons.sos),
+                  label: Text(
+                    'SOS / หน่วยช่วยเหลือ • ${_messages.receivedSos.where((m) => SosAlert.fromJson(m.text).active).length} คำขอ',
+                  ),
+                ),
 
                 if (_busy) ...[
                   const SizedBox(height: 14),

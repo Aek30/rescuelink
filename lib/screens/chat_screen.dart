@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/message_service.dart';
+import '../models/message_model.dart';
+import '../models/sos_alert.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key, required this.service, required this.peerId});
@@ -105,7 +107,13 @@ class _ChatScreenState extends State<ChatScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  SelectableText(message.text),
+                                  SelectableText(
+                                    message.type == MessageType.sos
+                                        ? SosAlert.fromJson(
+                                            message.text,
+                                          ).summary
+                                        : message.text,
+                                  ),
                                   const SizedBox(height: 4),
                                   Text(
                                     '${time.year}-${time.month.toString().padLeft(2, '0')}-${time.day.toString().padLeft(2, '0')} '

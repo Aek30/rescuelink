@@ -1,4 +1,21 @@
-# Validation — 2026-09-23
+# Validation
+
+## Phase 3 — 2026-09-24
+
+| Check | Actual result |
+| --- | --- |
+| `tool/flutter.ps1 analyze` | PASS — No issues found |
+| Message and Nearby tests | PASS — 32 tests, including 7 new SOS service tests |
+| `tool/flutter.ps1 test test/sos_screen_test.dart` | PASS — 2 UI tests: recipient/confirmation gate and Rescue → sender chat |
+| `tool/flutter.ps1 build apk --debug` | PASS — `build/app/outputs/flutter-apk/app-debug.apk` |
+| `git diff --check` | PASS |
+| Physical GPS and offline A ↔ B acceptance | PASS — user reported all five guided test sections passed on 2026-09-25; see [Phase 3 test record](PHASE_3_TEST.md) |
+
+Debug compilation reports existing plugin/Kotlin and Android SDK/Java deprecation warnings, but completes successfully. No dependency versions changed. A temporary-drive native-hook cache issue during concurrent Flutter commands was resolved by clearing only the generated project hook cache and running validation sequentially. Future Flutter commands should use one temporary alias at a time.
+
+The 34 passing tests comprise a 32-test service run and a separate 2-test UI run. They do not establish physical radio delivery or GPS performance. The APK was built from the final application code; subsequent edits affected only tests and documentation.
+
+## Historical Phase 1 — 2026-09-23
 
 Project: RescueLink Phase 1, Flutter stable 3.44.6 / Dart 3.12.2, Windows.
 

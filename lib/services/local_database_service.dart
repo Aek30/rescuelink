@@ -60,6 +60,34 @@ class LocalDatabaseService {
         'id': id,
         'name': name,
       }, conflictAlgorithm: ConflictAlgorithm.replace);
+  Future<String?> getSetting(String key) async {
+    final rows = await (await database).query(
+      'settings',
+      where: 'key = ?',
+      whereArgs: [key],
+    );
+    return rows.isEmpty ? null : rows.single['value'] as String;
+  }
+
+  Future<void> setSetting(String key, String value) async {
+    await (await database).insert('settings', {
+      'key': key,
+      'value': value,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> saveSos(String state, List<MessageModel> packets) async {
+    await (await database).transaction((txn) async {
+      await txn.insert('settings', {
+        'key': 'mySos',
+        'value': state,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      for (final packet in packets) {
+        await txn.insert('messages', packet.toMap());
+      }
+    });
+  }
+
   Future<Map<String, String>> getPeers() async => {
     for (final row in await (await database).query('peers'))
       row['id'] as String: row['name'] as String,
