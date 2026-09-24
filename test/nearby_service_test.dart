@@ -30,6 +30,7 @@ class TestNearby extends Fake implements Nearby {
   bool requestOk = true;
   bool acceptOk = true;
   bool sendFails = false;
+  bool stopFails = false;
   int advertiseCalls = 0;
   int accepted = 0;
   int stopped = 0;
@@ -107,6 +108,7 @@ class TestNearby extends Fake implements Nearby {
   @override
   Future<void> stopAllEndpoints() async {
     stopped++;
+    if (stopFails) throw StateError('Native cleanup failed');
   }
 
   @override
@@ -153,6 +155,31 @@ void main() {
     }
   });
 
+  test('permission display accepts exemptions but rejects disabled radio', () {
+    expect(
+      PermissionService.statusIsReady(
+        'Not required for permission on Android 13+',
+      ),
+      isTrue,
+    );
+    expect(
+      PermissionService.statusIsReady('Uses Location on this Android version'),
+      isTrue,
+    );
+    expect(
+      PermissionService.statusIsReady('Permission granted; radio off'),
+      isFalse,
+    );
+    expect(PermissionService.statusIsReady('Denied'), isFalse);
+    expect(PermissionService.statusIsReady('Not checked'), isFalse);
+  });
+  test('failed native STOP still invalidates local endpoints', () async {
+    await connect();
+    native.stopFails = true;
+    await service.stopAll();
+    expect(service.connectedDevices, isEmpty);
+    await expectLater(service.sendMessage('A', '{}'), throwsStateError);
+  });
   test('permission denial prevents native advertising', () async {
     permissions.allowed = false;
     await service.startAdvertising();

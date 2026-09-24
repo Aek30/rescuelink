@@ -30,6 +30,7 @@ class NearbyService extends ChangeNotifier {
   bool _foreground = true;
   int _session = 0;
   Future<void>? _stopping;
+  void Function(String endpointId, String payload)? onTextPayloadReceived;
 
   List<NearbyDevice> get discoveredDevices =>
       _devices.values.where((d) => !d.isConnected).toList();
@@ -225,6 +226,10 @@ class NearbyService extends ChangeNotifier {
           }
           try {
             final text = utf8.decode(payload.bytes!);
+            if (onTextPayloadReceived != null) {
+              onTextPayloadReceived!(endpointId, text);
+              return;
+            }
             final message =
                 '${_devices[endpointId]?.name ?? endpointId}: $text';
             _append(receivedMessages, message);
@@ -322,6 +327,17 @@ class NearbyService extends ChangeNotifier {
     return allSent;
   }
 
+  Future<void> sendMessage(String endpointId, String payload) async {
+    if (_disposed ||
+        !_foreground ||
+        !connectedDevices.any((d) => d.endpointId == endpointId)) {
+      throw StateError('Peer disconnected');
+    }
+    final bytes = Uint8List.fromList(utf8.encode(payload));
+    if (bytes.length > 32768) throw ArgumentError('Packet exceeds 32 KB');
+    await _nearby.sendBytesPayload(endpointId, bytes);
+  }
+
   Future<void> stopAdvertising() async {
     try {
       await _nearby.stopAdvertising();
@@ -359,12 +375,15 @@ class NearbyService extends ChangeNotifier {
       timer.cancel();
     }
     _timeouts.clear();
+    // Invalidate local routes immediately, even if native cleanup fails.
+    _devices.clear();
     // Lifecycle and STOP can arrive together; share one cleanup operation.
     _stopping = _cleanup().whenComplete(() => _stopping = null);
     return _stopping!;
   }
 
   Future<void> _cleanup() async {
+    _update();
     await stopAdvertising();
     await stopDiscovery();
     try {

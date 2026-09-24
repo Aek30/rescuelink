@@ -12,6 +12,13 @@ class PermissionService {
   };
   String? error;
 
+  static bool statusIsReady(String status) => const {
+    'Granted',
+    'On',
+    'Not required for permission on Android 13+',
+    'Uses Location on this Android version',
+  }.contains(status);
+
   // Android 12/12L still use location with this version of Nearby SDK.
   // Android 13+ uses Nearby Wi-Fi permission instead.
   static List<Permission> requiredPermissions(int sdk) => [

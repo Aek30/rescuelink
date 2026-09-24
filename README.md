@@ -1,9 +1,12 @@
-# RescueLink — Phase 1 / Week 2
+# RescueLink — Phase 2: Reliable Offline Messaging
 
 Flutter Android Technical POC: ค้นหา → เชื่อมต่อ → ส่งข้อความ UTF-8 แบบ offline ผ่าน Google Nearby Connections Bytes Payload
 
-**สถานะ: เขียนโค้ดแล้ว แต่ยังไม่ผ่านเกณฑ์ทดสอบบน Android จริงสองเครื่อง**
-อัปเดตล่าสุด: ติดตั้ง Android SDK/NDK แล้ว และ build/install/เปิดแอปบน emulator-5554 สำเร็จ ดู [รายละเอียดการแก้และคำสั่งรัน](docs/EMULATOR_RUN_FIX.md) ยังไม่ได้ยืนยันผล radio/device-to-device บนโทรศัพท์จริงสองเครื่อง ห้ามเริ่ม Phase 2 จนกว่าจะทำ checklist ด้านล่างผ่าน
+Phase 1 ผ่านเครื่องจริงสองเครื่องตามข้อมูลผู้ใช้แล้ว Phase 2 เพิ่ม SQLite, UUID ถาวร, JSON/ACK, คิวส่งซ้ำ และหน้าแชตพร้อมประวัติ อ่าน [ขั้นตอนทดสอบ Phase 2](docs/PHASE_2_TEST.md) ซึ่งยังต้องยืนยันผลบนโทรศัพท์จริง
+
+เชื่อมต่อด้วย Advertising / Discovery ตามเดิม แล้วเลือกคู่สนทนาใน **Conversations** ข้อความจะบันทึกก่อนส่งและแสดง PENDING → SENT → DELIVERED เมื่ออีกเครื่องบันทึกและส่ง ACK กลับ ขณะออฟไลน์ยังเปิดประวัติและพิมพ์ข้อความค้างส่งให้คู่สนทนาที่เคยเชื่อมต่อได้ เมื่อ reconnect จะส่งซ้ำอัตโนมัติทุก 5 วินาทีจนได้รับ ACK
+
+รายละเอียด Phase 1 ด้านล่างเป็นบันทึกอ้างอิงเดิม; การส่งแบบ broadcast และข้อความใน RAM ถูกแทนที่ใน UI ด้วยแชตแยกคู่สนทนาและ SQLite แล้ว
 
 ## ไฟล์และหน้าที่
 
@@ -161,13 +164,12 @@ build ครั้งแรกต้องใช้อินเทอร์เ�
 ## ข้อจำกัดที่ตั้งใจไว้
 
 - Auto-accept ใช้เฉพาะอุปกรณ์ทดสอบ; มี TODO ให้ผู้ใช้ approve/reject ในรุ่นจริง
-- ข้อความส่งไปยัง peers ที่เชื่อมต่อทั้งหมด ไม่มี relay A → B → C
+- ส่งข้อความถึงคู่สนทนาที่เลือก ไม่มี relay A → B → C
 - Bytes payload ไม่เกิน 32 KB หลัง encode UTF-8
-- เก็บข้อความ/log ใน RAM ไม่เกิน 200 รายการต่อ list; ชื่อ default สุ่มใหม่เมื่อเปิด session ไม่มีฐานข้อมูล
-- `Me … (queued)` ไม่ใช่คำยืนยันว่าอีกฝ่ายอ่านแล้ว; System Log แสดง payload transfer status แยกต่างหาก
+- เก็บข้อความและรหัสเครื่องใน SQLite; log ยังอยู่ใน RAM ชื่อ default สุ่มใหม่แต่รหัสคู่สนทนาคงเดิม
+- DELIVERED หมายถึงอีกฝ่ายบันทึกข้อความและตอบ ACK แล้ว ไม่ใช่อ่านแล้ว
 - หยุด Advertising/Discovery/Endpoints เมื่อ STOP, screen dispose, app paused/detached; ไม่รับประกัน callback ตอน OS force-kill ซึ่งระบบจะคืนทรัพยากร native เอง
-- Android debug build/manifest merge และเปิดแอปบน emulator ผ่านแล้ว แต่ยังไม่ยืนยันการเชื่อมต่อจริงบนโทรศัพท์สองเครื่อง
-- Phase 2 ยังไม่เริ่ม
+- Phase 2 ต้องทดสอบ checklist ใหม่บนโทรศัพท์สองเครื่อง โดยติดตั้ง APK รุ่นเดียวกัน
 
 ## แหล่งอ้างอิง
 
