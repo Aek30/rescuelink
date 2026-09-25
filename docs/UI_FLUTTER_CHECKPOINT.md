@@ -35,6 +35,7 @@
 - flutter analyze: ผ่าน ไม่มี issues
 - flutter test: ผ่าน 59 tests รวมเดิมและ 2 tests ของโฟลว์จำลอง
 - git diff --check: ผ่าน
+- flutter build apk --debug: ผ่านหลังสร้างแคชใหม่; APK อยู่ที่ build/app/outputs/flutter-apk/app-debug.apk
 - Build ครั้งแรกติด Gradle parent is null: ตรวจพบ flutter_build.d อ้าง output บนไดรฟ์ R: เดิม จึงล้างเฉพาะ .dart_tool/flutter_build และ build/app/intermediates/flutter เพื่อสร้างแคชจาก path ปัจจุบัน
 - ยังไม่มี Android เชื่อมต่อในรอบนี้ จึงยังไม่ตรวจรูปลักษณ์/สัมผัสหรือการสื่อสารบนมือถือจริง
 - งานนี้ยังไม่ปิดชุดส่ง Week 2: ต้องเก็บภาพ Flutter 5 หน้าและผลทดสอบอุปกรณ์จริง
