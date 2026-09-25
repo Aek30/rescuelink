@@ -4,6 +4,8 @@ import '../models/sos_alert.dart';
 import '../services/message_service.dart';
 import '../services/sos_location_service.dart';
 import 'chat_screen.dart';
+import '../widgets/presence_list.dart';
+import '../widgets/location_button.dart';
 
 class SosScreen extends StatefulWidget {
   const SosScreen({super.key, required this.service});
@@ -21,6 +23,7 @@ class _SosScreenState extends State<SosScreen> {
   SosLocation? _location;
   final _recipients = <String>{};
   bool _busy = false;
+  bool _readingLocation = false;
   String? _error;
 
   @override
@@ -62,17 +65,14 @@ class _SosScreenState extends State<SosScreen> {
 
   Future<void> _send() async {
     if (!_form.currentState!.validate()) return;
-    if (_recipients.isEmpty) {
-      setState(() => _error = 'เลือกผู้รับอย่างน้อย 1 เครื่อง');
-      return;
-    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('ยืนยันข้อมูล SOS'),
         content: SingleChildScrollView(
           child: Text(
-            'ส่งถึง: ${_recipients.map((id) => widget.service.peers[id] ?? id).join(', ')}'
+            'ประกาศสถานะให้ทุกเครื่องที่เชื่อมต่อ รวมเครื่องที่เชื่อมต่อภายหลัง'
+            '\nผู้รับข้อความเพิ่มเติม: ${_recipients.map((id) => widget.service.peers[id] ?? id).join(', ')}'
             '\n${_name.text} • ${_people.text} คน\n${_category.label}\n${_details.text}'
             '\n\n${_location?.summary ?? 'ส่งโดยไม่แนบพิกัด'}'
             '\n\nหากออฟไลน์ ระบบจะเก็บไว้ส่งเมื่อเชื่อมต่อผู้รับอีกครั้ง',
@@ -112,11 +112,15 @@ class _SosScreenState extends State<SosScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              alert.active ? '🔴 ขอความช่วยเหลือ' : 'ยกเลิกโดยผู้ส่ง',
+              alert.active
+                  ? 'ประวัติข้อความขอความช่วยเหลือ'
+                  : 'ยกเลิกโดยผู้ส่ง',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
             SelectableText(alert.summary),
+            if (alert.location != null)
+              LocationButton(location: alert.location!),
             Text('อัปเดต: ${alert.updatedAt.toLocal()}'),
             Text(
               widget.service.isOnline(message.senderId)
@@ -166,11 +170,11 @@ class _SosScreenState extends State<SosScreen> {
             padding: const EdgeInsets.all(16),
             children: [
               const Text(
-                'ส่งถึงเครื่อง RescueLink ที่เลือกและเชื่อมต่อกันโดยตรง เปิดแอปค้างไว้ระหว่างรับส่ง',
+                'ประกาศ SOS / Rescue ให้ทุกเครื่องที่เชื่อมต่อโดยตรง เปิดแอปค้างไว้และเชื่อมต่อจากหน้าหลักก่อน สถานะส่งซ้ำทุก 5 วินาที และหมดอายุเมื่อไม่ได้รับ 30 วินาที',
               ),
               const SizedBox(height: 12),
               SwitchListTile(
-                title: const Text('Rescue Mode — ดูคำขอความช่วยเหลือ'),
+                title: const Text('Rescue Mode — ประกาศพร้อมช่วยเหลือ'),
                 subtitle: Text(
                   'รับ SOS แล้ว ${service.receivedSos.where((m) => SosAlert.fromJson(m.text).active).length} รายการที่ยังไม่ยกเลิก',
                 ),
@@ -180,6 +184,10 @@ class _SosScreenState extends State<SosScreen> {
                     : (value) => _run(() => service.setRescueMode(value)),
               ),
               if (_busy) const LinearProgressIndicator(),
+              if (_readingLocation)
+                const Text(
+                  'กำลังอ่านตำแหน่ง สูงสุด 60 วินาที กรุณาอยู่บริเวณโล่งและเปิดหน้านี้ค้างไว้',
+                ),
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.all(8),
@@ -189,6 +197,7 @@ class _SosScreenState extends State<SosScreen> {
                   ),
                 ),
               if (service.error != null) Text(service.error!),
+              PresenceList(service: service),
               if (service.rescueMode) ...[
                 const Text(
                   'สถานะรับข้อความไม่ได้หมายถึงมีผู้ช่วยเหลือรับงานแล้ว',
@@ -199,7 +208,8 @@ class _SosScreenState extends State<SosScreen> {
                     child: Text('ยังไม่มี SOS ที่ส่งมาถึงเครื่องนี้'),
                   ),
                 ...service.receivedSos.map(_requestCard),
-              ] else ...[
+              ],
+              ...[
                 Text(
                   active ? 'SOS ของฉัน — เปิดอยู่' : 'ขอความช่วยเหลือ',
                   style: Theme.of(context).textTheme.headlineSmall,
@@ -279,6 +289,7 @@ class _SosScreenState extends State<SosScreen> {
                 ),
                 const SizedBox(height: 8),
                 SelectableText(_location?.summary ?? 'ยังไม่ได้แนบพิกัด'),
+                if (_location != null) LocationButton(location: _location!),
                 Wrap(
                   spacing: 8,
                   children: [
@@ -286,8 +297,16 @@ class _SosScreenState extends State<SosScreen> {
                       onPressed: _busy
                           ? null
                           : () => _run(() async {
-                              final fix = await SosLocationService().capture();
-                              if (mounted) setState(() => _location = fix);
+                              setState(() => _readingLocation = true);
+                              try {
+                                final fix = await SosLocationService()
+                                    .capture();
+                                if (mounted) setState(() => _location = fix);
+                              } finally {
+                                if (mounted) {
+                                  setState(() => _readingLocation = false);
+                                }
+                              }
                             }),
                       icon: const Icon(Icons.my_location),
                       label: const Text('อ่าน GPS'),
@@ -305,10 +324,12 @@ class _SosScreenState extends State<SosScreen> {
                 Text(
                   active
                       ? 'ผู้รับเดิม (ยกเลิก SOS ก่อนเปลี่ยนผู้รับ)'
-                      : 'เลือกผู้รับ SOS',
+                      : 'ผู้รับข้อความ SOS เพิ่มเติม (ไม่จำเป็นต้องเลือก)',
                 ),
                 if (service.peers.isEmpty)
-                  const Text('กลับหน้าหลักเพื่อเชื่อมต่อเครื่องผู้รับก่อน'),
+                  const Text(
+                    'เปิด SOS ไว้ก่อนได้ สถานะจะประกาศเมื่อเชื่อมต่อเครื่องอื่น',
+                  ),
                 for (final peer in service.peers.entries)
                   CheckboxListTile(
                     title: Text(peer.value),

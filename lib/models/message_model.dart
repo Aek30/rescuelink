@@ -2,7 +2,7 @@ import 'dart:convert';
 
 enum MessageStatus { pending, sent, delivered, synced }
 
-enum MessageType { message, ack, sos, deviceInfo }
+enum MessageType { message, ack, sos, deviceInfo, presence }
 
 class MessageModel {
   const MessageModel({

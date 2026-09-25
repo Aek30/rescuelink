@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/message_model.dart';
 import '../models/sos_alert.dart';
+import '../models/peer_presence.dart';
 import 'local_database_service.dart';
 import 'nearby_service.dart';
 
@@ -21,6 +22,12 @@ class MessageService extends ChangeNotifier {
   SosAlert? mySos;
   bool _publishingSos = false;
   bool rescueMode = false;
+  int _presenceSequence = 0;
+  Map<String, PeerPresence> presence = {};
+  void Function(String name)? onSosReceived;
+  int get activeSosCount => presence.values
+      .where((p) => p.sos?.active == true && p.isFresh(DateTime.now().toUtc()))
+      .length;
   Set<String> _sosRecipients = {};
   Set<String> get sosRecipients => Set.unmodifiable(_sosRecipients);
   List<MessageModel> get receivedSos {
@@ -40,9 +47,11 @@ class MessageService extends ChangeNotifier {
   }
 
   Future<void> setRescueMode(bool value) async {
+    if (!ready || _disposed) throw StateError('Message service is not ready');
     await database.setSetting('rescueMode', '$value');
     rescueMode = value;
     _notify();
+    await retry();
   }
 
   Future<void> publishSos({
@@ -56,7 +65,7 @@ class MessageService extends ChangeNotifier {
   }) async {
     if (!ready || _disposed) throw StateError('Message service is not ready');
     if (_publishingSos) throw StateError('กำลังบันทึก SOS');
-    if (recipients.isEmpty || !recipients.every(peers.containsKey)) {
+    if (!recipients.every(peers.containsKey)) {
       throw ArgumentError('กรุณาเลือกผู้รับที่เคยเชื่อมต่อ');
     }
     // Keep recipients fixed for an incident so cancellation reaches everyone.
@@ -144,6 +153,15 @@ class MessageService extends ChangeNotifier {
         _sosRecipients = (saved['recipients'] as List).cast<String>().toSet();
       }
       rescueMode = await database.getSetting('rescueMode') == 'true';
+      _presenceSequence = int.parse(
+        await database.getSetting('presenceSequence') ?? '0',
+      );
+      final savedPresence = await database.getSetting('peerPresence');
+      if (savedPresence != null) {
+        presence = (jsonDecode(savedPresence) as Map<String, dynamic>).map(
+          (id, value) => MapEntry(id, PeerPresence.decode(value as String)),
+        );
+      }
       await _refresh();
       if (_disposed) return;
       nearbyService.onTextPayloadReceived = (endpoint, payload) {
@@ -234,6 +252,24 @@ class MessageService extends ChangeNotifier {
           );
           final peer = _endpointPeers[device.endpointId];
           if (peer == null) continue;
+          _presenceSequence++;
+          await database.setSetting(
+            'presenceSequence',
+            _presenceSequence.toString(),
+          );
+          await nearbyService.sendMessage(
+            device.endpointId,
+            _packet(
+              MessageType.presence,
+              receiver: peer,
+              text: PeerPresence(
+                sequence: _presenceSequence,
+                rescue: rescueMode,
+                sos: mySos,
+                receivedAt: DateTime.now().toUtc(),
+              ).encode(),
+            ).toJson(),
+          );
           final history = await database.getMessages();
           final latestSos = <String, int>{};
           for (final m in history.where(
@@ -335,6 +371,36 @@ class MessageService extends ChangeNotifier {
               MessageStatus.delivered,
             );
             await _refresh();
+          }
+        case MessageType.presence:
+          final state = PeerPresence.decode(
+            packet.text,
+            receivedAt: DateTime.now().toUtc(),
+          );
+          if (state.sequence > (presence[packet.senderId]?.sequence ?? 0)) {
+            final previous = presence[packet.senderId]?.sos;
+            final updated = {...presence, packet.senderId: state};
+            await database.setSetting(
+              'peerPresence',
+              jsonEncode(
+                updated.map((id, value) => MapEntry(id, value.encode())),
+              ),
+            );
+            presence = updated;
+            _notify();
+            final alert = state.sos;
+            if (alert != null &&
+                alert.active &&
+                (previous == null ||
+                    previous.incidentId != alert.incidentId ||
+                    previous.revision < alert.revision)) {
+              onSosReceived?.call(alert.name);
+              unawaited(
+                nearbyService.connectionSession
+                    .alert(alert.name)
+                    .catchError((Object _) {}),
+              );
+            }
           }
         case MessageType.deviceInfo:
           break;

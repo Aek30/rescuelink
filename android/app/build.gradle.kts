@@ -45,3 +45,8 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Same version already used by the installed location plugin.
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+}

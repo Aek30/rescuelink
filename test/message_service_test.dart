@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:rescuelink/models/message_model.dart';
 import 'package:rescuelink/models/sos_alert.dart';
+import 'package:rescuelink/models/peer_presence.dart';
 import 'package:rescuelink/models/nearby_device.dart';
 import 'package:rescuelink/services/local_database_service.dart';
 import 'package:rescuelink/services/message_service.dart';
@@ -90,6 +91,147 @@ void main() {
     details: 'ชั้นสอง',
     recipients: {'peer'},
     location: location,
+  );
+
+  test(
+    'broadcast state reaches a newly connected peer and repeats cancellation',
+    () async {
+      await service.publishSos(
+        name: 'A',
+        people: 1,
+        category: EmergencyType.other,
+        details: 'Help',
+        recipients: {},
+      );
+      await service.setRescueMode(true);
+      await connect();
+      var state = PeerPresence.decode(
+        transport.packets.lastWhere((p) => p.type == MessageType.presence).text,
+      );
+      expect(state.sos!.active, isTrue);
+      expect(state.rescue, isTrue);
+      final first = state.sequence;
+      await service.cancelSos();
+      await service.setRescueMode(false);
+      state = PeerPresence.decode(
+        transport.packets.lastWhere((p) => p.type == MessageType.presence).text,
+      );
+      expect(state.sos!.active, isFalse);
+      expect(state.rescue, isFalse);
+      expect(state.sequence, greaterThan(first));
+      service.dispose();
+      service = MessageService(nearbyService: transport, database: db);
+      await service.initialize();
+      expect(service.mySos!.active, isFalse);
+      expect(service.rescueMode, isFalse);
+      await receive(packet(MessageType.deviceInfo));
+      expect(
+        PeerPresence.decode(
+          transport.packets
+              .lastWhere((p) => p.type == MessageType.presence)
+              .text,
+        ).sequence,
+        greaterThan(state.sequence),
+      );
+    },
+  );
+
+  test(
+    'presence persists, rejects stale packets and expires using receiver time',
+    () async {
+      await connect();
+      Future<void> status(
+        int sequence,
+        bool rescue, {
+        String sender = 'peer',
+      }) => receive(
+        MessageModel(
+          id: 'status-$sequence',
+          senderId: sender,
+          senderName: 'B',
+          receiverId: service.myId!,
+          text: PeerPresence(
+            sequence: sequence,
+            rescue: rescue,
+            receivedAt: DateTime.utc(2099),
+          ).encode(),
+          timestamp: DateTime.utc(2099),
+          type: MessageType.presence,
+        ),
+      );
+      await status(2, false);
+      final received = service.presence['peer']!.receivedAt;
+      await status(1, true);
+      await status(2, true);
+      await status(3, true, sender: 'imposter');
+      expect(service.presence['peer']!.rescue, isFalse);
+      expect(service.presence.containsKey('imposter'), isFalse);
+      expect(service.presence['peer']!.receivedAt, received);
+      expect(
+        service.presence['peer']!.isFresh(
+          received.add(const Duration(seconds: 29)),
+        ),
+        isTrue,
+      );
+      expect(
+        service.presence['peer']!.isFresh(
+          received.add(const Duration(seconds: 30)),
+        ),
+        isFalse,
+      );
+      service.dispose();
+      service = MessageService(nearbyService: transport, database: db);
+      await service.initialize();
+      expect(service.presence['peer']!.sequence, 2);
+      expect(service.presence['peer']!.receivedAt, received);
+    },
+  );
+
+  test(
+    'broadcast SOS updates count and notifies once per revision, not heartbeat',
+    () async {
+      await connect();
+      final alerts = <String>[];
+      service.onSosReceived = alerts.add;
+      Future<void> status(int sequence, int revision, bool active) async {
+        final sos = SosAlert(
+          incidentId: 'one',
+          revision: revision,
+          active: active,
+          name: 'B',
+          people: 1,
+          category: EmergencyType.other,
+          details: '',
+          updatedAt: DateTime.now(),
+        );
+        await receive(
+          MessageModel(
+            id: 'p-$sequence',
+            senderId: 'peer',
+            senderName: 'B',
+            receiverId: service.myId!,
+            type: MessageType.presence,
+            text: PeerPresence(
+              sequence: sequence,
+              rescue: false,
+              receivedAt: DateTime.now(),
+              sos: sos,
+            ).encode(),
+            timestamp: DateTime.now(),
+          ),
+        );
+      }
+
+      await status(1, 1, true);
+      expect(service.activeSosCount, 1);
+      await status(2, 1, true);
+      expect(alerts, ['B']);
+      await status(3, 2, true);
+      expect(alerts, ['B', 'B']);
+      await status(4, 3, false);
+      expect(service.activeSosCount, 0);
+      expect(alerts, hasLength(2));
+    },
   );
 
   test(

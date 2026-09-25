@@ -5,16 +5,27 @@ import 'package:flutter/foundation.dart';
 import 'package:nearby_connections/nearby_connections.dart';
 import '../models/nearby_device.dart';
 import 'permission_service.dart';
+import 'connection_session.dart';
 
 class NearbyService extends ChangeNotifier {
-  NearbyService({Nearby? nearby, PermissionService? permissions})
-    : _nearby = nearby ?? Nearby(),
-      permissions = permissions ?? PermissionService();
+  NearbyService({
+    Nearby? nearby,
+    PermissionService? permissions,
+    ConnectionSession? session,
+  }) : _nearby = nearby ?? Nearby(),
+       connectionSession = session ?? ConnectionSession(),
+       permissions = permissions ?? PermissionService();
 
   static const serviceId = 'com.rmutt.rescuelink';
   static const strategy = Strategy.P2P_CLUSTER;
   final Nearby _nearby;
   final PermissionService permissions;
+  final ConnectionSession connectionSession;
+  bool backgroundActive = false;
+  bool autoConnect = false;
+  Timer? _autoTimer;
+  bool _autoBusy = false;
+  Future<void>? _startingAutomatic, _startingAdvertising, _startingDiscovery;
   final Map<String, NearbyDevice> _devices = {};
   final Map<String, Timer> _timeouts = {};
   final List<String> messages = [];
@@ -41,11 +52,63 @@ class NearbyService extends ChangeNotifier {
       isDiscovering ||
       _devices.values.any((d) => d.isConnected || d.isConnecting);
   bool _current(int session) =>
-      !_disposed && _foreground && _session == session;
+      !_disposed && (_foreground || backgroundActive) && _session == session;
 
   void setForeground(bool value) {
     _foreground = value;
-    if (!value) unawaited(stopAll());
+    if (!value && !backgroundActive) unawaited(stopAll());
+  }
+
+  Future<void> startAutomatic() => _startingAutomatic ??= _startAutomatic()
+      .whenComplete(() => _startingAutomatic = null);
+
+  Future<void> _startAutomatic() async {
+    await _stopping;
+    if (!_foreground || _disposed) return;
+    autoConnect = true;
+    await startAdvertising();
+    if (!autoConnect || !isAdvertising) {
+      autoConnect = false;
+      return;
+    }
+    await startDiscovery();
+    _autoTimer?.cancel();
+    _autoTimer = Timer.periodic(
+      const Duration(seconds: 8),
+      (_) => unawaited(_connectAvailable()),
+    );
+    await _connectAvailable();
+    _update();
+  }
+
+  Future<void> _connectAvailable() async {
+    if (!autoConnect || _autoBusy || _disposed) return;
+    _autoBusy = true;
+    final session = _session;
+    try {
+      if (!isDiscovering) await startDiscovery();
+      for (final device in discoveredDevices) {
+        // Random delay reduces simultaneous requests when both phones discover each other.
+        await Future<void>.delayed(
+          Duration(milliseconds: 200 + Random().nextInt(1000)),
+        );
+        if (!_current(session) || !autoConnect) return;
+        if (device.isAvailable) await requestConnection(device.endpointId);
+      }
+    } finally {
+      _autoBusy = false;
+    }
+  }
+
+  Future<void> _keepSession() async {
+    if (!backgroundActive && _foreground) {
+      final session = _session;
+      backgroundActive = await connectionSession.start();
+      if (_disposed || session != _session) {
+        await connectionSession.stop();
+        backgroundActive = false;
+      }
+    }
   }
 
   void _update() {
@@ -85,12 +148,25 @@ class NearbyService extends ChangeNotifier {
     return ready;
   }
 
-  Future<void> startAdvertising() async {
+  Future<void> startAdvertising() => _startingAdvertising ??=
+      _startAdvertising().whenComplete(() => _startingAdvertising = null);
+
+  Future<void> _startAdvertising() async {
     await _stopping;
-    if (_disposed || !_foreground || isAdvertising) return;
+    if (_disposed || (!_foreground && !backgroundActive) || isAdvertising) {
+      return;
+    }
     final session = _session;
-    if (!await checkPermissions() || !_current(session)) return;
+    if ((_foreground && !await checkPermissions()) || !_current(session)) {
+      return;
+    }
     try {
+      await _keepSession();
+      if (!_current(session)) return;
+      // Clear a stale native advertiser left by an interrupted previous start.
+      // This does not disconnect existing endpoints.
+      await _nearby.stopAdvertising();
+      if (!_current(session)) return;
       final ok = await _nearby.startAdvertising(
         deviceName,
         strategy,
@@ -113,12 +189,23 @@ class NearbyService extends ChangeNotifier {
     }
   }
 
-  Future<void> startDiscovery() async {
+  Future<void> startDiscovery() => _startingDiscovery ??= _startDiscovery()
+      .whenComplete(() => _startingDiscovery = null);
+
+  Future<void> _startDiscovery() async {
     await _stopping;
-    if (_disposed || !_foreground || isDiscovering) return;
+    if (_disposed || (!_foreground && !backgroundActive) || isDiscovering) {
+      return;
+    }
     final session = _session;
-    if (!await checkPermissions() || !_current(session)) return;
+    if ((_foreground && !await checkPermissions()) || !_current(session)) {
+      return;
+    }
     try {
+      await _keepSession();
+      if (!_current(session)) return;
+      await _nearby.stopDiscovery();
+      if (!_current(session)) return;
       final ok = await _nearby.startDiscovery(
         deviceName,
         strategy,
@@ -174,7 +261,10 @@ class NearbyService extends ChangeNotifier {
       return;
     }
     final session = _session;
-    if (!await checkPermissions() || !_current(session)) return;
+    if ((_foreground && !await checkPermissions()) || !_current(session)) {
+      return;
+    }
+    if (device.isConnected || device.isConnecting) return;
     device.isConnecting = true;
     _startTimeout(session, id);
     _log('Connection requested: ${device.name}');
@@ -273,7 +363,7 @@ class NearbyService extends ChangeNotifier {
       connectionStatus = 'Connected to ${device.name}';
       _log(connectionStatus);
       // Reduce radio contention after finding the intended peer.
-      unawaited(stopDiscovery());
+      if (!autoConnect) unawaited(stopDiscovery());
     } else {
       reportError(
         status == Status.REJECTED
@@ -293,7 +383,7 @@ class NearbyService extends ChangeNotifier {
   }
 
   Future<bool> sendTextMessage(String text) async {
-    if (_disposed || !_foreground) return false;
+    if (_disposed || (!_foreground && !backgroundActive)) return false;
     final session = _session;
     text = text.trim();
     if (text.isEmpty) {
@@ -329,7 +419,7 @@ class NearbyService extends ChangeNotifier {
 
   Future<void> sendMessage(String endpointId, String payload) async {
     if (_disposed ||
-        !_foreground ||
+        (!_foreground && !backgroundActive) ||
         !connectedDevices.any((d) => d.endpointId == endpointId)) {
       throw StateError('Peer disconnected');
     }
@@ -369,6 +459,8 @@ class NearbyService extends ChangeNotifier {
   }
 
   Future<void> stopAll() {
+    autoConnect = false;
+    _autoTimer?.cancel();
     if (_stopping != null) return _stopping!;
     ++_session; // Ignore late callbacks from the previous session.
     for (final timer in _timeouts.values) {
@@ -394,6 +486,12 @@ class NearbyService extends ChangeNotifier {
     } catch (e) {
       reportError('Stop endpoints failed: $e');
     }
+    try {
+      await connectionSession.stop();
+    } catch (e) {
+      reportError('Stop background service failed: $e');
+    }
+    backgroundActive = false;
   }
 
   @override

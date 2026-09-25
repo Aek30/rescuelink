@@ -6,6 +6,17 @@ import 'package:nearby_connections/nearby_connections.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:rescuelink/services/nearby_service.dart';
 import 'package:rescuelink/services/permission_service.dart';
+import 'package:rescuelink/services/connection_session.dart';
+
+class TestSession extends ConnectionSession {
+  bool stopped = false;
+  @override
+  Future<bool> start() async => true;
+  @override
+  Future<void> stop() async {
+    stopped = true;
+  }
+}
 
 class TestPermissions extends PermissionService {
   bool allowed = true;
@@ -32,6 +43,8 @@ class TestNearby extends Fake implements Nearby {
   bool sendFails = false;
   bool stopFails = false;
   int advertiseCalls = 0;
+  int discoveryCalls = 0;
+  bool nativeAdvertising = false;
   int accepted = 0;
   int stopped = 0;
   Uint8List? sent;
@@ -46,6 +59,8 @@ class TestNearby extends Fake implements Nearby {
     String serviceId = '',
   }) async {
     advertiseCalls++;
+    if (nativeAdvertising) throw StateError('Already advertising');
+    nativeAdvertising = advertiseOk;
     expect(strategy, Strategy.P2P_CLUSTER);
     expect(serviceId, 'com.rmutt.rescuelink');
     initiated = onConnectionInitiated;
@@ -62,6 +77,7 @@ class TestNearby extends Fake implements Nearby {
     required OnEndpointLost onEndpointLost,
     String serviceId = '',
   }) async {
+    discoveryCalls++;
     expect(strategy, Strategy.P2P_CLUSTER);
     expect(serviceId, 'com.rmutt.rescuelink');
     found = onEndpointFound;
@@ -102,7 +118,10 @@ class TestNearby extends Fake implements Nearby {
   }
 
   @override
-  Future<void> stopAdvertising() async {}
+  Future<void> stopAdvertising() async {
+    nativeAdvertising = false;
+  }
+
   @override
   Future<void> stopDiscovery() async {}
   @override
@@ -137,6 +156,71 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     native.result('A', Status.CONNECTED);
   }
+
+  test(
+    'active background session retains payload delivery when paused and STOP releases it',
+    () async {
+      await service.stopAll();
+      service.dispose();
+      final session = TestSession();
+      service = NearbyService(
+        nearby: native,
+        permissions: permissions,
+        session: session,
+      );
+      await connect();
+      service.setForeground(false);
+      expect(service.connectedDevices, hasLength(1));
+      expect(service.backgroundActive, isTrue);
+      await service.sendMessage('A', 'background');
+      expect(utf8.decode(native.sent!), 'background');
+      await service.stopAll();
+      expect(session.stopped, isTrue);
+      expect(service.backgroundActive, isFalse);
+      expect(service.connectedDevices, isEmpty);
+    },
+  );
+
+  test(
+    'automatic mode requests discovered peers and continues discovery after connection',
+    () async {
+      await service.startAutomatic();
+      native.found('A', 'Rescue-A', NearbyService.serviceId);
+      await service.startAutomatic();
+      expect(service.discoveredDevices.single.isConnecting, isTrue);
+      native.initiated('A', ConnectionInfo('Rescue-A', '1234', false));
+      await Future<void>.delayed(Duration.zero);
+      native.result('A', Status.CONNECTED);
+      expect(service.isDiscovering, isTrue);
+      await service.stopAll();
+      expect(service.autoConnect, isFalse);
+    },
+  );
+
+  test(
+    'simultaneous local automatic starts share one advertising and discovery operation',
+    () async {
+      permissions.pending = Completer<bool>();
+      final first = service.startAutomatic();
+      final second = service.startAutomatic();
+      permissions.pending!.complete(true);
+      await Future.wait([first, second]);
+      expect(native.advertiseCalls, 1);
+      expect(native.discoveryCalls, 1);
+      expect(service.isAdvertising, isTrue);
+      expect(service.isDiscovering, isTrue);
+    },
+  );
+  test(
+    'stale native advertiser is cleared before starting a fresh session',
+    () async {
+      native.nativeAdvertising = true;
+      await service.startAutomatic();
+      expect(service.isAdvertising, isTrue);
+      expect(service.isDiscovering, isTrue);
+      expect(service.lastError, isNull);
+    },
+  );
 
   test('permission matrix covers Android 11, 12, 12L and 13+', () {
     expect(PermissionService.requiredPermissions(30), [

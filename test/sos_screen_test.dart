@@ -43,37 +43,32 @@ class UiMessages extends MessageService {
 }
 
 void main() {
-  testWidgets('SOS requires a recipient and confirmation before sending', (
-    tester,
-  ) async {
-    final service = UiMessages();
-    addTearDown(() {
-      service.dispose();
-      service.nearbyService.dispose();
-    });
-    await tester.pumpWidget(MaterialApp(home: SosScreen(service: service)));
-    final send = find.text('ตรวจข้อมูลและส่ง SOS');
-    await tester.scrollUntilVisible(
-      send,
-      250,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.tap(send);
-    await tester.pumpAndSettle();
-    expect(service.sentTo, isNull);
-    await tester.ensureVisible(find.text('Phone B'));
-    await tester.tap(find.text('Phone B'));
-    await tester.pump();
-    await tester.ensureVisible(send);
-    await tester.tap(send);
-    await tester.pumpAndSettle();
-    expect(find.text('ยืนยันข้อมูล SOS'), findsOneWidget);
-    expect(service.sentTo, isNull);
-    await tester.tap(find.text('ยืนยันส่ง SOS'));
-    await tester.pumpAndSettle();
-    expect(service.sentTo, {'peer'});
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'SOS can broadcast without recipients but requires confirmation',
+    (tester) async {
+      final service = UiMessages();
+      addTearDown(() {
+        service.dispose();
+        service.nearbyService.dispose();
+      });
+      await tester.pumpWidget(MaterialApp(home: SosScreen(service: service)));
+      final send = find.text('ตรวจข้อมูลและส่ง SOS');
+      await tester.scrollUntilVisible(
+        send,
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(send);
+      await tester.pumpAndSettle();
+      expect(service.sentTo, isNull);
+      expect(find.text('ยืนยันข้อมูล SOS'), findsOneWidget);
+      expect(service.sentTo, isNull);
+      await tester.tap(find.text('ยืนยันส่ง SOS'));
+      await tester.pumpAndSettle();
+      expect(service.sentTo, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('Rescue card displays SOS details and opens sender chat', (
     tester,

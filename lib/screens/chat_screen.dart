@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/message_service.dart';
 import '../models/message_model.dart';
 import '../models/sos_alert.dart';
+import '../widgets/location_button.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key, required this.service, required this.peerId});
@@ -115,6 +116,16 @@ class _ChatScreenState extends State<ChatScreen> {
                                         : message.text,
                                   ),
                                   const SizedBox(height: 4),
+                                  if (message.type == MessageType.sos &&
+                                      SosAlert.fromJson(
+                                            message.text,
+                                          ).location !=
+                                          null)
+                                    LocationButton(
+                                      location: SosAlert.fromJson(
+                                        message.text,
+                                      ).location!,
+                                    ),
                                   Text(
                                     '${time.year}-${time.month.toString().padLeft(2, '0')}-${time.day.toString().padLeft(2, '0')} '
                                     '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}'

@@ -4,9 +4,9 @@ import '../services/nearby_service.dart';
 import '../services/message_service.dart';
 import '../services/permission_service.dart';
 import '../widgets/device_tile.dart';
+import '../widgets/presence_list.dart';
 import 'chat_screen.dart';
 import 'sos_screen.dart';
-import '../models/sos_alert.dart';
 
 class NearbyTestScreen extends StatefulWidget {
   const NearbyTestScreen({super.key});
@@ -264,6 +264,23 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
 
               children: [
                 _buildHeroCard(),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: _busy ? null : () => _run(_service.startAutomatic),
+                  icon: const Icon(Icons.wifi_tethering),
+                  label: Text(
+                    _service.autoConnect
+                        ? 'โหมดค้นหาและเชื่อมต่ออัตโนมัติเปิดอยู่'
+                        : 'เริ่มรับส่ง SOS / เชื่อมต่ออัตโนมัติ',
+                  ),
+                ),
+                const Text(
+                  'เปิดโหมดนี้ทั้งสองเครื่อง เพื่อค้นหาและเชื่อมต่อกันก่อนรับสถานะ SOS',
+                ),
+                if (_service.backgroundActive)
+                  const Text(
+                    'คงการเชื่อมต่อขณะสลับแอป/ดับหน้าจอ • กดหยุดเมื่อเลิกใช้งาน',
+                  ),
                 const SizedBox(height: 16),
                 FilledButton.icon(
                   onPressed: !_messages.ready
@@ -276,10 +293,11 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                         ),
                   icon: const Icon(Icons.sos),
                   label: Text(
-                    'SOS / หน่วยช่วยเหลือ • ${_messages.receivedSos.where((m) => SosAlert.fromJson(m.text).active).length} คำขอ',
+                    'SOS / หน่วยช่วยเหลือ • ${_messages.activeSosCount} คำขอที่ยังไม่หมดอายุ',
                   ),
                 ),
 
+                PresenceList(service: _messages),
                 if (_busy) ...[
                   const SizedBox(height: 14),
                   const LinearProgressIndicator(),
@@ -313,6 +331,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                 const SizedBox(height: 30),
 
                 _buildConversations(),
+                const SizedBox(height: 20),
 
                 const SizedBox(height: 30),
 
