@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/message_model.dart';
+import '../models/relay_packet.dart';
 import '../models/sos_alert.dart';
 import '../models/peer_presence.dart';
 import 'local_database_service.dart';
@@ -15,6 +16,7 @@ class MessageService extends ChangeNotifier {
   final LocalDatabaseService database;
   final _uuid = const Uuid();
   final Map<String, String> _endpointPeers = {};
+  final Set<String> _relaySent = {};
   Set<String> _connectedEndpoints = {};
   Map<String, String> peers = {};
   List<MessageModel> messages = [];
@@ -229,8 +231,11 @@ class MessageService extends ChangeNotifier {
       receiver: receiverId,
       text: text,
     );
-    if (utf8.encode(message.toJson()).length > 32768) {
-      throw ArgumentError('Message exceeds 32 KB including envelope');
+    // Reserve room for the bounded relay path (including JSON escaping).
+    if (utf8.encode(message.toJson()).length > 32768 - 8192) {
+      throw ArgumentError(
+        'Message exceeds 24 KB before the reserved relay path',
+      );
     }
     await database.insertMessage(message);
     await _refresh();
@@ -287,8 +292,25 @@ class MessageService extends ChangeNotifier {
               if (alert.revision < (latestSos[alert.incidentId] ?? 0)) continue;
             }
             if (message.senderId != myId ||
-                message.receiverId != peer ||
                 message.status.index >= MessageStatus.delivered.index) {
+              continue;
+            }
+            if (message.receiverId != peer) {
+              if (message.type != MessageType.message ||
+                  isOnline(message.receiverId)) {
+                continue;
+              }
+              final key = '${message.id}:$peer';
+              if (_relaySent.contains(key)) continue;
+              await nearbyService.sendMessage(
+                device.endpointId,
+                RelayPacket(message, [myId!]).toJson(),
+              );
+              _relaySent.add(key);
+              await database.updateMessageStatus(
+                message.id,
+                MessageStatus.sent,
+              );
               continue;
             }
             await nearbyService.sendMessage(
@@ -325,7 +347,12 @@ class MessageService extends ChangeNotifier {
       )) {
         return;
       }
-      final packet = MessageModel.fromJson(rawPayload);
+      final data = jsonDecode(rawPayload) as Map<String, dynamic>;
+      if (data.containsKey('relayVersion') || data.containsKey('relayPath')) {
+        await _receiveRelay(endpointId, RelayPacket.fromMap(data));
+        return;
+      }
+      final packet = MessageModel.fromMap(data);
       if (packet.senderId == myId) return;
       if (packet.type == MessageType.deviceInfo) {
         final existing = _endpointPeers[endpointId];
@@ -408,6 +435,47 @@ class MessageService extends ChangeNotifier {
     } catch (e) {
       error = 'Receive failed: $e';
       _notify();
+    }
+  }
+
+  Future<void> _receiveRelay(String endpointId, RelayPacket relay) async {
+    final packet = relay.message;
+    if (_endpointPeers[endpointId] != relay.path.last ||
+        packet.senderId == myId ||
+        relay.path.contains(myId)) {
+      return;
+    }
+    if (packet.receiverId == myId) {
+      // SQLite verifies duplicate content and keeps exactly one inbox row.
+      await database.insertMessage(
+        packet.copyWith(status: MessageStatus.delivered),
+      );
+      await database.savePeer(packet.senderId, packet.senderName);
+      await _refresh();
+      // End-to-end relay ACK is deliberately deferred to Phase 5 part 2.
+      return;
+    }
+    if (relay.path.length >= RelayPacket.maxHops) return;
+    if (!await database.claimRelay(packet.id)) return;
+    final forwarded = RelayPacket(packet, [...relay.path, myId!]).toJson();
+    if (utf8.encode(forwarded).length > 32768) {
+      throw const FormatException('Relay payload exceeds 32 KB');
+    }
+    for (final device in nearbyService.connectedDevices.toList()) {
+      if (_disposed) return;
+      final peer = _endpointPeers[device.endpointId];
+      if (peer == null ||
+          device.endpointId == endpointId ||
+          relay.path.contains(peer)) {
+        continue;
+      }
+      try {
+        await nearbyService.sendMessage(device.endpointId, forwarded);
+      } catch (e) {
+        // Try other neighbors even when one link fails. No relay queue yet.
+        error = 'Relay failed: $e';
+        _notify();
+      }
     }
   }
 

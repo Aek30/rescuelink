@@ -16,8 +16,12 @@ class LocalDatabaseService {
       return await _factory.openDatabase(
         path ?? p.join(await _factory.getDatabasesPath(), 'rescuelink.db'),
         options: OpenDatabaseOptions(
-          version: 1,
+          version: 2,
+          onUpgrade: (db, oldVersion, _) async {
+            if (oldVersion < 2) await _createRelaySeen(db);
+          },
           onCreate: (db, _) async {
+            await _createRelaySeen(db);
             await db.execute(
               'CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
             );
@@ -38,6 +42,24 @@ class LocalDatabaseService {
       _opening = null;
       rethrow;
     }
+  }
+
+  static Future<void> _createRelaySeen(Database db) =>
+      db.execute('CREATE TABLE relay_seen (id TEXT PRIMARY KEY)');
+
+  /// Atomic across concurrent arrivals and retained across restarts.
+  Future<bool> claimRelay(String id) async {
+    return (await database).transaction((txn) async {
+      final existing = await txn.query(
+        'relay_seen',
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      if (existing.isNotEmpty) return false;
+      await txn.insert('relay_seen', {'id': id});
+      return true;
+    });
   }
 
   Future<String> getDeviceId() async {

@@ -1,5 +1,14 @@
 # Validation
 
+## Phase 5 part 1 — 2026-09-25
+
+- Full Flutter suite: PASS, 57 tests, including 5 new multi-hop tests using three services with separate SQLite databases.
+- Flutter analyze: PASS, no issues. `git diff --check`: PASS.
+- Verified simulated A → B → C text delivery, unchanged origin/content, concurrent duplicate suppression, relay restart deduplication, path/loop validation, hop ceiling, failed-link behavior, and version 1 → 2 database migration preserving identity/history.
+- No new APK build or physical three-phone test performed in this step. Existing APK is from the previous phase.
+- Only text relay is implemented. Relay queues, end-to-end relay ACK and SOS/Rescue forwarding remain part 2; physical acceptance remains part 3. See [scope and limitations](PHASE_5_PART_1.md).
+- Initial sandbox SDK invocation stalled without output and was canceled. Completed test/analyze results above came from authorized SDK runs outside the sandbox.
+
 ## P30 follow-up and notification preference — 2026-09-25
 
 - Final debug APK build: PASS (101.7 seconds), including the optional fused-location code; output `build/app/outputs/flutter-apk/app-debug.apk`.

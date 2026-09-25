@@ -65,7 +65,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Text(
                   service.isOnline(widget.peerId)
                       ? 'Connected • DELIVERED means saved on the other phone'
-                      : 'Offline • Messages will send after reconnecting',
+                      : 'ไม่มีลิงก์ตรง • ลองส่งผ่านเครื่องใกล้เคียงได้ '
+                            '(SENT ยังไม่ยืนยันว่าปลายทางได้รับ)',
                 ),
               ),
               if (service.error != null)
