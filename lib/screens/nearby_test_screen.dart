@@ -7,6 +7,8 @@ import '../widgets/device_tile.dart';
 import '../widgets/presence_list.dart';
 import 'chat_screen.dart';
 import 'sos_screen.dart';
+import 'demo_features_screen.dart';
+import '../models/message_model.dart';
 
 class NearbyTestScreen extends StatefulWidget {
   const NearbyTestScreen({super.key});
@@ -23,9 +25,10 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
   late final MessageService _messages;
 
   bool _busy = false;
+  int _tab = 0;
 
-  static const Color _primary = Color(0xFF24599A);
-  static const Color _background = Color(0xFFF5F7FB);
+  static const Color _primary = Color(0xFF873B10);
+  static const Color _background = Color(0xFFFFF8F2);
   static const Color _success = Color(0xFF2E9B6F);
   static const Color _warning = Color(0xFFF0A63A);
 
@@ -254,11 +257,94 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
         ],
       ),
 
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _tab,
+        onDestinationSelected: (value) {
+          if (value == 2) {
+            if (_messages.ready) {
+              Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => SosScreen(service: _messages),
+                ),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('กำลังเตรียมข้อมูล SOS กรุณารอสักครู่'),
+                ),
+              );
+            }
+          } else {
+            setState(() => _tab = value);
+          }
+        },
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.radar), label: 'ใกล้ฉัน'),
+          NavigationDestination(
+            icon: Icon(Icons.chat_bubble_outline),
+            label: 'ข้อความ',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.sos, color: Colors.red),
+            label: 'SOS',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.outbox_outlined),
+            label: 'คิวส่ง',
+          ),
+          NavigationDestination(icon: Icon(Icons.person_outline), label: 'ฉัน'),
+        ],
+      ),
       body: SafeArea(
         child: ListenableBuilder(
           listenable: Listenable.merge([_service, _messages]),
 
           builder: (context, _) {
+            if (_tab == 1) {
+              return ListView(
+                padding: const EdgeInsets.all(18),
+                children: [
+                  _buildConversations(),
+                  const SizedBox(height: 24),
+                  OutlinedButton.icon(
+                    onPressed: () => _openDemo(media: true),
+                    icon: const Icon(Icons.perm_media_outlined),
+                    label: const Text('ทดลองแชตรูปภาพ / วิดีโอ • จำลอง'),
+                  ),
+                ],
+              );
+            }
+            if (_tab == 3) return _buildQueue();
+            if (_tab == 4) {
+              return ListView(
+                padding: const EdgeInsets.all(18),
+                children: [
+                  const Text(
+                    'ฉัน • ใช้งานแบบ Guest',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildDeviceName(),
+                  ListTile(
+                    leading: const Icon(Icons.cloud_outlined),
+                    title: const Text('บัญชีและการซิงก์'),
+                    subtitle: const Text(
+                      'ทดลองโฟลว์จำลอง • ยังไม่เชื่อมคลาวด์',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _openDemo(),
+                  ),
+                  if (_busy) const LinearProgressIndicator(),
+                  if (_service.lastError != null) _buildErrorCard(),
+                  _buildPermissionCard(),
+                  const SizedBox(height: 24),
+                  _buildConnectionMode(),
+                  const SizedBox(height: 24),
+                  _buildOfflineInfo(),
+                ],
+              );
+            }
             return ListView(
               padding: const EdgeInsets.fromLTRB(18, 8, 18, 36),
 
@@ -310,18 +396,6 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
 
                 const SizedBox(height: 24),
 
-                _buildDeviceName(),
-
-                const SizedBox(height: 24),
-
-                _buildPermissionCard(),
-
-                const SizedBox(height: 28),
-
-                _buildConnectionMode(),
-
-                const SizedBox(height: 30),
-
                 _buildNearbyDevices(),
 
                 const SizedBox(height: 30),
@@ -330,7 +404,6 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
 
                 const SizedBox(height: 30),
 
-                _buildConversations(),
                 const SizedBox(height: 20),
 
                 const SizedBox(height: 30),
@@ -350,6 +423,74 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
           },
         ),
       ),
+    );
+  }
+
+  void _openDemo({bool media = false}) => Navigator.push(
+    context,
+    MaterialPageRoute<void>(builder: (_) => DemoFeaturesScreen(media: media)),
+  );
+
+  Widget _buildQueue() {
+    final pending = _messages.messages
+        .where(
+          (m) =>
+              m.senderId == _messages.myId &&
+              (m.status == MessageStatus.pending ||
+                  m.status == MessageStatus.sent),
+        )
+        .toList();
+    return ListView(
+      padding: const EdgeInsets.all(18),
+      children: [
+        const Text(
+          'คิวข้อความ',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+        ),
+        const Text(
+          'ค้างส่ง / รอการยืนยันจากเครื่องรับ • ไม่ใช่สถานะซิงก์คลาวด์',
+        ),
+        const SizedBox(height: 16),
+        if (!_messages.ready || _busy) const LinearProgressIndicator(),
+        if (_messages.error != null) Text(_messages.error!),
+        if (_messages.ready && pending.isEmpty)
+          const _EmptyState(
+            icon: Icons.done_all,
+            title: 'ไม่มีข้อความรอส่ง',
+            description: 'ข้อความที่ยังไม่ถึงเครื่องรับจะแสดงที่นี่',
+          ),
+        for (final message in pending)
+          Card(
+            child: ListTile(
+              leading: Icon(
+                message.status == MessageStatus.pending
+                    ? Icons.schedule
+                    : Icons.done,
+              ),
+              title: Text(
+                message.type == MessageType.sos ? 'ข้อความ SOS' : message.text,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                'ถึง ${_messages.peers[message.receiverId] ?? message.receiverId} • '
+                '${message.status == MessageStatus.pending ? 'ค้างส่ง' : 'ส่งแล้ว รอยืนยัน'}',
+              ),
+            ),
+          ),
+        const SizedBox(height: 16),
+        FilledButton.icon(
+          onPressed: !_messages.ready || _busy
+              ? null
+              : () => _run(_messages.retry),
+          icon: const Icon(Icons.refresh),
+          label: const Text('ลองส่งอีกครั้ง'),
+        ),
+        TextButton(
+          onPressed: () => _openDemo(),
+          child: const Text('ทดลองกลับมาออนไลน์และซิงก์ • จำลอง'),
+        ),
+      ],
     );
   }
 
@@ -406,7 +547,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
 
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF174C8F), Color(0xFF3378C5)],
+          colors: [Color(0xFF873B10), Color(0xFFB7541B)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -1153,7 +1294,7 @@ class _RescueLogo extends StatelessWidget {
       height: 39,
 
       decoration: BoxDecoration(
-        color: const Color(0xFF24599A),
+        color: const Color(0xFF873B10),
 
         borderRadius: BorderRadius.circular(12),
       ),
@@ -1212,12 +1353,12 @@ class _SectionTitle extends StatelessWidget {
           height: 42,
 
           decoration: BoxDecoration(
-            color: const Color(0xFFEAF2FC),
+            color: const Color(0xFFFFE8D6),
 
             borderRadius: BorderRadius.circular(13),
           ),
 
-          child: Icon(icon, color: const Color(0xFF24599A), size: 21),
+          child: Icon(icon, color: const Color(0xFF873B10), size: 21),
         ),
 
         const SizedBox(width: 12),
@@ -1353,7 +1494,7 @@ class _ModeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: active ? const Color(0xFFEAF2FC) : Colors.white,
+      color: active ? const Color(0xFFFFE8D6) : Colors.white,
 
       borderRadius: BorderRadius.circular(20),
 
@@ -1371,7 +1512,7 @@ class _ModeCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
 
             border: Border.all(
-              color: active ? const Color(0xFF24599A) : const Color(0xFFE5E8ED),
+              color: active ? const Color(0xFF873B10) : const Color(0xFFE5E8ED),
 
               width: active ? 1.5 : 1,
             ),
@@ -1387,8 +1528,8 @@ class _ModeCard extends StatelessWidget {
 
                 decoration: BoxDecoration(
                   color: active
-                      ? const Color(0xFF24599A)
-                      : const Color(0xFFEAF2FC),
+                      ? const Color(0xFF873B10)
+                      : const Color(0xFFFFE8D6),
 
                   borderRadius: BorderRadius.circular(13),
                 ),
@@ -1396,7 +1537,7 @@ class _ModeCard extends StatelessWidget {
                 child: Icon(
                   icon,
 
-                  color: active ? Colors.white : const Color(0xFF24599A),
+                  color: active ? Colors.white : const Color(0xFF873B10),
                 ),
               ),
 
@@ -1442,7 +1583,7 @@ class _ModeCard extends StatelessWidget {
                       'กำลังทำงาน',
 
                       style: TextStyle(
-                        color: Color(0xFF24599A),
+                        color: Color(0xFF873B10),
 
                         fontWeight: FontWeight.w700,
 
@@ -1531,12 +1672,12 @@ class _EmptyState extends StatelessWidget {
             height: 58,
 
             decoration: const BoxDecoration(
-              color: Color(0xFFEAF2FC),
+              color: Color(0xFFFFE8D6),
 
               shape: BoxShape.circle,
             ),
 
-            child: Icon(icon, color: const Color(0xFF24599A), size: 29),
+            child: Icon(icon, color: const Color(0xFF873B10), size: 29),
           ),
 
           const SizedBox(height: 14),
@@ -1613,7 +1754,7 @@ class _ConversationTile extends StatelessWidget {
                   CircleAvatar(
                     radius: 25,
 
-                    backgroundColor: const Color(0xFF24599A),
+                    backgroundColor: const Color(0xFF873B10),
 
                     child: Text(
                       firstLetter,

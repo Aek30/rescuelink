@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/message_service.dart';
 import '../screens/chat_screen.dart';
+import '../screens/incident_detail_screen.dart';
 import 'location_button.dart';
 
 class PresenceList extends StatelessWidget {
@@ -12,9 +13,7 @@ class PresenceList extends StatelessWidget {
     children: [
       const Text('สถานะ SOS / หน่วยกู้ภัยใกล้เคียง'),
       if (service.presence.isEmpty)
-        const Text(
-          'ยังไม่มีสถานะ เชื่อมต่อเครื่องที่ใช้ Phase 4 เพื่อรับข้อมูล',
-        ),
+        const Text('ยังไม่มีสถานะ • เชื่อมต่ออุปกรณ์ใกล้เคียงเพื่อรับข้อมูล'),
       for (final entry in service.presence.entries)
         Builder(
           builder: (context) {
@@ -63,6 +62,19 @@ class PresenceList extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           SelectableText(state.sos!.summary),
+                          TextButton.icon(
+                            icon: const Icon(Icons.article_outlined),
+                            label: const Text('ดูรายละเอียดเหตุ'),
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute<void>(
+                                builder: (_) => IncidentDetailScreen(
+                                  service: service,
+                                  peerId: entry.key,
+                                ),
+                              ),
+                            ),
+                          ),
                           if (state.sos!.location != null)
                             LocationButton(location: state.sos!.location!),
                         ],

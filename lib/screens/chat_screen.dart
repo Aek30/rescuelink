@@ -3,6 +3,7 @@ import '../services/message_service.dart';
 import '../models/message_model.dart';
 import '../models/sos_alert.dart';
 import '../widgets/location_button.dart';
+import 'demo_features_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key, required this.service, required this.peerId});
@@ -56,7 +57,7 @@ class _ChatScreenState extends State<ChatScreen> {
           .reversed
           .toList();
       return Scaffold(
-        appBar: AppBar(title: Text(service.peers[widget.peerId] ?? 'Chat')),
+        appBar: AppBar(title: Text(service.peers[widget.peerId] ?? 'แชต')),
         body: SafeArea(
           child: Column(
             children: [
@@ -64,7 +65,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 padding: const EdgeInsets.all(12),
                 child: Text(
                   service.isOnline(widget.peerId)
-                      ? 'Connected • DELIVERED means saved on the other phone'
+                      ? 'เชื่อมต่อแล้ว • ถึงปลายทาง = บันทึกบนเครื่องรับแล้ว'
                       : 'ไม่มีลิงก์ตรง • ลองส่งผ่านเครื่องใกล้เคียงได้ '
                             '(SENT ยังไม่ยืนยันว่าปลายทางได้รับ)',
                 ),
@@ -76,7 +77,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               Expanded(
                 child: messages.isEmpty
-                    ? const Center(child: Text('No messages yet'))
+                    ? const Center(
+                        child: Text('ยังไม่มีข้อความ • เริ่มบทสนทนาได้เลย'),
+                      )
                     : ListView.builder(
                         reverse: true,
                         padding: const EdgeInsets.all(12),
@@ -153,15 +156,25 @@ class _ChatScreenState extends State<ChatScreen> {
                         maxLines: 4,
                         enabled: !_sending,
                         decoration: const InputDecoration(
-                          labelText: 'Message',
+                          labelText: 'พิมพ์ข้อความ',
                           border: OutlineInputBorder(),
                         ),
                       ),
                     ),
                     IconButton(
+                      tooltip: 'แนบสื่อ • จำลอง',
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => const DemoFeaturesScreen(media: true),
+                        ),
+                      ),
+                      icon: const Icon(Icons.add_photo_alternate_outlined),
+                    ),
+                    IconButton(
                       onPressed: _sending ? null : _send,
                       icon: const Icon(Icons.send),
-                      tooltip: 'Send',
+                      tooltip: 'ส่งข้อความ',
                     ),
                   ],
                 ),

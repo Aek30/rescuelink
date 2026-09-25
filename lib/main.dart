@@ -17,44 +17,35 @@ class RescueLinkApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        fontFamily: 'Roboto',
-        scaffoldBackgroundColor:
-            const Color(0xFFF5F7FB),
+        fontFamily: 'NotoSansThai',
+        scaffoldBackgroundColor: const Color(0xFFFFF8F2),
 
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF174C8F),
+          seedColor: const Color(0xFF873B10),
+          primary: const Color(0xFF873B10),
+          primaryContainer: const Color(0xFFFFE8D6),
+          surface: const Color(0xFFFFF8F2),
           brightness: Brightness.light,
         ),
 
-        appBarTheme: const AppBarTheme(
-          centerTitle: false,
-          elevation: 0,
-        ),
+        appBarTheme: const AppBarTheme(centerTitle: false, elevation: 0),
 
-        filledButtonTheme:
-            FilledButtonThemeData(
+        filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 18,
-              vertical: 13,
-            ),
+            backgroundColor: const Color(0xFFFF9F5A),
+            foregroundColor: const Color(0xFF2B2B2B),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
             shape: RoundedRectangleBorder(
-              borderRadius:
-                  BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(14),
             ),
           ),
         ),
 
-        outlinedButtonTheme:
-            OutlinedButtonThemeData(
+        outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 18,
-              vertical: 13,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
             shape: RoundedRectangleBorder(
-              borderRadius:
-                  BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(14),
             ),
           ),
         ),
