@@ -5,6 +5,7 @@ import '../services/message_service.dart';
 import '../services/permission_service.dart';
 import '../widgets/device_tile.dart';
 import '../widgets/presence_list.dart';
+import '../widgets/nearby_mini_map.dart';
 import 'chat_screen.dart';
 import 'sos_screen.dart';
 import 'demo_features_screen.dart';
@@ -1028,6 +1029,8 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
 
         const SizedBox(height: 12),
 
+        NearbyMiniMap(service: _messages),
+        const SizedBox(height: 12),
         if (_service.discoveredDevices.isEmpty)
           _EmptyState(
             icon: Icons.radar_rounded,
