@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/sos_alert.dart';
+import 'offline_location_map.dart';
 
 class LocationButton extends StatelessWidget {
   const LocationButton({super.key, required this.location});
@@ -9,6 +10,7 @@ class LocationButton extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
+      OfflineLocationMap(location: location),
       Text(
         'พิกัดบันทึกเมื่อ ${location.capturedAt.toLocal()} • อายุ ${DateTime.now().difference(location.capturedAt).inMinutes.clamp(0, 999999)} นาที',
       ),

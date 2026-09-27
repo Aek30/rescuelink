@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
@@ -90,6 +91,27 @@ class LocalDatabaseService {
     );
     return rows.isEmpty ? null : rows.single['value'] as String;
   }
+
+  /// Keep the first observed inbound path, not a claimed end-to-end receipt.
+  Future<void> saveReceivedRoute(String id, List<String> route) async {
+    await (await database).insert('settings', {
+      'key': 'receivedRoute:$id',
+      'value': jsonEncode(route),
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
+  Future<Map<String, List<String>>> getReceivedRoutes() async => {
+    for (final row in await (await database).query(
+      'settings',
+      where: 'key LIKE ?',
+      whereArgs: ['receivedRoute:%'],
+    ))
+      (row['key'] as String).substring(
+        'receivedRoute:'.length,
+      ): List<String>.unmodifiable(
+        (jsonDecode(row['value'] as String) as List).cast<String>(),
+      ),
+  };
 
   Future<void> setSetting(String key, String value) async {
     await (await database).insert('settings', {

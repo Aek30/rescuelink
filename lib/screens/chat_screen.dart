@@ -3,6 +3,7 @@ import '../services/message_service.dart';
 import '../models/message_model.dart';
 import '../models/sos_alert.dart';
 import '../widgets/location_button.dart';
+import '../widgets/relay_badge.dart';
 import 'demo_features_screen.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -120,6 +121,15 @@ class _ChatScreenState extends State<ChatScreen> {
                                         : message.text,
                                   ),
                                   const SizedBox(height: 4),
+                                  if (message.type == MessageType.message)
+                                    RelayBadge(
+                                      route: service.receivedRoutes[message.id],
+                                      peers: {
+                                        ...service.peers,
+                                        if (service.myId != null)
+                                          service.myId!: 'เครื่องนี้',
+                                      },
+                                    ),
                                   if (message.type == MessageType.sos &&
                                       SosAlert.fromJson(
                                             message.text,

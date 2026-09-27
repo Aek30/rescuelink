@@ -20,6 +20,7 @@ class MessageService extends ChangeNotifier {
   Set<String> _connectedEndpoints = {};
   Map<String, String> peers = {};
   List<MessageModel> messages = [];
+  Map<String, List<String>> receivedRoutes = {};
   String? myId, error;
   SosAlert? mySos;
   bool _publishingSos = false;
@@ -186,6 +187,7 @@ class MessageService extends ChangeNotifier {
   }
 
   Future<void> _refresh() async {
+    receivedRoutes = await database.getReceivedRoutes();
     messages = await database.getMessages();
     peers = await database.getPeers();
     _notify();
@@ -451,6 +453,7 @@ class MessageService extends ChangeNotifier {
         packet.copyWith(status: MessageStatus.delivered),
       );
       await database.savePeer(packet.senderId, packet.senderName);
+      await database.saveReceivedRoute(packet.id, [...relay.path, myId!]);
       await _refresh();
       // End-to-end relay ACK is deliberately deferred to Phase 5 part 2.
       return;

@@ -111,6 +111,11 @@ void main() {
       expect(nodes[2].messages.single.senderId, nodes[0].myId);
       expect(nodes[2].messages.single.text, 'ช่วยด้วย 🌍');
       expect(nodes[2].messages.single.status, MessageStatus.delivered);
+      final route = [nodes[0].myId!, nodes[1].myId!, nodes[2].myId!];
+      expect(nodes[2].receivedRoutes[nodes[2].messages.single.id], route);
+      final messageId = nodes[2].messages.single.id;
+      await dbs[2].close();
+      expect((await dbs[2].getReceivedRoutes())[messageId], route);
       expect(nodes[0].messages.single.status, MessageStatus.sent);
       expect(nodes[2].peers[nodes[0].myId], isNotNull);
       expect(relays(2), isEmpty);
