@@ -240,9 +240,24 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
 
             SizedBox(width: 10),
 
-            Text(
-              'RescueLink',
-              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 22),
+            Flexible(
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: 'Rescue',
+                      style: TextStyle(color: Color(0xFF0C2942)),
+                    ),
+                    TextSpan(
+                      text: 'Link',
+                      style: TextStyle(color: Color(0xFFFF641F)),
+                    ),
+                  ],
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 22),
+              ),
             ),
           ],
         ),
@@ -1292,20 +1307,14 @@ class _RescueLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 39,
-      height: 39,
-
-      decoration: BoxDecoration(
-        color: const Color(0xFF873B10),
-
-        borderRadius: BorderRadius.circular(12),
-      ),
-
-      child: const Icon(
-        Icons.cell_tower_rounded,
-        color: Colors.white,
-        size: 21,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Image.asset(
+        'assets/branding/rescuelink-logo.png',
+        width: 52,
+        height: 52,
+        fit: BoxFit.contain,
+        semanticLabel: 'โลโก้ RescueLink',
       ),
     );
   }
