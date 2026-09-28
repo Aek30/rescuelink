@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
-// import หน้าเดิมของคุณ
-import 'screens/nearby_test_screen.dart';
+import 'screens/onboarding_screen.dart';
+import 'theme/rescue_theme.dart';
+import 'services/app_preferences.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  AppPreferences.instance.load().catchError((Object _) {});
   runApp(const RescueLinkApp());
 }
 
@@ -12,46 +15,19 @@ class RescueLinkApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'RescueLink',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        fontFamily: 'NotoSansThai',
-        scaffoldBackgroundColor: const Color(0xFFFFF8F2),
+    return ListenableBuilder(
+      listenable: AppPreferences.instance,
+      builder: (context, _) => MaterialApp(
+        title: 'RescueLink',
+        debugShowCheckedModeBanner: false,
+        theme: RescueTheme.light,
+        darkTheme: RescueTheme.dark,
+        themeMode: AppPreferences.instance.dark
+            ? ThemeMode.dark
+            : ThemeMode.light,
 
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF873B10),
-          primary: const Color(0xFF873B10),
-          primaryContainer: const Color(0xFFFFE8D6),
-          surface: const Color(0xFFFFF8F2),
-          brightness: Brightness.light,
-        ),
-
-        appBarTheme: const AppBarTheme(centerTitle: false, elevation: 0),
-
-        filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFFFF9F5A),
-            foregroundColor: const Color(0xFF2B2B2B),
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-          ),
-        ),
-
-        outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-          ),
-        ),
+        home: const OnboardingScreen(),
       ),
-
-      home: const NearbyTestScreen(),
     );
   }
 }

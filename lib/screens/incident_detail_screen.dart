@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../services/message_service.dart';
 import '../widgets/location_button.dart';
 import 'chat_screen.dart';
+import '../widgets/brand_header.dart';
+import '../theme/rescue_theme.dart';
 
 class IncidentDetailScreen extends StatelessWidget {
   const IncidentDetailScreen({
@@ -24,13 +26,11 @@ class IncidentDetailScreen extends StatelessWidget {
         body: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            Text(
-              service.peers[peerId] ?? peerId,
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              !fresh
+            BrandHeader(
+              title: service.peers[peerId] ?? peerId,
+              eyebrow: 'รายละเอียดคำขอ • ข้อมูลจากผู้ส่ง',
+              icon: Icons.health_and_safety_outlined,
+              subtitle: !fresh
                   ? 'ข้อมูลล่าสุด • สถานะหมดอายุ กรุณาติดต่อผู้ส่งเพื่อยืนยัน'
                   : alert?.active == true
                   ? 'SOS • กำลังขอความช่วยเหลือ'
@@ -62,7 +62,12 @@ class IncidentDetailScreen extends StatelessWidget {
               icon: const Icon(Icons.chat_outlined),
               label: const Text('ติดต่อผ่านแชต'),
             ),
-            const Text('การได้รับข้อความไม่ได้หมายถึงมีหน่วยกู้ภัยตอบรับแล้ว'),
+            const SizedBox(height: 16),
+            const Text(
+              'การได้รับข้อความไม่ได้หมายถึงมีหน่วยกู้ภัยตอบรับแล้ว',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: RescueTheme.muted, fontSize: 12),
+            ),
           ],
         ),
       );

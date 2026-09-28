@@ -69,12 +69,15 @@ class _NearbyMiniMapState extends State<NearbyMiniMap> {
         extent = math.max(extent, math.max(p.dx.abs(), p.dy.abs()) * 1.3);
       }
       final now = DateTime.now().toUtc();
+      final isDark = Theme.of(context).brightness == Brightness.dark;
       return Container(
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? const Color(0xFF161C24) : Colors.white,
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: const Color(0xFFE2E8E4)),
+          border: Border.all(
+            color: isDark ? const Color(0xFF283442) : const Color(0xFFE2E8E4),
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -108,7 +111,9 @@ class _NearbyMiniMapState extends State<NearbyMiniMap> {
                   );
                   return Stack(
                     children: [
-                      Positioned.fill(child: CustomPaint(painter: _MapGrid())),
+                      Positioned.fill(
+                        child: CustomPaint(painter: _MapGrid(isDark: isDark)),
+                      ),
                       const Positioned(top: 12, right: 14, child: Text('↑ N')),
                       if (origin == null)
                         const Center(
@@ -170,7 +175,9 @@ class _NearbyMiniMapState extends State<NearbyMiniMap> {
                           bottom: 10,
                           left: 12,
                           child: Container(
-                            color: Colors.white.withValues(alpha: .9),
+                            color: isDark
+                                ? const Color(0xFF161C24).withValues(alpha: .9)
+                                : Colors.white.withValues(alpha: .9),
                             padding: const EdgeInsets.all(6),
                             child: Text(
                               'จากกึ่งกลางถึงขอบพื้นที่วาด ≈ ${extent.round()} ม.',
@@ -193,9 +200,14 @@ class _NearbyMiniMapState extends State<NearbyMiniMap> {
                     style: TextStyle(fontSize: 12),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'แผนภาพจากพิกัด GPS ไม่มีถนนหรือการนำทาง\nอุปกรณ์ที่ไม่มีพิกัดจะแสดงเฉพาะในรายการด้านล่าง',
-                    style: TextStyle(fontSize: 11, color: Color(0xFF63736B)),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF63736B),
+                    ),
                   ),
                   if (_me == null && points.isNotEmpty)
                     const Text(
@@ -248,14 +260,18 @@ class _NearbyMiniMapState extends State<NearbyMiniMap> {
 }
 
 class _MapGrid extends CustomPainter {
+  const _MapGrid({this.isDark = false});
+  final bool isDark;
+
   @override
   void paint(Canvas canvas, Size size) {
     canvas.drawRect(
       Offset.zero & size,
-      Paint()..color = const Color(0xFFEDF4EF),
+      Paint()
+        ..color = isDark ? const Color(0xFF0F1512) : const Color(0xFFEDF4EF),
     );
     final paint = Paint()
-      ..color = const Color(0xFFDCE7DF)
+      ..color = isDark ? const Color(0xFF1B2822) : const Color(0xFFDCE7DF)
       ..strokeWidth = 1;
     for (double x = size.width / 2 % 24; x < size.width; x += 24) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
@@ -266,5 +282,6 @@ class _MapGrid extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _MapGrid oldDelegate) => false;
+  bool shouldRepaint(covariant _MapGrid oldDelegate) =>
+      oldDelegate.isDark != isDark;
 }

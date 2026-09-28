@@ -6,6 +6,7 @@ import '../services/sos_location_service.dart';
 import 'chat_screen.dart';
 import '../widgets/presence_list.dart';
 import '../widgets/location_button.dart';
+import '../widgets/sos_radar.dart';
 
 class SosScreen extends StatefulWidget {
   const SosScreen({super.key, required this.service});
@@ -26,9 +27,9 @@ class _SosScreenState extends State<SosScreen> {
   bool _readingLocation = false;
   String? _error;
   bool _rescueTab = false;
-  static const _ink = Color(0xFF242B35);
-  static const _muted = Color(0xFF707884);
-  static const _orange = Color(0xFFE85A32);
+  static const _ink = Color(0xFF102D43);
+  static const _muted = Color(0xFF687782);
+  static const _orange = Color(0xFFB94612);
 
   @override
   void initState() {
@@ -151,88 +152,101 @@ class _SosScreenState extends State<SosScreen> {
     );
   }
 
-  InputDecoration _input(String label, {String? hint, IconData? icon}) =>
-      InputDecoration(
-        labelText: label,
-        hintText: hint,
-        prefixIcon: icon == null ? null : Icon(icon, size: 20, color: _muted),
-        filled: true,
-        fillColor: const Color(0xFFF7F8FA),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 18,
+  InputDecoration _input(String label, {String? hint, IconData? icon}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: icon == null ? null : Icon(icon, size: 20, color: _muted),
+      filled: true,
+      fillColor: isDark ? const Color(0xFF161C24) : const Color(0xFFFCF8F1),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 18,
+      ),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(
+          color: isDark ? const Color(0xFF283442) : const Color(0xFFEAE2D8),
         ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0xFFE8EBEF)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(
+          color: isDark ? const Color(0xFF283442) : const Color(0xFFEAE2D8),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0xFFE8EBEF)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: _orange, width: 1.5),
-        ),
-      );
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: _orange, width: 1.5),
+      ),
+    );
+  }
 
   Widget _section(
     String number,
     String title,
     String subtitle,
     List<Widget> children,
-  ) => Container(
-    margin: const EdgeInsets.only(bottom: 16),
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: const Color(0xFFECEEF1)),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFEDE6),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                number,
-                style: const TextStyle(
-                  color: _orange,
-                  fontWeight: FontWeight.w800,
+  ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF161C24) : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: isDark ? const Color(0xFF283442) : const Color(0xFFF0EBE3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF382314)
+                      : const Color(0xFFFFEDE6),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  number,
+                  style: const TextStyle(
+                    color: _orange,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  color: _ink,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? const Color(0xFFF1F5F9) : _ink,
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Text(
-          subtitle,
-          style: const TextStyle(color: _muted, fontSize: 12, height: 1.5),
-        ),
-        const SizedBox(height: 20),
-        ...children,
-      ],
-    ),
-  );
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: const TextStyle(color: _muted, fontSize: 12, height: 1.5),
+          ),
+          const SizedBox(height: 20),
+          ...children,
+        ],
+      ),
+    );
+  }
 
   IconData _categoryIcon(EmergencyType value) => switch (value) {
     EmergencyType.medical => Icons.medical_services_outlined,
@@ -243,6 +257,7 @@ class _SosScreenState extends State<SosScreen> {
 
   Widget _categoryPicker() => LayoutBuilder(
     builder: (context, constraints) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
       final largeText = MediaQuery.textScalerOf(context).scale(14) > 19;
       final width = largeText || constraints.maxWidth < 270
           ? constraints.maxWidth
@@ -260,14 +275,16 @@ class _SosScreenState extends State<SosScreen> {
                   style: OutlinedButton.styleFrom(
                     alignment: Alignment.centerLeft,
                     padding: const EdgeInsets.all(14),
-                    foregroundColor: _category == type ? _orange : _ink,
+                    foregroundColor: _category == type
+                        ? _orange
+                        : (isDark ? const Color(0xFFF1F5F9) : _ink),
                     backgroundColor: _category == type
-                        ? const Color(0xFFFFF0E9)
-                        : Colors.white,
+                        ? (isDark ? const Color(0xFF3D2314) : const Color(0xFFFFEADB))
+                        : (isDark ? const Color(0xFF161C24) : Colors.white),
                     side: BorderSide(
                       color: _category == type
                           ? _orange
-                          : const Color(0xFFE8EBEF),
+                          : (isDark ? const Color(0xFF283442) : const Color(0xFFEAE2D8)),
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -325,12 +342,14 @@ class _SosScreenState extends State<SosScreen> {
                 SosAlert.fromJson(m.text).revision == current.revision,
           )
           .toList();
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      final inkColor = isDark ? const Color(0xFFF1F5F9) : _ink;
       return Scaffold(
-        backgroundColor: const Color(0xFFF6F7F9),
+        backgroundColor: isDark ? const Color(0xFF0C1017) : const Color(0xFFFCF8F1),
         appBar: AppBar(
-          backgroundColor: const Color(0xFFF6F7F9),
+          backgroundColor: isDark ? const Color(0xFF0C1017) : const Color(0xFFFCF8F1),
           surfaceTintColor: Colors.transparent,
-          foregroundColor: _ink,
+          foregroundColor: inkColor,
           title: const Text(
             'ศูนย์ช่วยเหลือ',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
@@ -349,7 +368,7 @@ class _SosScreenState extends State<SosScreen> {
                     Container(
                       padding: const EdgeInsets.all(5),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFECEEF1),
+                        color: isDark ? const Color(0xFF1E2631) : const Color(0xFFF0EBE3),
                         borderRadius: BorderRadius.circular(18),
                       ),
                       child: Row(
@@ -359,6 +378,7 @@ class _SosScreenState extends State<SosScreen> {
                               'ขอความช่วยเหลือ',
                               false,
                               Icons.sos_rounded,
+                              isDark: isDark,
                             ),
                           ),
                           const SizedBox(width: 4),
@@ -367,6 +387,7 @@ class _SosScreenState extends State<SosScreen> {
                               'หน่วยกู้ภัย',
                               true,
                               Icons.shield_outlined,
+                              isDark: isDark,
                             ),
                           ),
                         ],
@@ -379,21 +400,23 @@ class _SosScreenState extends State<SosScreen> {
                         margin: const EdgeInsets.only(bottom: 16),
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFFE8E4),
+                          color: isDark ? const Color(0xFF381815) : const Color(0xFFFFE8E4),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Text(
                           _error ?? service.error!,
-                          style: const TextStyle(color: Color(0xFF9B3021)),
+                          style: TextStyle(
+                            color: isDark ? const Color(0xFFFF897D) : const Color(0xFF9B3021),
+                          ),
                         ),
                       ),
                     if (_rescueTab) ...[
-                      const Text(
+                      Text(
                         'พร้อมเป็นคนช่วย',
                         style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.w800,
-                          color: _ink,
+                          color: inkColor,
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -403,7 +426,7 @@ class _SosScreenState extends State<SosScreen> {
                       ),
                       const SizedBox(height: 20),
                       Material(
-                        color: Colors.white,
+                        color: isDark ? const Color(0xFF161C24) : Colors.white,
                         borderRadius: BorderRadius.circular(24),
                         clipBehavior: Clip.antiAlias,
                         child: SwitchListTile(
@@ -424,6 +447,7 @@ class _SosScreenState extends State<SosScreen> {
                         ),
                       ),
                       const SizedBox(height: 20),
+                      if (service.rescueMode) SosRadar(service: service),
                       PresenceList(service: service),
                       if (service.rescueMode) ...[
                         const SizedBox(height: 16),
@@ -442,12 +466,17 @@ class _SosScreenState extends State<SosScreen> {
                       Container(
                         padding: const EdgeInsets.all(22),
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFFFFE9DC), Color(0xFFFFF5EC)],
+                          gradient: LinearGradient(
+                            colors: isDark
+                                ? const [Color(0xFF2C1E17), Color(0xFF1E1714)]
+                                : const [Color(0xFFFFE9DC), Color(0xFFFFF5EC)],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
                           borderRadius: BorderRadius.circular(24),
+                          border: isDark
+                              ? Border.all(color: const Color(0xFF4A2B20))
+                              : null,
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -457,7 +486,9 @@ class _SosScreenState extends State<SosScreen> {
                                 Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: .8),
+                                    color: isDark
+                                        ? const Color(0xFF3D251A)
+                                        : Colors.white.withValues(alpha: .8),
                                     borderRadius: BorderRadius.circular(14),
                                   ),
                                   child: const Icon(
@@ -467,11 +498,11 @@ class _SosScreenState extends State<SosScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 12),
-                                const Expanded(
+                                Expanded(
                                   child: Text(
                                     'ทุกการขอความช่วยเหลือสำคัญ',
                                     style: TextStyle(
-                                      color: Color(0xFF934025),
+                                      color: isDark ? const Color(0xFFFF9E7D) : const Color(0xFF934025),
                                       fontSize: 12,
                                       fontWeight: FontWeight.w700,
                                     ),
@@ -484,18 +515,18 @@ class _SosScreenState extends State<SosScreen> {
                               active
                                   ? 'SOS ของคุณเปิดอยู่'
                                   : 'ให้คนใกล้ตัวช่วยคุณ',
-                              style: const TextStyle(
-                                color: _ink,
+                              style: TextStyle(
+                                color: inkColor,
                                 fontSize: 26,
                                 fontWeight: FontWeight.w800,
                                 height: 1.25,
                               ),
                             ),
                             const SizedBox(height: 8),
-                            const Text(
+                            Text(
                               'ระบุเหตุและตำแหน่ง เพื่อให้คนที่เชื่อมต่อ\nเข้าใจว่าคุณต้องการความช่วยเหลืออะไร',
                               style: TextStyle(
-                                color: Color(0xFF805E4F),
+                                color: isDark ? const Color(0xFFC4B5A5) : const Color(0xFF805E4F),
                                 fontSize: 13,
                                 height: 1.6,
                               ),
@@ -592,8 +623,11 @@ class _SosScreenState extends State<SosScreen> {
                             width: double.infinity,
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF2F6F5),
+                              color: isDark ? const Color(0xFF14221E) : const Color(0xFFF2F6F5),
                               borderRadius: BorderRadius.circular(16),
+                              border: isDark
+                                  ? Border.all(color: const Color(0xFF1F3830))
+                                  : null,
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -646,7 +680,7 @@ class _SosScreenState extends State<SosScreen> {
                         ],
                       ),
                       Material(
-                        color: Colors.white,
+                        color: isDark ? const Color(0xFF161C24) : Colors.white,
                         borderRadius: BorderRadius.circular(20),
                         clipBehavior: Clip.antiAlias,
                         child: ExpansionTile(
@@ -704,7 +738,7 @@ class _SosScreenState extends State<SosScreen> {
                         width: double.infinity,
                         child: FilledButton.icon(
                           style: FilledButton.styleFrom(
-                          backgroundColor: Color(0xFFC94B2B),
+                            backgroundColor: Color(0xFFC94B2B),
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(
                               horizontal: 20,
@@ -775,12 +809,21 @@ class _SosScreenState extends State<SosScreen> {
     },
   );
 
-  Widget _tabButton(String label, bool rescue, IconData icon) {
+  Widget _tabButton(
+    String label,
+    bool rescue,
+    IconData icon, {
+    bool isDark = false,
+  }) {
     final selected = _rescueTab == rescue;
     return TextButton(
       style: TextButton.styleFrom(
-        foregroundColor: selected ? _ink : _muted,
-        backgroundColor: selected ? Colors.white : Colors.transparent,
+        foregroundColor: selected
+            ? (isDark ? Colors.white : _ink)
+            : (isDark ? const Color(0xFF94A3B8) : _muted),
+        backgroundColor: selected
+            ? (isDark ? const Color(0xFF283442) : Colors.white)
+            : Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
@@ -794,7 +837,7 @@ class _SosScreenState extends State<SosScreen> {
               size: 22,
               color: selected
                   ? (rescue ? const Color(0xFF2563EB) : _orange)
-                  : _muted,
+                  : (isDark ? const Color(0xFF94A3B8) : _muted),
             ),
             const SizedBox(height: 4),
             Text(

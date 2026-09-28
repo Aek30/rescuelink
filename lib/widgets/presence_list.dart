@@ -3,17 +3,59 @@ import '../services/message_service.dart';
 import '../screens/chat_screen.dart';
 import '../screens/incident_detail_screen.dart';
 import 'location_button.dart';
+import '../theme/rescue_theme.dart';
 
 class PresenceList extends StatelessWidget {
   const PresenceList({super.key, required this.service});
   final MessageService service;
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Text('สถานะ SOS / หน่วยกู้ภัยใกล้เคียง'),
-      if (service.presence.isEmpty)
-        const Text('ยังไม่มีสถานะ • เชื่อมต่ออุปกรณ์ใกล้เคียงเพื่อรับข้อมูล'),
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Text(
+            'สถานะ SOS / หน่วยกู้ภัยใกล้เคียง',
+            style: TextStyle(
+              color: isDark ? const Color(0xFFF1F5F9) : RescueTheme.navy,
+              fontWeight: FontWeight.w700,
+              fontSize: 16,
+            ),
+          ),
+        ),
+        if (service.presence.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF161C24) : Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isDark ? const Color(0xFF283442) : RescueTheme.border,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.radar_rounded,
+                  color: isDark ? const Color(0xFFFF9E7D) : RescueTheme.orangeInk,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'ยังไม่มีสถานะ • เชื่อมต่ออุปกรณ์ใกล้เคียงเพื่อรับข้อมูล',
+                    style: TextStyle(
+                      color: isDark ? const Color(0xFF94A3B8) : RescueTheme.muted,
+                      fontSize: 13,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
       for (final entry in service.presence.entries)
         Builder(
           builder: (context) {
@@ -86,5 +128,6 @@ class PresenceList extends StatelessWidget {
           },
         ),
     ],
-  );
+    );
+  }
 }

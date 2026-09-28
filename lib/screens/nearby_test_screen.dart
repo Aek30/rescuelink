@@ -1,3 +1,7 @@
+import '../services/app_preferences.dart';
+import '../models/message_model.dart';
+import 'settings_panel.dart';
+import 'login_screen.dart';
 import 'package:flutter/material.dart';
 
 import '../services/nearby_service.dart';
@@ -9,7 +13,9 @@ import '../widgets/nearby_mini_map.dart';
 import 'chat_screen.dart';
 import 'sos_screen.dart';
 import 'demo_features_screen.dart';
-import '../models/message_model.dart';
+import '../widgets/outbox_queue.dart';
+import '../theme/rescue_theme.dart';
+import '../widgets/brand_header.dart';
 
 class NearbyTestScreen extends StatefulWidget {
   const NearbyTestScreen({super.key});
@@ -28,8 +34,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
   bool _busy = false;
   int _tab = 0;
 
-  static const Color _primary = Color(0xFF873B10);
-  static const Color _background = Color(0xFFFFF8F2);
+  static const Color _primary = RescueTheme.orangeInk;
   static const Color _success = Color(0xFF2E9B6F);
   static const Color _warning = Color(0xFFF0A63A);
 
@@ -42,6 +47,13 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
     _messages = MessageService(nearbyService: _service);
 
     _messages.initialize();
+    AppPreferences.instance.load().catchError((Object _) {});
+    _messages.onSosReceived = (name) {
+      if (!mounted || !AppPreferences.instance.alerts) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('SOS: $name')));
+    };
 
     WidgetsBinding.instance.addObserver(this);
   }
@@ -226,52 +238,59 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
 
-      appBar: AppBar(
-        backgroundColor: _background,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        titleSpacing: 18,
+      appBar: _tab == 4
+          ? null
+          : AppBar(
+              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              titleSpacing: 18,
 
-        title: const Row(
-          children: [
-            _RescueLogo(),
+              title: Row(
+                children: [
+                  const _RescueLogo(),
 
-            SizedBox(width: 10),
+                  const SizedBox(width: 10),
 
-            Flexible(
-              child: Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'Rescue',
-                      style: TextStyle(color: Color(0xFF0C2942)),
+                  Flexible(
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: 'Rescue',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                          const TextSpan(
+                            text: 'Link',
+                            style: TextStyle(color: Color(0xFFFF641F)),
+                          ),
+                        ],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 22,
+                      ),
                     ),
-                    TextSpan(
-                      text: 'Link',
-                      style: TextStyle(color: Color(0xFFFF641F)),
-                    ),
-                  ],
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 22),
+                  ),
+                ],
               ),
+
+              actions: [
+                IconButton(
+                  tooltip: 'ตั้งค่าแอป',
+                  onPressed: () => setState(() => _tab = 4),
+                  icon: const Icon(Icons.settings_outlined),
+                ),
+
+                const SizedBox(width: 8),
+              ],
             ),
-          ],
-        ),
-
-        actions: [
-          IconButton(
-            tooltip: 'ตั้งค่าแอป',
-            onPressed: _busy ? null : _openSettings,
-            icon: const Icon(Icons.settings_outlined),
-          ),
-
-          const SizedBox(width: 8),
-        ],
-      ),
 
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
@@ -302,7 +321,11 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
             label: 'ข้อความ',
           ),
           NavigationDestination(
-            icon: Icon(Icons.sos, color: Colors.red),
+            icon: CircleAvatar(
+              backgroundColor: RescueTheme.danger,
+              radius: 20,
+              child: Icon(Icons.sos, color: Colors.white, size: 26),
+            ),
             label: 'SOS',
           ),
           NavigationDestination(
@@ -321,6 +344,13 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
               return ListView(
                 padding: const EdgeInsets.all(18),
                 children: [
+                  const BrandHeader(
+                    title: 'ทุกบทสนทนา เชื่อมถึงกัน',
+                    subtitle:
+                        'ส่งข้อความถึงผู้คนที่เชื่อมต่อกับคุณ แม้ไม่มีอินเทอร์เน็ต',
+                    icon: Icons.forum_outlined,
+                    eyebrow: 'ข้อความ • อยู่ใกล้กันเสมอ',
+                  ),
                   _buildConversations(),
                   const SizedBox(height: 24),
                   OutlinedButton.icon(
@@ -333,32 +363,26 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
             }
             if (_tab == 3) return _buildQueue();
             if (_tab == 4) {
-              return ListView(
-                padding: const EdgeInsets.all(18),
-                children: [
-                  const Text(
-                    'ฉัน • ใช้งานแบบ Guest',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildDeviceName(),
-                  ListTile(
-                    leading: const Icon(Icons.cloud_outlined),
-                    title: const Text('บัญชีและการซิงก์'),
-                    subtitle: const Text(
-                      'ทดลองโฟลว์จำลอง • ยังไม่เชื่อมคลาวด์',
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => _openDemo(),
-                  ),
-                  if (_busy) const LinearProgressIndicator(),
-                  if (_service.lastError != null) _buildErrorCard(),
-                  _buildPermissionCard(),
-                  const SizedBox(height: 24),
-                  _buildConnectionMode(),
-                  const SizedBox(height: 24),
-                  _buildOfflineInfo(),
-                ],
+              return SettingsPanel(
+                pending: _messages.messages
+                    .where(
+                      (m) =>
+                          m.senderId == _messages.myId &&
+                          m.status == MessageStatus.pending &&
+                          (m.type == MessageType.message ||
+                              m.type == MessageType.sos),
+                    )
+                    .length,
+                rescue: _messages.rescueMode,
+                ready: _messages.ready && !_busy,
+                onRescue: (value) => _run(() => _messages.setRescueMode(value)),
+                onQueue: () => setState(() => _tab = 3),
+                onDevice: _openConnectionSettings,
+                onConnection: _openConnectionSettings,
+                onExit: () => Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+                  (_) => false,
+                ),
               );
             }
             return ListView(
@@ -418,11 +442,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
 
                 _buildConnectedDevices(),
 
-                const SizedBox(height: 30),
-
-                const SizedBox(height: 20),
-
-                const SizedBox(height: 30),
+                const SizedBox(height: 24),
 
                 _buildOfflineInfo(),
 
@@ -442,73 +462,46 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
     );
   }
 
+  void _openConnectionSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('การเชื่อมต่อและสิทธิ์')),
+          body: ListenableBuilder(
+            listenable: _service,
+            builder: (context, _) => ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                _buildDeviceName(),
+                _buildPermissionCard(),
+                if (_service.lastError != null) _buildErrorCard(),
+                const SizedBox(height: 20),
+                _buildConnectionMode(),
+                const SizedBox(height: 20),
+                _buildOfflineInfo(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _openDemo({bool media = false}) => Navigator.push(
     context,
     MaterialPageRoute<void>(builder: (_) => DemoFeaturesScreen(media: media)),
   );
 
-  Widget _buildQueue() {
-    final pending = _messages.messages
-        .where(
-          (m) =>
-              m.senderId == _messages.myId &&
-              (m.status == MessageStatus.pending ||
-                  m.status == MessageStatus.sent),
-        )
-        .toList();
-    return ListView(
-      padding: const EdgeInsets.all(18),
-      children: [
-        const Text(
-          'คิวข้อความ',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-        ),
-        const Text(
-          'ค้างส่ง / รอการยืนยันจากเครื่องรับ • ไม่ใช่สถานะซิงก์คลาวด์',
-        ),
-        const SizedBox(height: 16),
-        if (!_messages.ready || _busy) const LinearProgressIndicator(),
-        if (_messages.error != null) Text(_messages.error!),
-        if (_messages.ready && pending.isEmpty)
-          const _EmptyState(
-            icon: Icons.done_all,
-            title: 'ไม่มีข้อความรอส่ง',
-            description: 'ข้อความที่ยังไม่ถึงเครื่องรับจะแสดงที่นี่',
-          ),
-        for (final message in pending)
-          Card(
-            child: ListTile(
-              leading: Icon(
-                message.status == MessageStatus.pending
-                    ? Icons.schedule
-                    : Icons.done,
-              ),
-              title: Text(
-                message.type == MessageType.sos ? 'ข้อความ SOS' : message.text,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: Text(
-                'ถึง ${_messages.peers[message.receiverId] ?? message.receiverId} • '
-                '${message.status == MessageStatus.pending ? 'ค้างส่ง' : 'ส่งแล้ว รอยืนยัน'}',
-              ),
-            ),
-          ),
-        const SizedBox(height: 16),
-        FilledButton.icon(
-          onPressed: !_messages.ready || _busy
-              ? null
-              : () => _run(_messages.retry),
-          icon: const Icon(Icons.refresh),
-          label: const Text('ลองส่งอีกครั้ง'),
-        ),
-        TextButton(
-          onPressed: () => _openDemo(),
-          child: const Text('ทดลองกลับมาออนไลน์และซิงก์ • จำลอง'),
-        ),
-      ],
-    );
-  }
+  Widget _buildQueue() => OutboxQueue(
+    messages: _messages.messages
+        .where((m) => m.senderId == _messages.myId)
+        .toList(),
+    peers: _messages.peers,
+    ready: _messages.ready,
+    busy: _busy,
+    hasError: _messages.error != null,
+    onRetry: () => _run(_messages.retry),
+  );
 
   // =========================================================
   // กล่องสถานะหลัก
@@ -516,199 +509,248 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
 
   Widget _buildHeroCard() {
     final connectedCount = _service.connectedDevices.length;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     String title;
     String description;
     String status;
     IconData icon;
+    Color statusColor;
 
     if (connectedCount > 0) {
       title = 'เชื่อมต่อแล้ว';
-
       description = connectedCount == 1
           ? 'กำลังเชื่อมต่อกับอุปกรณ์ใกล้เคียง 1 เครื่อง'
           : 'กำลังเชื่อมต่อกับอุปกรณ์ใกล้เคียง $connectedCount เครื่อง';
-
       status = 'เชื่อมต่อ';
-
       icon = Icons.link_rounded;
+      statusColor = const Color(0xFF34D399);
     } else if (_service.isDiscovering) {
       title = 'กำลังค้นหาอุปกรณ์';
-
       description = 'กำลังค้นหาอุปกรณ์ RescueLink ที่อยู่ใกล้คุณ';
-
       status = 'กำลังค้นหา';
-
       icon = Icons.radar_rounded;
+      statusColor = const Color(0xFFFBBF24);
     } else if (_service.isAdvertising) {
       title = 'พร้อมให้อุปกรณ์อื่นค้นพบ';
-
       description = 'โทรศัพท์ RescueLink เครื่องอื่นสามารถค้นหาเครื่องนี้ได้';
-
       status = 'พร้อมค้นพบ';
-
       icon = Icons.cell_tower_rounded;
+      statusColor = const Color(0xFF38BDF8);
     } else {
       title = 'พร้อมเชื่อมต่อแบบออฟไลน์';
-
       description = 'ติดต่อกับอุปกรณ์ใกล้เคียงได้โดยไม่ต้องใช้อินเทอร์เน็ต';
-
       status = 'ออฟไลน์';
-
       icon = Icons.shield_outlined;
+      statusColor = const Color(0xFF94A3B8);
     }
 
     return Container(
-      padding: const EdgeInsets.all(22),
-
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF873B10), Color(0xFFB7541B)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: isDark ? const Color(0x3394A3B8) : const Color(0x22102130),
+          width: 1.2,
         ),
-
-        borderRadius: BorderRadius.circular(26),
-
         boxShadow: [
           BoxShadow(
-            color: _primary.withValues(alpha: 0.18),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.45)
+                : RescueTheme.navy.withValues(alpha: 0.16),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.14),
-
-                  borderRadius: BorderRadius.circular(16),
-                ),
-
-                child: Icon(icon, color: Colors.white, size: 26),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22.8),
+        child: Stack(
+          children: [
+            // Background Artwork
+            Positioned.fill(
+              child: Image.asset(
+                'assets/onboarding/nearby.png',
+                fit: BoxFit.cover,
+                alignment: const Alignment(0, -0.15),
               ),
+            ),
 
-              const Spacer(),
-
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 11,
-                  vertical: 7,
-                ),
-
+            // Smooth multi-stop gradient overlay
+            Positioned.fill(
+              child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.14),
-
-                  borderRadius: BorderRadius.circular(30),
-                ),
-
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-
-                      decoration: BoxDecoration(
-                        color: _nearbyActive || connectedCount > 0
-                            ? const Color(0xFF77F2B5)
-                            : Colors.white70,
-
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-
-                    const SizedBox(width: 7),
-
-                    Text(
-                      status,
-
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 22),
-
-          Text(
-            title,
-
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-
-          const SizedBox(height: 7),
-
-          Text(
-            description,
-
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.82),
-
-              height: 1.4,
-              fontSize: 14,
-            ),
-          ),
-
-          const SizedBox(height: 22),
-
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.13),
-
-              borderRadius: BorderRadius.circular(12),
-            ),
-
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-
-              children: [
-                const Icon(
-                  Icons.smartphone_rounded,
-                  color: Colors.white,
-                  size: 17,
-                ),
-
-                const SizedBox(width: 7),
-
-                Flexible(
-                  child: Text(
-                    _name.text,
-
-                    overflow: TextOverflow.ellipsis,
-
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: isDark
+                        ? [
+                            const Color(0x38091624),
+                            const Color(0x28091624),
+                            const Color(0x8C06101B),
+                            const Color(0xEB040B13),
+                          ]
+                        : [
+                            const Color(0x30091624),
+                            const Color(0x22091624),
+                            const Color(0x82071321),
+                            const Color(0xE0050E18),
+                          ],
+                    stops: const [0.0, 0.32, 0.62, 1.0],
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
-        ],
+
+            // Foreground Content
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0x520B1928),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.22),
+                            width: 1,
+                          ),
+                        ),
+                        child: Icon(icon, color: Colors.white, size: 24),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0x520B1928),
+                          borderRadius: BorderRadius.circular(30),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.22),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: statusColor,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: statusColor.withValues(alpha: 0.6),
+                                    blurRadius: 6,
+                                    spreadRadius: 1,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 7),
+                            Text(
+                              status,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 11.5,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 23,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.2,
+                      shadows: [
+                        Shadow(
+                          color: Colors.black87,
+                          blurRadius: 8,
+                          offset: Offset(0, 1.5),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  Text(
+                    description,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.90),
+                      height: 1.38,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w400,
+                      shadows: const [
+                        Shadow(
+                          color: Colors.black87,
+                          blurRadius: 6,
+                          offset: Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0x520B1928),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.smartphone_rounded,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 7),
+                        Flexible(
+                          child: Text(
+                            _name.text,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -745,7 +787,9 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
 
               filled: true,
 
-              fillColor: const Color(0xFFF7F8FB),
+              fillColor: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF161C24)
+                  : const Color(0xFFFCF8F1),
 
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(15),
@@ -756,7 +800,11 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(15),
 
-                borderSide: const BorderSide(color: Color(0xFFE4E7EC)),
+                borderSide: BorderSide(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xFF283442)
+                      : const Color(0xFFEAE2D8),
+                ),
               ),
 
               focusedBorder: OutlineInputBorder(
@@ -878,15 +926,17 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                 ),
               ),
 
-              const Padding(
-                padding: EdgeInsets.only(bottom: 8),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
 
                 child: Text(
                   'ควรเปิด Bluetooth, Wi-Fi และบริการตำแหน่งเพื่อให้การค้นหาอุปกรณ์ทำงานได้ตามปกติ',
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.4,
-                    color: Color(0xFF666666),
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF666666),
                   ),
                 ),
               ),
@@ -994,18 +1044,30 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
 
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF161C24)
+                : Colors.white,
 
             borderRadius: BorderRadius.circular(14),
 
-            border: Border.all(color: const Color(0xFFE5E8ED)),
+            border: Border.all(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF283442)
+                  : const Color(0xFFEAE2D8),
+            ),
           ),
 
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
 
             children: [
-              Icon(Icons.info_outline, size: 19, color: Colors.grey.shade600),
+              Icon(
+                Icons.info_outline,
+                size: 19,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xFF94A3B8)
+                    : Colors.grey.shade600,
+              ),
 
               const SizedBox(width: 10),
 
@@ -1014,7 +1076,9 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                   _connectionStatusThai,
 
                   style: TextStyle(
-                    color: Colors.grey.shade700,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(
+                      alpha: 0.85,
+                    ),
                     height: 1.4,
                     fontSize: 13,
                   ),
@@ -1066,12 +1130,18 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
             child: Card(
               margin: EdgeInsets.zero,
               elevation: 0,
-              color: Colors.white,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF161C24)
+                  : Colors.white,
 
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
 
-                side: const BorderSide(color: Color(0xFFE5E8ED)),
+                side: BorderSide(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xFF283442)
+                      : const Color(0xFFEAE2D8),
+                ),
               ),
 
               child: Padding(
@@ -1126,11 +1196,17 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
 
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xFF161C24)
+                    : Colors.white,
 
                 borderRadius: BorderRadius.circular(18),
 
-                border: Border.all(color: const Color(0xFFE5E8ED)),
+                border: Border.all(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xFF283442)
+                      : const Color(0xFFEAE2D8),
+                ),
               ),
 
               child: DeviceTile(
@@ -1217,41 +1293,45 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
   // =========================================================
 
   Widget _buildOfflineInfo() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(17),
 
       decoration: BoxDecoration(
-        color: const Color(0xFFEAF7F1),
+        color: isDark ? const Color(0xFF11221A) : const Color(0xFFEAF7F1),
 
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark ? const Color(0xFF1C382C) : const Color(0xFFD4EFE3),
+        ),
       ),
 
-      child: const Row(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
 
         children: [
-          Icon(Icons.shield_outlined, color: Color(0xFF28845F)),
+          const Icon(Icons.shield_outlined, color: Color(0xFF28845F)),
 
-          SizedBox(width: 12),
+          const SizedBox(width: 12),
 
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
 
               children: [
-                Text(
+                const Text(
                   'เชื่อมต่อโดยตรงระหว่างอุปกรณ์',
 
                   style: TextStyle(fontWeight: FontWeight.w800),
                 ),
 
-                SizedBox(height: 5),
+                const SizedBox(height: 5),
 
                 Text(
                   'RescueLink สามารถติดต่อสื่อสารกับโทรศัพท์ที่อยู่ใกล้เคียงได้โดยตรง โดยไม่ต้องใช้ข้อมูลมือถือหรือการเชื่อมต่ออินเทอร์เน็ต',
 
                   style: TextStyle(
-                    color: Color(0xFF50675F),
+                    color: isDark ? const Color(0xFF86EFAC) : const Color(0xFF50675F),
 
                     height: 1.45,
                     fontSize: 13,
@@ -1266,30 +1346,33 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
   }
 
   Widget _buildErrorCard() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(14),
 
       decoration: BoxDecoration(
-        color: const Color(0xFFFFEEEE),
+        color: isDark ? const Color(0xFF331414) : const Color(0xFFFFEEEE),
 
         borderRadius: BorderRadius.circular(14),
 
-        border: Border.all(color: const Color(0xFFFFCACA)),
+        border: Border.all(
+          color: isDark ? const Color(0xFF5C2020) : const Color(0xFFFFCACA),
+        ),
       ),
 
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
 
         children: [
-          Icon(Icons.error_outline, color: Colors.red),
+          const Icon(Icons.error_outline, color: Colors.red),
 
-          SizedBox(width: 10),
+          const SizedBox(width: 10),
 
           Expanded(
             child: Text(
               'เกิดข้อผิดพลาด: ${_service.lastError}',
 
-              style: TextStyle(height: 1.4),
+              style: const TextStyle(height: 1.4),
             ),
           ),
         ],
@@ -1307,12 +1390,15 @@ class _RescueLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Image.asset(
-        'assets/branding/rescuelink-logo.png',
-        width: 52,
-        height: 52,
+        isDark
+            ? 'assets/branding/rescuelink-logo-dark.png'
+            : 'assets/branding/rescuelink-logo.png',
+        width: 44,
+        height: 44,
         fit: BoxFit.contain,
         semanticLabel: 'โลโก้ RescueLink',
       ),
@@ -1331,11 +1417,17 @@ class _SectionCard extends StatelessWidget {
       padding: const EdgeInsets.all(17),
 
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF161C24)
+            : Colors.white,
 
         borderRadius: BorderRadius.circular(20),
 
-        border: Border.all(color: const Color(0xFFE5E8ED)),
+        border: Border.all(
+          color: Theme.of(context).brightness == Brightness.dark
+              ? const Color(0xFF283442)
+              : const Color(0xFFEAE2D8),
+        ),
       ),
 
       child: child,
@@ -1365,12 +1457,12 @@ class _SectionTitle extends StatelessWidget {
           height: 42,
 
           decoration: BoxDecoration(
-            color: const Color(0xFFFFE8D6),
+            color: const Color(0xFFFFEADB),
 
             borderRadius: BorderRadius.circular(13),
           ),
 
-          child: Icon(icon, color: const Color(0xFF873B10), size: 21),
+          child: Icon(icon, color: const Color(0xFFB94612), size: 21),
         ),
 
         const SizedBox(width: 12),
@@ -1505,8 +1597,11 @@ class _ModeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Material(
-      color: active ? const Color(0xFFFFE8D6) : Colors.white,
+      color: active
+          ? (isDark ? const Color(0xFF3D2314) : const Color(0xFFFFEADB))
+          : (isDark ? const Color(0xFF161C24) : Colors.white),
 
       borderRadius: BorderRadius.circular(20),
 
@@ -1524,7 +1619,9 @@ class _ModeCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
 
             border: Border.all(
-              color: active ? const Color(0xFF873B10) : const Color(0xFFE5E8ED),
+              color: active
+                  ? const Color(0xFFB94612)
+                  : (isDark ? const Color(0xFF283442) : const Color(0xFFEAE2D8)),
 
               width: active ? 1.5 : 1,
             ),
@@ -1540,8 +1637,8 @@ class _ModeCard extends StatelessWidget {
 
                 decoration: BoxDecoration(
                   color: active
-                      ? const Color(0xFF873B10)
-                      : const Color(0xFFFFE8D6),
+                      ? const Color(0xFFB94612)
+                      : (isDark ? const Color(0xFF382314) : const Color(0xFFFFEADB)),
 
                   borderRadius: BorderRadius.circular(13),
                 ),
@@ -1549,7 +1646,7 @@ class _ModeCard extends StatelessWidget {
                 child: Icon(
                   icon,
 
-                  color: active ? Colors.white : const Color(0xFF873B10),
+                  color: active ? Colors.white : const Color(0xFFB94612),
                 ),
               ),
 
@@ -1570,7 +1667,7 @@ class _ModeCard extends StatelessWidget {
                 subtitle,
 
                 style: TextStyle(
-                  color: Colors.grey.shade600,
+                  color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade600,
 
                   fontSize: 12,
                   height: 1.35,
@@ -1595,7 +1692,7 @@ class _ModeCard extends StatelessWidget {
                       'กำลังทำงาน',
 
                       style: TextStyle(
-                        color: Color(0xFF873B10),
+                        color: Color(0xFFB94612),
 
                         fontWeight: FontWeight.w700,
 
@@ -1621,6 +1718,7 @@ class _ListHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
       children: [
         Expanded(
@@ -1635,7 +1733,7 @@ class _ListHeading extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
 
           decoration: BoxDecoration(
-            color: const Color(0xFFE8EBF0),
+            color: isDark ? const Color(0xFF283442) : const Color(0xFFF0EBE3),
 
             borderRadius: BorderRadius.circular(30),
           ),
@@ -1664,17 +1762,20 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
 
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 26),
 
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF161C24) : Colors.white,
 
         borderRadius: BorderRadius.circular(20),
 
-        border: Border.all(color: const Color(0xFFE5E8ED)),
+        border: Border.all(
+          color: isDark ? const Color(0xFF283442) : const Color(0xFFEAE2D8),
+        ),
       ),
 
       child: Column(
@@ -1683,13 +1784,13 @@ class _EmptyState extends StatelessWidget {
             width: 58,
             height: 58,
 
-            decoration: const BoxDecoration(
-              color: Color(0xFFFFE8D6),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF382314) : const Color(0xFFFFEADB),
 
               shape: BoxShape.circle,
             ),
 
-            child: Icon(icon, color: const Color(0xFF873B10), size: 29),
+            child: Icon(icon, color: const Color(0xFFB94612), size: 29),
           ),
 
           const SizedBox(height: 14),
@@ -1710,7 +1811,7 @@ class _EmptyState extends StatelessWidget {
             textAlign: TextAlign.center,
 
             style: TextStyle(
-              color: Colors.grey.shade600,
+              color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade600,
               height: 1.4,
               fontSize: 13,
             ),
@@ -1734,6 +1835,7 @@ class _ConversationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final trimmed = name.trim();
 
     final firstLetter = trimmed.isNotEmpty
@@ -1741,7 +1843,7 @@ class _ConversationTile extends StatelessWidget {
         : 'R';
 
     return Material(
-      color: Colors.white,
+      color: isDark ? const Color(0xFF161C24) : Colors.white,
 
       borderRadius: BorderRadius.circular(18),
 
@@ -1756,7 +1858,9 @@ class _ConversationTile extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
 
-            border: Border.all(color: const Color(0xFFE5E8ED)),
+            border: Border.all(
+              color: isDark ? const Color(0xFF283442) : const Color(0xFFEAE2D8),
+            ),
           ),
 
           child: Row(
@@ -1766,7 +1870,7 @@ class _ConversationTile extends StatelessWidget {
                   CircleAvatar(
                     radius: 25,
 
-                    backgroundColor: const Color(0xFF873B10),
+                    backgroundColor: const Color(0xFFB94612),
 
                     child: Text(
                       firstLetter,
@@ -1792,7 +1896,10 @@ class _ConversationTile extends StatelessWidget {
 
                         shape: BoxShape.circle,
 
-                        border: Border.all(color: Colors.white, width: 2),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF161C24) : Colors.white,
+                          width: 2,
+                        ),
                       ),
                     ),
                   ),
@@ -1825,7 +1932,7 @@ class _ConversationTile extends StatelessWidget {
                       style: TextStyle(
                         color: online
                             ? const Color(0xFF2E9B6F)
-                            : Colors.grey.shade600,
+                            : (isDark ? const Color(0xFF94A3B8) : Colors.grey.shade600),
 
                         fontSize: 12,
                       ),
@@ -1861,22 +1968,32 @@ class _InfoState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(14),
 
       decoration: BoxDecoration(
-        color: error ? const Color(0xFFFFEEEE) : Colors.white,
+        color: error
+            ? (isDark ? const Color(0xFF331414) : const Color(0xFFFFEEEE))
+            : (isDark ? const Color(0xFF161C24) : Colors.white),
 
         borderRadius: BorderRadius.circular(14),
 
         border: Border.all(
-          color: error ? const Color(0xFFFFCCCC) : const Color(0xFFE5E8ED),
+          color: error
+              ? (isDark ? const Color(0xFF5C2020) : const Color(0xFFFFCCCC))
+              : (isDark ? const Color(0xFF283442) : const Color(0xFFEAE2D8)),
         ),
       ),
 
       child: Row(
         children: [
-          Icon(icon, color: error ? Colors.red : Colors.grey.shade600),
+          Icon(
+            icon,
+            color: error
+                ? Colors.red
+                : (isDark ? const Color(0xFF94A3B8) : Colors.grey.shade600),
+          ),
 
           const SizedBox(width: 10),
 

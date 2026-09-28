@@ -16,7 +16,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final font = FontLoader('NotoSansThai')
-      ..addFont(rootBundle.load('ui-preview/assets/NotoSansThai.ttf'));
+      ..addFont(rootBundle.load('assets/fonts/NotoSansThai.ttf'));
     await font.load();
     final icons = FontLoader('MaterialIcons')
       ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));

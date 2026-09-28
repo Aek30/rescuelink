@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/nearby_device.dart';
+import '../theme/rescue_theme.dart';
 
 class DeviceTile extends StatelessWidget {
   const DeviceTile({super.key, required this.device, required this.onPressed});
@@ -9,21 +10,24 @@ class DeviceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Card(
     child: ListTile(
-      leading: Icon(device.isConnected ? Icons.link : Icons.phone_android),
+      leading: CircleAvatar(
+        backgroundColor: RescueTheme.peach,
+        foregroundColor: RescueTheme.orangeInk,
+        child: Icon(device.isConnected ? Icons.link : Icons.phone_android),
+      ),
       title: Text(device.name),
       subtitle: Text(
-        '${device.endpointId}\nStatus: ${device.isConnected
-            ? 'Connected'
+        device.isConnected
+            ? 'เชื่อมต่อแล้ว'
             : device.isConnecting
-            ? 'Connecting...'
+            ? 'กำลังเชื่อมต่อ…'
             : device.isAvailable
-            ? 'Available'
-            : 'Out of range'}',
+            ? 'พร้อมเชื่อมต่อ'
+            : 'อยู่นอกระยะ',
       ),
-      isThreeLine: true,
       trailing: TextButton(
         onPressed: device.isConnecting ? null : onPressed,
-        child: Text(device.isConnected ? 'DISCONNECT' : 'CONNECT'),
+        child: Text(device.isConnected ? 'ตัดการเชื่อมต่อ' : 'เชื่อมต่อ'),
       ),
     ),
   );

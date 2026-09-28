@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/brand_header.dart';
 
 /// Isolated presentation state: never writes to MessageService or the database.
 class DemoFeaturesScreen extends StatefulWidget {
@@ -42,6 +43,16 @@ class _DemoFeaturesScreenState extends State<DemoFeaturesScreen> {
     body: ListView(
       padding: const EdgeInsets.all(20),
       children: [
+        BrandHeader(
+          title: widget.media ? 'ส่งต่อภาพและเรื่องราว' : 'เชื่อมต่อเมื่อพร้อม',
+          subtitle: widget.media
+              ? 'ทดลองแนบรูปภาพและวิดีโอในบทสนทนา'
+              : 'ทดลองการใช้บัญชีและซิงก์เมื่อกลับมาออนไลน์',
+          icon: widget.media
+              ? Icons.perm_media_outlined
+              : Icons.cloud_sync_outlined,
+          eyebrow: 'พื้นที่ทดลอง • ข้อมูลตัวอย่างเท่านั้น',
+        ),
         const Card(
           child: Padding(
             padding: EdgeInsets.all(16),
