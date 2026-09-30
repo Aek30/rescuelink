@@ -3,23 +3,35 @@ import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 import '../models/message_model.dart';
+import 'sos_store.dart';
 
 class LocalDatabaseService {
-  LocalDatabaseService({DatabaseFactory? factory, this.path})
-    : _factory = factory ?? databaseFactory;
-  static final instance = LocalDatabaseService();
+  LocalDatabaseService({
+    DatabaseFactory? factory,
+    this.path,
+    this.blocked = false,
+  }) : _factory = factory ?? databaseFactory;
+  // Services capture this immutable database handle when they are created.
+  // Never mutate a handle while callbacks from a previous account can finish.
+  static LocalDatabaseService instance = LocalDatabaseService();
   final DatabaseFactory _factory;
   final String? path;
+  final bool blocked;
   Future<Database>? _opening;
-  Future<Database> get database => _opening ??= _open();
+  Future<Database> get database => blocked
+      ? Future.error(
+          StateError('ไม่สามารถอ่านเจ้าของข้อมูลได้ กรุณาเปิดแอปใหม่'),
+        )
+      : _opening ??= _open();
   Future<Database> _open() async {
     try {
       return await _factory.openDatabase(
         path ?? p.join(await _factory.getDatabasesPath(), 'rescuelink.db'),
         options: OpenDatabaseOptions(
-          version: 2,
+          version: 3,
           onUpgrade: (db, oldVersion, _) async {
             if (oldVersion < 2) await _createRelaySeen(db);
+            if (oldVersion < 3) await SosStore.createSchema(db);
           },
           onCreate: (db, _) async {
             await _createRelaySeen(db);
@@ -36,6 +48,7 @@ class LocalDatabaseService {
             await db.execute(
               'CREATE INDEX outbox ON messages(senderId, receiverId, status)',
             );
+            await SosStore.createSchema(db);
           },
         ),
       );
@@ -122,6 +135,7 @@ class LocalDatabaseService {
 
   Future<void> saveSos(String state, List<MessageModel> packets) async {
     await (await database).transaction((txn) async {
+      await SosStore.savePublished(txn, state);
       await txn.insert('settings', {
         'key': 'mySos',
         'value': state,

@@ -12,6 +12,14 @@ abstract final class RescueTheme {
   static const success = Color(0xFF23765B);
   static const danger = Color(0xFFC83F49);
 
+  static Color mutedFor(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? darkTextMuted : muted;
+
+  static Color accentFor(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+      ? const Color(0xFFFFAD85)
+      : orangeInk;
+
   static ThemeData get light {
     final scheme = ColorScheme.fromSeed(
       seedColor: orange,
@@ -217,7 +225,10 @@ abstract final class RescueTheme {
     );
     return base.copyWith(
       scaffoldBackgroundColor: darkBackground,
-      textTheme: base.textTheme.apply(bodyColor: darkText, displayColor: darkText),
+      textTheme: base.textTheme.apply(
+        bodyColor: darkText,
+        displayColor: darkText,
+      ),
       appBarTheme: const AppBarTheme(
         backgroundColor: darkBackground,
         foregroundColor: darkText,
@@ -299,7 +310,9 @@ abstract final class RescueTheme {
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => TextStyle(
             fontFamily: 'NotoSansThai',
-            color: states.contains(WidgetState.selected) ? Colors.white : darkTextMuted,
+            color: states.contains(WidgetState.selected)
+                ? Colors.white
+                : darkTextMuted,
             fontSize: 11,
             fontWeight: states.contains(WidgetState.selected)
                 ? FontWeight.w700
@@ -308,7 +321,9 @@ abstract final class RescueTheme {
         ),
         iconTheme: WidgetStateProperty.resolveWith(
           (states) => IconThemeData(
-            color: states.contains(WidgetState.selected) ? const Color(0xFFFF9565) : darkTextMuted,
+            color: states.contains(WidgetState.selected)
+                ? const Color(0xFFFF9565)
+                : darkTextMuted,
           ),
         ),
       ),

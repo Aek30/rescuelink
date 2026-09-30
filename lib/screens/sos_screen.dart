@@ -1,3 +1,4 @@
+import '../theme/rescue_theme.dart';
 import 'package:flutter/material.dart';
 import '../models/message_model.dart';
 import '../models/sos_alert.dart';
@@ -7,6 +8,8 @@ import 'chat_screen.dart';
 import '../widgets/presence_list.dart';
 import '../widgets/location_button.dart';
 import '../widgets/sos_radar.dart';
+import '../services/sos_store.dart';
+import 'my_sos_screen.dart';
 
 class SosScreen extends StatefulWidget {
   const SosScreen({super.key, required this.service});
@@ -28,8 +31,8 @@ class _SosScreenState extends State<SosScreen> {
   String? _error;
   bool _rescueTab = false;
   static const _ink = Color(0xFF102D43);
-  static const _muted = Color(0xFF687782);
-  static const _orange = Color(0xFFB94612);
+  Color get _muted => RescueTheme.mutedFor(context);
+  Color get _orange => RescueTheme.accentFor(context);
 
   @override
   void initState() {
@@ -160,10 +163,7 @@ class _SosScreenState extends State<SosScreen> {
       prefixIcon: icon == null ? null : Icon(icon, size: 20, color: _muted),
       filled: true,
       fillColor: isDark ? const Color(0xFF161C24) : const Color(0xFFFCF8F1),
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 18,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide(
@@ -178,7 +178,7 @@ class _SosScreenState extends State<SosScreen> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: _orange, width: 1.5),
+        borderSide: BorderSide(color: _orange, width: 1.5),
       ),
     );
   }
@@ -217,10 +217,7 @@ class _SosScreenState extends State<SosScreen> {
                 ),
                 child: Text(
                   number,
-                  style: const TextStyle(
-                    color: _orange,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: TextStyle(color: _orange, fontWeight: FontWeight.w800),
                 ),
               ),
               const SizedBox(width: 10),
@@ -239,7 +236,7 @@ class _SosScreenState extends State<SosScreen> {
           const SizedBox(height: 6),
           Text(
             subtitle,
-            style: const TextStyle(color: _muted, fontSize: 12, height: 1.5),
+            style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
           ),
           const SizedBox(height: 20),
           ...children,
@@ -279,12 +276,16 @@ class _SosScreenState extends State<SosScreen> {
                         ? _orange
                         : (isDark ? const Color(0xFFF1F5F9) : _ink),
                     backgroundColor: _category == type
-                        ? (isDark ? const Color(0xFF3D2314) : const Color(0xFFFFEADB))
+                        ? (isDark
+                              ? const Color(0xFF3D2314)
+                              : const Color(0xFFFFEADB))
                         : (isDark ? const Color(0xFF161C24) : Colors.white),
                     side: BorderSide(
                       color: _category == type
                           ? _orange
-                          : (isDark ? const Color(0xFF283442) : const Color(0xFFEAE2D8)),
+                          : (isDark
+                                ? const Color(0xFF283442)
+                                : const Color(0xFFEAE2D8)),
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -345,9 +346,28 @@ class _SosScreenState extends State<SosScreen> {
       final isDark = Theme.of(context).brightness == Brightness.dark;
       final inkColor = isDark ? const Color(0xFFF1F5F9) : _ink;
       return Scaffold(
-        backgroundColor: isDark ? const Color(0xFF0C1017) : const Color(0xFFFCF8F1),
+        backgroundColor: isDark
+            ? const Color(0xFF0C1017)
+            : const Color(0xFFFCF8F1),
         appBar: AppBar(
-          backgroundColor: isDark ? const Color(0xFF0C1017) : const Color(0xFFFCF8F1),
+          actions: [
+            IconButton(
+              tooltip: 'รายการเหตุ SOS ของฉัน',
+              icon: const Icon(Icons.history),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => MySosScreen(
+                    store: SosStore(service.database),
+                    onCreate: () => Navigator.pop(context),
+                  ),
+                ),
+              ),
+            ),
+          ],
+          backgroundColor: isDark
+              ? const Color(0xFF0C1017)
+              : const Color(0xFFFCF8F1),
           surfaceTintColor: Colors.transparent,
           foregroundColor: inkColor,
           title: const Text(
@@ -368,7 +388,9 @@ class _SosScreenState extends State<SosScreen> {
                     Container(
                       padding: const EdgeInsets.all(5),
                       decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1E2631) : const Color(0xFFF0EBE3),
+                        color: isDark
+                            ? const Color(0xFF1E2631)
+                            : const Color(0xFFF0EBE3),
                         borderRadius: BorderRadius.circular(18),
                       ),
                       child: Row(
@@ -394,19 +416,23 @@ class _SosScreenState extends State<SosScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    if (_busy) const LinearProgressIndicator(color: _orange),
+                    if (_busy) LinearProgressIndicator(color: _orange),
                     if (_error != null || service.error != null)
                       Container(
                         margin: const EdgeInsets.only(bottom: 16),
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF381815) : const Color(0xFFFFE8E4),
+                          color: isDark
+                              ? const Color(0xFF381815)
+                              : const Color(0xFFFFE8E4),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Text(
                           _error ?? service.error!,
                           style: TextStyle(
-                            color: isDark ? const Color(0xFFFF897D) : const Color(0xFF9B3021),
+                            color: isDark
+                                ? const Color(0xFFFF897D)
+                                : const Color(0xFF9B3021),
                           ),
                         ),
                       ),
@@ -420,7 +446,7 @@ class _SosScreenState extends State<SosScreen> {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      const Text(
+                      Text(
                         'ติดตามคำขอและติดต่อผู้ที่ต้องการความช่วยเหลือ',
                         style: TextStyle(color: _muted, height: 1.5),
                       ),
@@ -457,7 +483,7 @@ class _SosScreenState extends State<SosScreen> {
                             child: Text('ยังไม่มี SOS ที่ส่งมาถึงเครื่องนี้'),
                           ),
                         ...service.receivedSos.map(_requestCard),
-                        const Text(
+                        Text(
                           'สถานะรับข้อความไม่ได้หมายถึงมีผู้ช่วยเหลือรับงานแล้ว',
                           style: TextStyle(color: _muted, fontSize: 12),
                         ),
@@ -491,7 +517,7 @@ class _SosScreenState extends State<SosScreen> {
                                         : Colors.white.withValues(alpha: .8),
                                     borderRadius: BorderRadius.circular(14),
                                   ),
-                                  child: const Icon(
+                                  child: Icon(
                                     Icons.sos_rounded,
                                     color: _orange,
                                     size: 30,
@@ -502,7 +528,9 @@ class _SosScreenState extends State<SosScreen> {
                                   child: Text(
                                     'ทุกการขอความช่วยเหลือสำคัญ',
                                     style: TextStyle(
-                                      color: isDark ? const Color(0xFFFF9E7D) : const Color(0xFF934025),
+                                      color: isDark
+                                          ? const Color(0xFFFF9E7D)
+                                          : const Color(0xFF934025),
                                       fontSize: 12,
                                       fontWeight: FontWeight.w700,
                                     ),
@@ -526,7 +554,9 @@ class _SosScreenState extends State<SosScreen> {
                             Text(
                               'ระบุเหตุและตำแหน่ง เพื่อให้คนที่เชื่อมต่อ\nเข้าใจว่าคุณต้องการความช่วยเหลืออะไร',
                               style: TextStyle(
-                                color: isDark ? const Color(0xFFC4B5A5) : const Color(0xFF805E4F),
+                                color: isDark
+                                    ? const Color(0xFFC4B5A5)
+                                    : const Color(0xFF805E4F),
                                 fontSize: 13,
                                 height: 1.6,
                               ),
@@ -623,7 +653,9 @@ class _SosScreenState extends State<SosScreen> {
                             width: double.infinity,
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: isDark ? const Color(0xFF14221E) : const Color(0xFFF2F6F5),
+                              color: isDark
+                                  ? const Color(0xFF14221E)
+                                  : const Color(0xFFF2F6F5),
                               borderRadius: BorderRadius.circular(16),
                               border: isDark
                                   ? Border.all(color: const Color(0xFF1F3830))
@@ -632,9 +664,13 @@ class _SosScreenState extends State<SosScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.location_on_outlined,
-                                  color: Color(0xFF38776B),
+                                  color:
+                                      Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? const Color(0xFF8CDAC1)
+                                      : const Color(0xFF38776B),
                                   size: 28,
                                 ),
                                 const SizedBox(height: 10),
@@ -642,7 +678,7 @@ class _SosScreenState extends State<SosScreen> {
                                   _location?.summary ?? 'ยังไม่ได้แนบพิกัด',
                                 ),
                                 if (_location == null)
-                                  const Text(
+                                  Text(
                                     'ส่งคำขอโดยไม่แนบพิกัดได้',
                                     style: TextStyle(
                                       color: _muted,
@@ -686,7 +722,7 @@ class _SosScreenState extends State<SosScreen> {
                         child: ExpansionTile(
                           shape: const Border(),
                           collapsedShape: const Border(),
-                          leading: const Icon(
+                          leading: Icon(
                             Icons.group_add_outlined,
                             color: _muted,
                           ),
@@ -701,7 +737,7 @@ class _SosScreenState extends State<SosScreen> {
                             active
                                 ? 'ยกเลิก SOS ก่อนเปลี่ยนผู้รับ'
                                 : 'ไม่จำเป็นต้องเลือก',
-                            style: const TextStyle(fontSize: 12, color: _muted),
+                            style: TextStyle(fontSize: 12, color: _muted),
                           ),
                           children: [
                             if (service.peers.isEmpty)
@@ -756,7 +792,7 @@ class _SosScreenState extends State<SosScreen> {
                           ),
                         ),
                       ),
-                      const Padding(
+                      Padding(
                         padding: EdgeInsets.only(top: 10),
                         child: Text(
                           'คุณจะได้ตรวจสอบข้อมูลอีกครั้งก่อนส่ง',
@@ -767,7 +803,9 @@ class _SosScreenState extends State<SosScreen> {
                       if (active)
                         TextButton(
                           style: TextButton.styleFrom(
-                            foregroundColor: const Color(0xFFB63432),
+                            foregroundColor: Theme.of(
+                              context,
+                            ).colorScheme.error,
                           ),
                           onPressed: _busy
                               ? null
@@ -776,7 +814,7 @@ class _SosScreenState extends State<SosScreen> {
                         ),
                     ],
                     const SizedBox(height: 18),
-                    const ExpansionTile(
+                    ExpansionTile(
                       shape: Border(),
                       collapsedShape: Border(),
                       title: Text(

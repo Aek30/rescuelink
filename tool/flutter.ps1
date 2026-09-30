@@ -8,6 +8,18 @@ if (-not (Test-Path -LiteralPath $flutterExecutable)) {
     throw 'Flutter not found. Add your Flutter SDK bin directory to PATH.'
 }
 $projectDirectory = Split-Path -Parent $PSScriptRoot
+# ASCII workspaces do not need a temporary drive. Using one unnecessarily
+# leaves absolute Gradle/Dart cache paths pointing at a drive removed on exit.
+if ($projectDirectory -notmatch '[^\x00-\x7F]') {
+    Push-Location -LiteralPath $projectDirectory
+    try {
+        & $flutterExecutable @FlutterArguments
+        $flutterExitCode = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+    exit $flutterExitCode
+}
 $parentDirectory = Split-Path -Parent $projectDirectory
 $projectName = Split-Path -Leaf $projectDirectory
 $driveLetter = @('R','S','T','U','V','W','X','Y','Z') | Where-Object {

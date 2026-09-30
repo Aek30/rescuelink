@@ -1,4 +1,5 @@
 import '../services/app_preferences.dart';
+import '../services/auth_service.dart';
 import '../models/message_model.dart';
 import 'settings_panel.dart';
 import 'login_screen.dart';
@@ -379,10 +380,30 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                 onQueue: () => setState(() => _tab = 3),
                 onDevice: _openConnectionSettings,
                 onConnection: _openConnectionSettings,
-                onExit: () => Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
-                  (_) => false,
-                ),
+                onExit: () => _run(() async {
+                  await _service.stopAll();
+                  if (AuthService.instance.signedIn) {
+                    try {
+                      await AuthService.instance.signOut();
+                    } catch (_) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('ออกจากระบบไม่สำเร็จ กรุณาลองใหม่'),
+                          ),
+                        );
+                      }
+                      return;
+                    }
+                  }
+                  if (!context.mounted) return;
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const LoginScreen(),
+                    ),
+                    (_) => false,
+                  );
+                }),
               );
             }
             return ListView(
@@ -1076,9 +1097,9 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                   _connectionStatusThai,
 
                   style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(
-                      alpha: 0.85,
-                    ),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.85),
                     height: 1.4,
                     fontSize: 13,
                   ),
@@ -1331,7 +1352,9 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                   'RescueLink สามารถติดต่อสื่อสารกับโทรศัพท์ที่อยู่ใกล้เคียงได้โดยตรง โดยไม่ต้องใช้ข้อมูลมือถือหรือการเชื่อมต่ออินเทอร์เน็ต',
 
                   style: TextStyle(
-                    color: isDark ? const Color(0xFF86EFAC) : const Color(0xFF50675F),
+                    color: isDark
+                        ? const Color(0xFF86EFAC)
+                        : const Color(0xFF50675F),
 
                     height: 1.45,
                     fontSize: 13,
@@ -1621,7 +1644,9 @@ class _ModeCard extends StatelessWidget {
             border: Border.all(
               color: active
                   ? const Color(0xFFB94612)
-                  : (isDark ? const Color(0xFF283442) : const Color(0xFFEAE2D8)),
+                  : (isDark
+                        ? const Color(0xFF283442)
+                        : const Color(0xFFEAE2D8)),
 
               width: active ? 1.5 : 1,
             ),
@@ -1638,7 +1663,9 @@ class _ModeCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: active
                       ? const Color(0xFFB94612)
-                      : (isDark ? const Color(0xFF382314) : const Color(0xFFFFEADB)),
+                      : (isDark
+                            ? const Color(0xFF382314)
+                            : const Color(0xFFFFEADB)),
 
                   borderRadius: BorderRadius.circular(13),
                 ),
@@ -1667,7 +1694,9 @@ class _ModeCard extends StatelessWidget {
                 subtitle,
 
                 style: TextStyle(
-                  color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade600,
+                  color: isDark
+                      ? const Color(0xFF94A3B8)
+                      : Colors.grey.shade600,
 
                   fontSize: 12,
                   height: 1.35,
@@ -1897,7 +1926,9 @@ class _ConversationTile extends StatelessWidget {
                         shape: BoxShape.circle,
 
                         border: Border.all(
-                          color: isDark ? const Color(0xFF161C24) : Colors.white,
+                          color: isDark
+                              ? const Color(0xFF161C24)
+                              : Colors.white,
                           width: 2,
                         ),
                       ),
@@ -1932,7 +1963,9 @@ class _ConversationTile extends StatelessWidget {
                       style: TextStyle(
                         color: online
                             ? const Color(0xFF2E9B6F)
-                            : (isDark ? const Color(0xFF94A3B8) : Colors.grey.shade600),
+                            : (isDark
+                                  ? const Color(0xFF94A3B8)
+                                  : Colors.grey.shade600),
 
                         fontSize: 12,
                       ),

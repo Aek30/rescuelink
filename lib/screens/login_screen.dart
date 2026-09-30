@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'nearby_test_screen.dart';
+import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.auth});
+  final AuthService? auth;
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -14,7 +16,16 @@ class _LoginScreenState extends State<LoginScreen> {
   final identity = TextEditingController();
   final password = TextEditingController();
   bool register = false, hidden = true, remember = true, english = false;
+  bool busy = false, claimGuest = false;
+  String? error;
+  AuthService get auth => widget.auth ?? AuthService.instance;
   String t(String th, String en) => english ? en : th;
+
+  @override
+  void initState() {
+    super.initState();
+    error = auth.error;
+  }
 
   @override
   void dispose() {
@@ -23,35 +34,38 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void notice() => showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(
-        t('ระบบบัญชียังไม่พร้อมใช้งาน', 'Accounts are not available yet'),
-      ),
-      content: Text(
-        t(
-          'ยังไม่ได้เชื่อมต่อบริการยืนยันตัวตน คุณสามารถเข้าใช้งานแบบผู้เยี่ยมชมได้โดยไม่ต้องสมัครบัญชี',
-          'Authentication is not connected yet. Please continue as a guest.',
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(t('เข้าใจแล้ว', 'Got it')),
-        ),
-      ],
-    ),
-  );
-
-  void submit() {
-    if (form.currentState!.validate()) notice();
+  Future<void> submit() async {
+    if (busy || !form.currentState!.validate()) return;
+    setState(() {
+      busy = true;
+      error = null;
+    });
+    final ok = await auth.authenticate(
+      identity.text,
+      password.text,
+      register: register,
+      remember: remember,
+      claimGuest: claimGuest,
+    );
+    if (!mounted) return;
+    setState(() {
+      busy = false;
+      error = auth.error;
+    });
+    if (ok) {
+      password.clear();
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(builder: (_) => const NearbyTestScreen()),
+        (_) => false,
+      );
+    }
   }
 
   Widget field(bool secret) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return TextFormField(
       controller: secret ? password : identity,
+      enabled: !busy,
       obscureText: secret && hidden,
       autocorrect: false,
       enableSuggestions: !secret,
@@ -70,11 +84,14 @@ class _LoginScreenState extends State<LoginScreen> {
               secret ? 'กรุณากรอกรหัสผ่าน' : 'กรุณากรอกอีเมลหรือเบอร์โทรศัพท์',
               'This field is required',
             )
+          : !secret &&
+                !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value.trim())
+          ? t('กรุณากรอกอีเมลที่ถูกต้อง', 'Enter a valid email')
+          : secret && register && value.length < 8
+          ? t('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร', 'Use at least 8 characters')
           : null,
       decoration: InputDecoration(
-        hintText: secret
-            ? t('รหัสผ่าน', 'Password')
-            : t('อีเมลหรือเบอร์โทรศัพท์', 'Email or phone number'),
+        hintText: secret ? t('รหัสผ่าน', 'Password') : t('อีเมล', 'Email'),
         hintStyle: TextStyle(
           color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF939493),
           fontSize: 14,
@@ -104,8 +121,13 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
         filled: true,
-        fillColor: isDark ? const Color(0xFF161C24) : Colors.white.withValues(alpha: .9),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        fillColor: isDark
+            ? const Color(0xFF161C24)
+            : Colors.white.withValues(alpha: .9),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(13)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
@@ -127,11 +149,13 @@ class _LoginScreenState extends State<LoginScreen> {
       child: Semantics(
         selected: register == value,
         child: InkWell(
-          onTap: () => setState(() {
-            register = value;
-            form.currentState?.reset();
-            password.clear();
-          }),
+          onTap: busy
+              ? null
+              : () => setState(() {
+                  register = value;
+                  form.currentState?.reset();
+                  password.clear();
+                }),
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
@@ -163,14 +187,19 @@ class _LoginScreenState extends State<LoginScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? const Color(0xFFF1F5F9) : navy;
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0C1017) : const Color(0xFFFCF8F1),
+      backgroundColor: isDark
+          ? const Color(0xFF0C1017)
+          : const Color(0xFFFCF8F1),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) => SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
             child: ConstrainedBox(
               constraints: BoxConstraints(
-                minHeight: (constraints.maxHeight - 40).clamp(0, double.infinity),
+                minHeight: (constraints.maxHeight - 40).clamp(
+                  0,
+                  double.infinity,
+                ),
               ),
               child: Center(
                 child: ConstrainedBox(
@@ -181,9 +210,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         primary: orange,
                         onPrimary: Colors.white,
                       ),
-                      textTheme: Theme.of(
-                        context,
-                      ).textTheme.apply(bodyColor: textColor, displayColor: textColor),
+                      textTheme: Theme.of(context).textTheme.apply(
+                        bodyColor: textColor,
+                        displayColor: textColor,
+                      ),
                     ),
                     child: AutofillGroup(
                       child: Form(
@@ -200,7 +230,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                 onSelected: (value) =>
                                     setState(() => english = value),
                                 itemBuilder: (_) => const [
-                                  PopupMenuItem(value: false, child: Text('ไทย')),
+                                  PopupMenuItem(
+                                    value: false,
+                                    child: Text('ไทย'),
+                                  ),
                                   PopupMenuItem(
                                     value: true,
                                     child: Text('English'),
@@ -271,7 +304,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             Container(
                               clipBehavior: Clip.antiAlias,
                               decoration: BoxDecoration(
-                                color: isDark ? const Color(0xFF1E2631) : Colors.white,
+                                color: isDark
+                                    ? const Color(0xFF1E2631)
+                                    : Colors.white,
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               child: Row(
@@ -285,6 +320,34 @@ class _LoginScreenState extends State<LoginScreen> {
                             field(false),
                             const SizedBox(height: 12),
                             field(true),
+                            CheckboxListTile(
+                              value: claimGuest,
+                              onChanged: busy
+                                  ? null
+                                  : (value) =>
+                                        setState(() => claimGuest = value!),
+                              title: Text(
+                                t(
+                                  'ผูกข้อมูล Guest เดิมกับบัญชีนี้',
+                                  'Move guest data to this account',
+                                ),
+                              ),
+                              subtitle: Text(
+                                t(
+                                  'ย้ายประวัติ SOS และคิวส่งทั้งหมด ใช้ได้เมื่อบัญชียังไม่มีข้อมูลในเครื่องนี้',
+                                  'Moves history, SOS and outbox; available before this account has local data',
+                                ),
+                              ),
+                              contentPadding: EdgeInsets.zero,
+                              controlAffinity: ListTileControlAffinity.leading,
+                            ),
+                            if (error != null)
+                              Text(
+                                error!,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              ),
                             Row(
                               children: [
                                 Checkbox(
@@ -293,8 +356,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(4),
                                   ),
-                                  onChanged: (value) =>
-                                      setState(() => remember = value!),
+                                  onChanged: busy
+                                      ? null
+                                      : (value) =>
+                                            setState(() => remember = value!),
                                   visualDensity: VisualDensity.compact,
                                 ),
                                 Flexible(
@@ -304,23 +369,15 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                                 const Spacer(),
-                                if (!register)
-                                  TextButton(
-                                    onPressed: notice,
-                                    child: Text(
-                                      t('ลืมรหัสผ่าน?', 'Forgot password?'),
-                                      style: const TextStyle(
-                                        color: Color(0xFFE85415),
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ),
                               ],
                             ),
                             DecoratedBox(
                               decoration: BoxDecoration(
                                 gradient: const LinearGradient(
-                                  colors: [Color(0xFFFF7C30), Color(0xFFFF6024)],
+                                  colors: [
+                                    Color(0xFFFF7C30),
+                                    Color(0xFFFF6024),
+                                  ],
                                 ),
                                 borderRadius: BorderRadius.circular(28),
                               ),
@@ -332,9 +389,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                   minimumSize: const Size.fromHeight(50),
                                   shape: const StadiumBorder(),
                                 ),
-                                onPressed: submit,
+                                onPressed: busy ? null : submit,
                                 child: Text(
-                                  register
+                                  busy
+                                      ? t('กำลังดำเนินการ…', 'Please wait…')
+                                      : register
                                       ? t('สมัครใช้งาน', 'Create account')
                                       : t('เข้าสู่ระบบ', 'Log in'),
                                   style: const TextStyle(
@@ -374,58 +433,23 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ],
                               ),
                             ),
-                            OutlinedButton(
-                              style: OutlinedButton.styleFrom(
-                                backgroundColor: isDark ? const Color(0xFF161C24) : Colors.white,
-                                foregroundColor: textColor,
-                                side: BorderSide(
-                                  color: isDark
-                                      ? const Color(0xFF283442)
-                                      : const Color(0xFFE2E2E2),
-                                ),
-                                shape: const StadiumBorder(),
-                                minimumSize: const Size.fromHeight(50),
-                              ),
-                              onPressed: notice,
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Text(
-                                    'G',
-                                    style: TextStyle(
-                                      fontFamily: 'Roboto',
-                                      color: Color(0xFF4285F4),
-                                      fontSize: 26,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  Flexible(
-                                    child: Text(
-                                      t(
-                                        'เข้าสู่ระบบด้วย Google',
-                                        'Continue with Google',
-                                      ),
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
                             const SizedBox(height: 18),
                             Material(
-                              color: isDark ? const Color(0xFF161C24) : const Color(0xFFF0EBE3),
+                              color: isDark
+                                  ? const Color(0xFF161C24)
+                                  : const Color(0xFFF0EBE3),
                               borderRadius: BorderRadius.circular(22),
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(22),
-                                onTap: () =>
-                                    Navigator.of(context).pushReplacement(
-                                      MaterialPageRoute<void>(
-                                        builder: (_) => const NearbyTestScreen(),
-                                      ),
-                                    ),
+                                onTap: busy
+                                    ? null
+                                    : () =>
+                                          Navigator.of(context).pushReplacement(
+                                            MaterialPageRoute<void>(
+                                              builder: (_) =>
+                                                  const NearbyTestScreen(),
+                                            ),
+                                          ),
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 14,
@@ -437,7 +461,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                         backgroundColor: isDark
                                             ? const Color(0xFF382314)
                                             : const Color(0xFFFFEECF),
-                                        foregroundColor: const Color(0xFFFF8A00),
+                                        foregroundColor: const Color(
+                                          0xFFFF8A00,
+                                        ),
                                         radius: 22,
                                         child: const Icon(
                                           Icons.person_rounded,

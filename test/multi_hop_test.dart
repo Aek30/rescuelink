@@ -178,6 +178,8 @@ void main() {
       nodes[1].dispose();
       final database = await dbs[1].database;
       await database.execute('DROP TABLE relay_seen');
+      await database.execute('DROP TABLE sos_records');
+      await database.execute('DROP TABLE sos_queue');
       await database.setVersion(1);
       await dbs[1].close();
       nodes[1] = MessageService(nearbyService: wires[1], database: dbs[1]);

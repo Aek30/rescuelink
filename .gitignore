@@ -44,3 +44,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local Supabase app configuration (public key only; never put admin keys here).
+/config/supabase.local.json
+/config/test-account.local.json
+/supabase/.temp/

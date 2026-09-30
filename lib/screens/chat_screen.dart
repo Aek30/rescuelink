@@ -67,7 +67,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 backgroundColor: isDark
                     ? const Color(0xFF382314)
                     : RescueTheme.peach,
-                foregroundColor: isDark ? const Color(0xFFFF9565) : RescueTheme.orangeInk,
+                foregroundColor: isDark
+                    ? const Color(0xFFFF9565)
+                    : RescueTheme.orangeInk,
                 child: const Icon(Icons.person_outline_rounded),
               ),
               const SizedBox(width: 12),
@@ -90,7 +92,9 @@ class _ChatScreenState extends State<ChatScreen> {
                           : 'ไม่มีการเชื่อมต่อโดยตรง',
                       style: TextStyle(
                         fontSize: 11,
-                        color: isDark ? const Color(0xFF94A3B8) : RescueTheme.muted,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : RescueTheme.mutedFor(context),
                         fontWeight: FontWeight.w400,
                       ),
                     ),
@@ -119,7 +123,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       : 'ไม่มีลิงก์ตรง • ลองส่งผ่านเครื่องใกล้เคียงได้ '
                             '(SENT ยังไม่ยืนยันว่าปลายทางได้รับ)',
                   style: TextStyle(
-                    color: isDark ? const Color(0xFFCBD5E1) : RescueTheme.muted,
+                    color: isDark
+                        ? const Color(0xFFCBD5E1)
+                        : RescueTheme.mutedFor(context),
                     fontSize: 12,
                     height: 1.5,
                   ),
@@ -154,16 +160,18 @@ class _ChatScreenState extends State<ChatScreen> {
                                 'ยังไม่มีข้อความ • เริ่มบทสนทนาได้เลย',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: isDark ? Colors.white : RescueTheme.navy,
+                                  color: isDark
+                                      ? Colors.white
+                                      : RescueTheme.navy,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              const Text(
+                              Text(
                                 'ทุกข้อความช่วยให้เราใกล้กันมากขึ้น',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: RescueTheme.muted,
+                                  color: RescueTheme.mutedFor(context),
                                   fontSize: 13,
                                 ),
                               ),
@@ -193,11 +201,11 @@ class _ChatScreenState extends State<ChatScreen> {
                               decoration: BoxDecoration(
                                 color: mine
                                     ? (isDark
-                                        ? const Color(0xFF55250D)
-                                        : RescueTheme.peach)
+                                          ? const Color(0xFF55250D)
+                                          : RescueTheme.peach)
                                     : (isDark
-                                        ? const Color(0xFF161C24)
-                                        : Colors.white),
+                                          ? const Color(0xFF161C24)
+                                          : Colors.white),
                                 border: Border.all(
                                   color: isDark
                                       ? const Color(0xFF283442)

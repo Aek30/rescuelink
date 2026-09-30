@@ -77,6 +77,7 @@ class MessageService extends ChangeNotifier {
     }
     _publishingSos = true;
     try {
+      await _reloadCurrentSos();
       final previous = mySos;
       if (!active && (previous == null || !previous.active)) return;
       final alert = SosAlert(
@@ -187,10 +188,19 @@ class MessageService extends ChangeNotifier {
   }
 
   Future<void> _refresh() async {
+    await _reloadCurrentSos();
     receivedRoutes = await database.getReceivedRoutes();
     messages = await database.getMessages();
     peers = await database.getPeers();
     _notify();
+  }
+
+  Future<void> _reloadCurrentSos() async {
+    final saved = await database.getSetting('mySos');
+    if (saved == null) return;
+    final state = jsonDecode(saved) as Map<String, dynamic>;
+    mySos = SosAlert.fromJson(state['alert'] as String);
+    _sosRecipients = (state['recipients'] as List).cast<String>().toSet();
   }
 
   void _connectionChanged() {
@@ -248,6 +258,7 @@ class MessageService extends ChangeNotifier {
     if (!ready || _disposed || _ticking) return;
     _ticking = true;
     try {
+      if (!_publishingSos) await _reloadCurrentSos();
       String? retryError;
       for (final device in nearbyService.connectedDevices) {
         try {
@@ -279,6 +290,7 @@ class MessageService extends ChangeNotifier {
           );
           final history = await database.getMessages();
           final latestSos = <String, int>{};
+          if (mySos != null) latestSos[mySos!.incidentId] = mySos!.revision;
           for (final m in history.where(
             (m) => m.type == MessageType.sos && m.senderId == myId,
           )) {

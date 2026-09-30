@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/app_preferences.dart';
+import '../services/auth_service.dart';
+import '../services/sos_sync_service.dart';
+import 'sync_screen.dart';
 import '../theme/rescue_theme.dart';
 
 class SettingsPanel extends StatelessWidget {
@@ -149,7 +152,8 @@ class SettingsPanel extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      t('ผู้ใช้ Guest', 'Guest user'),
+                      AuthService.instance.session?.email ??
+                          t('ผู้ใช้ Guest', 'Guest user'),
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
@@ -242,6 +246,21 @@ class SettingsPanel extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 14),
+                    row(
+                      Icons.cloud_sync_outlined,
+                      t('บัญชี / Sync', 'Account / Sync'),
+                      tap: () {
+                        final sync = SosSyncCoordinator.instance.current;
+                        if (sync != null) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => SyncScreen(service: sync),
+                            ),
+                          );
+                        }
+                      },
+                    ),
                     row(
                       Icons.health_and_safety_outlined,
                       t('สถานะหน่วยกู้ภัย', 'Rescue unit mode'),
@@ -347,7 +366,9 @@ class SettingsPanel extends StatelessWidget {
                           ),
                         ),
                         child: Text(
-                          t('กลับหน้าเข้าสู่ระบบ', 'Back to sign in'),
+                          AuthService.instance.signedIn
+                              ? t('ออกจากระบบ', 'Sign out')
+                              : t('กลับหน้าเข้าสู่ระบบ', 'Back to sign in'),
                         ),
                       ),
                     ),

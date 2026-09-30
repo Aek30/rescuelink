@@ -153,9 +153,9 @@ class _OutboxQueueState extends State<OutboxQueue> {
           'ข้อความรอส่ง',
           style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
         ),
-        const Text(
+        Text(
           'ติดตามข้อความฉุกเฉินและการส่งต่อถึงเครื่องรับ',
-          style: TextStyle(color: RescueTheme.muted, fontSize: 13),
+          style: TextStyle(color: RescueTheme.mutedFor(context), fontSize: 13),
         ),
         const SizedBox(height: 16),
         Wrap(
@@ -171,12 +171,14 @@ class _OutboxQueueState extends State<OutboxQueue> {
                   size: 17,
                   color: _filter == i
                       ? RescueTheme.orangeInk
-                      : RescueTheme.muted,
+                      : RescueTheme.mutedFor(context),
                 ),
                 label: Text(
                   '${_labels[i]} (${messages.where((m) => _group(m) == i).length})',
                 ),
-                selectedColor: isDark ? const Color(0xFF382314) : RescueTheme.peach,
+                selectedColor: isDark
+                    ? const Color(0xFF382314)
+                    : RescueTheme.peach,
                 onSelected: (selected) =>
                     setState(() => _filter = selected ? i : null),
               ),
@@ -187,7 +189,7 @@ class _OutboxQueueState extends State<OutboxQueue> {
           _filter == null
               ? 'ทั้งหมด • ${messages.length} ข้อความ'
               : '${_labels[_filter!]} • แตะตัวกรองอีกครั้งเพื่อดูทั้งหมด',
-          style: const TextStyle(fontSize: 12, color: RescueTheme.muted),
+          style: TextStyle(fontSize: 12, color: RescueTheme.mutedFor(context)),
         ),
         const SizedBox(height: 12),
         if (!widget.ready || widget.busy) const LinearProgressIndicator(),
@@ -208,10 +210,10 @@ class _OutboxQueueState extends State<OutboxQueue> {
             ),
             child: Column(
               children: [
-                const Icon(
+                Icon(
                   Icons.outbox_outlined,
                   size: 40,
-                  color: RescueTheme.muted,
+                  color: RescueTheme.mutedFor(context),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -251,7 +253,7 @@ class _OutboxQueueState extends State<OutboxQueue> {
             ),
             borderRadius: BorderRadius.circular(18),
           ),
-          child: const Column(
+          child: Column(
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -270,7 +272,10 @@ class _OutboxQueueState extends State<OutboxQueue> {
               Text(
                 'ระบบจะลองส่งอีกครั้งเมื่อเชื่อมต่อกับอุปกรณ์ใกล้เคียง\nการซิงก์คลาวด์ยังไม่เปิดใช้งาน',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: RescueTheme.muted),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: RescueTheme.mutedFor(context),
+                ),
               ),
             ],
           ),
@@ -282,7 +287,9 @@ class _OutboxQueueState extends State<OutboxQueue> {
   Widget _card(MessageModel m) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final group = _group(m);
-    final color = _colors[group];
+    final color = isDark
+        ? const [Color(0xFFFFA6A8), Color(0xFF93DCAA), Color(0xFF9CCBFF)][group]
+        : _colors[group];
     final alert = _alert(m);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -306,7 +313,9 @@ class _OutboxQueueState extends State<OutboxQueue> {
               children: [
                 CircleAvatar(
                   backgroundColor: color,
-                  foregroundColor: Colors.white,
+                  foregroundColor: isDark
+                      ? RescueTheme.darkBackground
+                      : Colors.white,
                   child: Icon(
                     m.type == MessageType.sos
                         ? Icons.sos
@@ -331,9 +340,9 @@ class _OutboxQueueState extends State<OutboxQueue> {
                       const SizedBox(height: 3),
                       Text(
                         '${m.type == MessageType.sos ? 'SOS' : 'ข้อความ'} • ${_date(m.timestamp)}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: RescueTheme.muted,
+                          color: RescueTheme.mutedFor(context),
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -401,10 +410,10 @@ class _OutboxQueueState extends State<OutboxQueue> {
                     ],
                   ),
                 ),
-                const Icon(
+                Icon(
                   Icons.chevron_right,
                   size: 18,
-                  color: RescueTheme.muted,
+                  color: RescueTheme.mutedFor(context),
                 ),
               ],
             ),
