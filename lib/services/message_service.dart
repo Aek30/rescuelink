@@ -3,17 +3,24 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/message_model.dart';
+import '../models/incoming_notice.dart';
 import '../models/relay_packet.dart';
 import '../models/sos_alert.dart';
 import '../models/peer_presence.dart';
 import 'local_database_service.dart';
+import 'media_service.dart';
 import 'nearby_service.dart';
+import 'app_preferences.dart';
 
 class MessageService extends ChangeNotifier {
-  MessageService({required this.nearbyService, LocalDatabaseService? database})
-    : database = database ?? LocalDatabaseService.instance;
+  MessageService({
+    required this.nearbyService,
+    LocalDatabaseService? database,
+    this.mediaService,
+  }) : database = database ?? LocalDatabaseService.instance;
   final NearbyService nearbyService;
   final LocalDatabaseService database;
+  final MediaService? mediaService;
   final _uuid = const Uuid();
   final Map<String, String> _endpointPeers = {};
   final Set<String> _relaySent = {};
@@ -21,13 +28,86 @@ class MessageService extends ChangeNotifier {
   Map<String, String> peers = {};
   List<MessageModel> messages = [];
   Map<String, List<String>> receivedRoutes = {};
+  Map<String, int> unreadCounts = {};
+  final Set<String> _markingRead = {};
+  int get totalUnread =>
+      unreadCounts.values.fold(0, (total, count) => total + count);
+
+  String peerRoleLabel(String peerId) {
+    final state = presence[peerId];
+    if (state == null) return 'ยังไม่ทราบบทบาท';
+    final role = state.rescue ? 'หน่วยกู้ภัย' : 'ผู้ใช้ทั่วไป';
+    return state.isFresh(DateTime.now().toUtc()) ? role : '$role • สถานะล่าสุด';
+  }
+
+  String conversationPreview(String peerId) {
+    final unread = (unreadCounts[peerId] ?? 0) > 0;
+    final history = messages.where(
+      (m) =>
+          (m.senderId == peerId && m.receiverId == myId) ||
+          (!unread && m.senderId == myId && m.receiverId == peerId),
+    );
+    if (history.isEmpty) return 'ยังไม่มีข้อความ';
+    final latest = history.last;
+    final prefix = latest.senderId == myId ? 'คุณ: ' : '';
+    return prefix +
+        switch (latest.type) {
+          MessageType.media =>
+            mediaService?.getCached(latest.text)?.isVideo == true
+                ? 'วิดีโอ'
+                : 'รูปภาพ / สื่อ',
+          MessageType.sos => 'คำขอ SOS',
+          _ => latest.text,
+        };
+  }
+
+  Future<void> markConversationRead(String peerId, String messageId) async {
+    if (!ready || _disposed || !_markingRead.add(peerId)) return;
+    try {
+      await database.markConversationRead(myId!, peerId, messageId);
+      if (_disposed) return;
+      unreadCounts = await database.getUnreadCounts(myId!);
+      _notify();
+    } finally {
+      _markingRead.remove(peerId);
+    }
+  }
+
   String? myId, error;
   SosAlert? mySos;
   bool _publishingSos = false;
   bool rescueMode = false;
+
+  /// คืน peerId (deviceId) ที่ตรงกับ endpointId — ใช้โดย MediaService
+  String? getPeerForEndpoint(String endpointId) => _endpointPeers[endpointId];
   int _presenceSequence = 0;
   Map<String, PeerPresence> presence = {};
   void Function(String name)? onSosReceived;
+  void Function(String name)? onMediaReceived;
+  void Function(IncomingNotice notice)? onNotice;
+  final Set<String> clockSkewPeers = {};
+
+  void _notice(IncomingNotice notice) {
+    if (_disposed || !AppPreferences.instance.alerts) return;
+    onNotice?.call(notice);
+  }
+
+  void _sosNotice(String peer, SosAlert alert) {
+    if (!rescueMode || !alert.active) return;
+    onSosReceived?.call(alert.name);
+    _notice(
+      IncomingNotice(
+        id: '${alert.incidentId}:${alert.revision}',
+        peerId: peer,
+        name: alert.name,
+        body:
+            '${alert.category.label} • ${alert.people} คน\n${alert.details}\n'
+            '${alert.location == null ? 'ไม่ได้แนบพิกัด' : 'มีพิกัด • แตะดูรายละเอียด'}',
+        sos: alert,
+      ),
+    );
+  }
+
   int get activeSosCount => presence.values
       .where((p) => p.sos?.active == true && p.isFresh(DateTime.now().toUtc()))
       .length;
@@ -167,6 +247,24 @@ class MessageService extends ChangeNotifier {
         );
       }
       await _refresh();
+      // เริ่มต้น MediaService และส่ง myId
+      if (mediaService != null) {
+        mediaService!.onMessagesChanged = _refresh;
+        mediaService!.onReceived = (media) {
+          if (!AppPreferences.instance.alerts) return;
+          onMediaReceived?.call(media.senderName);
+          _notice(
+            IncomingNotice(
+              id: media.messageId,
+              peerId: media.senderId,
+              name: media.senderName,
+              body:
+                  'ส่ง${media.isImage ? 'รูปภาพ' : 'วิดีโอ'}: ${media.fileName}',
+            ),
+          );
+        };
+        await mediaService!.initialize(myId!);
+      }
       if (_disposed) return;
       nearbyService.onTextPayloadReceived = (endpoint, payload) {
         _incoming = _incoming.then(
@@ -192,6 +290,7 @@ class MessageService extends ChangeNotifier {
     receivedRoutes = await database.getReceivedRoutes();
     messages = await database.getMessages();
     peers = await database.getPeers();
+    unreadCounts = await database.getUnreadCounts(myId!);
     _notify();
   }
 
@@ -209,7 +308,10 @@ class MessageService extends ChangeNotifier {
         .toSet();
     if (setEquals(connected, _connectedEndpoints)) return;
     _connectedEndpoints = connected;
+    // A relay peer may have restarted; permit unacknowledged packets again.
+    _relaySent.clear();
     _endpointPeers.removeWhere((id, _) => !connected.contains(id));
+    if (mediaService != null) unawaited(mediaService!.pauseDisconnected());
     _notify();
     unawaited(retry());
   }
@@ -288,6 +390,17 @@ class MessageService extends ChangeNotifier {
               ).encode(),
             ).toJson(),
           );
+          // ─── ส่งสื่อที่ค้างไว้ (MediaService) ─────────────────────────────
+          if (mediaService != null) {
+            try {
+              await mediaService!.sendPendingForPeer(
+                peerId: peer,
+                endpointId: device.endpointId,
+              );
+            } catch (e) {
+              retryError = 'Media retry failed for ${device.name}: $e';
+            }
+          }
           final history = await database.getMessages();
           final latestSos = <String, int>{};
           if (mySos != null) latestSos[mySos!.incidentId] = mySos!.revision;
@@ -305,6 +418,8 @@ class MessageService extends ChangeNotifier {
               final alert = SosAlert.fromJson(message.text);
               if (alert.revision < (latestSos[alert.incidentId] ?? 0)) continue;
             }
+            // ข้ามข้อความ media (จัดการโดย MediaService แยกต่างหาก)
+            if (message.type == MessageType.media) continue;
             if (message.senderId != myId ||
                 message.status.index >= MessageStatus.delivered.index) {
               continue;
@@ -366,9 +481,20 @@ class MessageService extends ChangeNotifier {
         await _receiveRelay(endpointId, RelayPacket.fromMap(data));
         return;
       }
+      // ─── Media protocol packets (ไม่ถูก parse เป็น MessageModel) ─────────
+      if (data.containsKey('packetType')) {
+        await _receiveMediaPacket(endpointId, data);
+        return;
+      }
       final packet = MessageModel.fromMap(data);
       if (packet.senderId == myId) return;
       if (packet.type == MessageType.deviceInfo) {
+        if (DateTime.now().toUtc().difference(packet.timestamp).abs() >
+            const Duration(minutes: 5)) {
+          clockSkewPeers.add(packet.senderId);
+        } else {
+          clockSkewPeers.remove(packet.senderId);
+        }
         final existing = _endpointPeers[endpointId];
         if (existing != null && existing != packet.senderId) {
           throw const FormatException('Peer identity changed');
@@ -387,10 +513,21 @@ class MessageService extends ChangeNotifier {
         case MessageType.message:
         case MessageType.sos:
           if (packet.type == MessageType.sos) SosAlert.fromJson(packet.text);
-          await database.insertMessage(
+          final inserted = await database.insertMessage(
             packet.copyWith(status: MessageStatus.delivered),
           );
+          await database.saveReceivedRoute(packet.id, [packet.senderId, myId!]);
           await _refresh();
+          if (inserted && packet.type == MessageType.message) {
+            _notice(
+              IncomingNotice(
+                id: packet.id,
+                peerId: packet.senderId,
+                name: packet.senderName,
+                body: packet.text,
+              ),
+            );
+          }
           await nearbyService.sendMessage(
             endpointId,
             _packet(
@@ -407,6 +544,10 @@ class MessageService extends ChangeNotifier {
                 m.senderId == myId &&
                 m.receiverId == packet.senderId,
           )) {
+            await database.saveReceivedRoute(packet.ackFor!, [
+              myId!,
+              packet.senderId,
+            ]);
             await database.updateMessageStatus(
               packet.ackFor!,
               MessageStatus.delivered,
@@ -414,6 +555,7 @@ class MessageService extends ChangeNotifier {
             await _refresh();
           }
         case MessageType.presence:
+          // (presence handling unchanged)
           final state = PeerPresence.decode(
             packet.text,
             receivedAt: DateTime.now().toUtc(),
@@ -435,16 +577,13 @@ class MessageService extends ChangeNotifier {
                 (previous == null ||
                     previous.incidentId != alert.incidentId ||
                     previous.revision < alert.revision)) {
-              onSosReceived?.call(alert.name);
-              unawaited(
-                nearbyService.connectionSession
-                    .alert(alert.name)
-                    .catchError((Object _) {}),
-              );
+              _sosNotice(packet.senderId, alert);
             }
           }
         case MessageType.deviceInfo:
           break;
+        case MessageType.media:
+          break; // media messages ถูกสร้างโดย MediaService ไม่ใช่ผ่าน wire โดยตรง
       }
     } catch (e) {
       error = 'Receive failed: $e';
@@ -461,12 +600,22 @@ class MessageService extends ChangeNotifier {
     }
     if (packet.receiverId == myId) {
       // SQLite verifies duplicate content and keeps exactly one inbox row.
-      await database.insertMessage(
+      final inserted = await database.insertMessage(
         packet.copyWith(status: MessageStatus.delivered),
       );
       await database.savePeer(packet.senderId, packet.senderName);
       await database.saveReceivedRoute(packet.id, [...relay.path, myId!]);
       await _refresh();
+      if (inserted) {
+        _notice(
+          IncomingNotice(
+            id: packet.id,
+            peerId: packet.senderId,
+            name: packet.senderName,
+            body: packet.text,
+          ),
+        );
+      }
       // End-to-end relay ACK is deliberately deferred to Phase 5 part 2.
       return;
     }
@@ -491,6 +640,32 @@ class MessageService extends ChangeNotifier {
         error = 'Relay failed: $e';
         _notify();
       }
+    }
+  }
+
+  /// Route packetType packets ไปยัง MediaService
+  Future<void> _receiveMediaPacket(
+    String endpointId,
+    Map<String, dynamic> data,
+  ) async {
+    final packetType = data['packetType'] as String?;
+    switch (packetType) {
+      case 'mediaInit':
+        if (mediaService != null) {
+          if (_endpointPeers[endpointId] != data['senderId']) return;
+          await mediaService!.handleMediaInit(endpointId, data);
+          await _refresh(); // อัพเดต chat list
+        }
+      case 'mediaAck':
+        if (mediaService != null) {
+          final peer = _endpointPeers[endpointId];
+          if (peer != null) {
+            await mediaService!.handleMediaAck(data, peerId: peer);
+          }
+          await _refresh();
+        }
+      default:
+        debugPrint('[MessageService] Unknown packetType: $packetType');
     }
   }
 

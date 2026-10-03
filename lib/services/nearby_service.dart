@@ -25,6 +25,11 @@ class NearbyService extends ChangeNotifier {
   bool autoConnect = false;
   Timer? _autoTimer;
   bool _autoBusy = false;
+  Future<void>? _refreshingDiscovery;
+  Future<void>? _connectingAvailable;
+  final Set<String> _accepting = {};
+  final Map<String, DateTime> _retryAfter = {};
+  DateTime? _lastScan;
   Future<void>? _startingAutomatic, _startingAdvertising, _startingDiscovery;
   final Map<String, NearbyDevice> _devices = {};
   final Map<String, Timer> _timeouts = {};
@@ -42,6 +47,25 @@ class NearbyService extends ChangeNotifier {
   int _session = 0;
   Future<void>? _stopping;
   void Function(String endpointId, String payload)? onTextPayloadReceived;
+
+  // ─── FILE payload callbacks (used by MediaService) ────────────────────────
+  void Function(String endpointId, int payloadId, String? uri)?
+  onFilePayloadStarted;
+  void Function(
+    String endpointId,
+    int payloadId,
+    int bytesTransferred,
+    int totalBytes,
+  )?
+  onFileTransferProgress;
+  void Function(String endpointId, int payloadId)? onFileTransferSuccess;
+  void Function(String endpointId, int payloadId)? onFileTransferFailed;
+
+  /// payloadId → file URI: ติดตาม FILE payload ที่กำลังรับอยู่
+  final Map<int, String?> _pendingFileUris = {};
+
+  /// payloadId ของไฟล์ที่เราส่งออก เพื่อแยก sent vs received progress
+  final Set<int> _sentFilePayloads = {};
 
   List<NearbyDevice> get discoveredDevices =>
       _devices.values.where((d) => !d.isConnected).toList();
@@ -81,23 +105,71 @@ class NearbyService extends ChangeNotifier {
     _update();
   }
 
-  Future<void> _connectAvailable() async {
+  Future<void> _connectAvailable() => _connectingAvailable ??=
+      _connectAvailableNow().whenComplete(() => _connectingAvailable = null);
+
+  Future<void> _connectAvailableNow() async {
     if (!autoConnect || _autoBusy || _disposed) return;
     _autoBusy = true;
     final session = _session;
     try {
       if (!isDiscovering) await startDiscovery();
+      // Lost endpoints are not always reported again by Nearby until a new scan.
+      if (discoveredDevices.isEmpty &&
+          connectedDevices.isEmpty &&
+          DateTime.now().difference(_lastScan ?? DateTime(1970)) >
+              const Duration(seconds: 12)) {
+        await _rediscover();
+      }
       for (final device in discoveredDevices) {
+        // Both devices advertise and scan. For distinct names, elect one caller
+        // so simultaneous outbound requests cannot cancel each other.
+        // Equal custom names retain randomized backoff; manual Connect is free.
+        if (deviceName.compareTo(device.name) > 0) continue;
         // Random delay reduces simultaneous requests when both phones discover each other.
         await Future<void>.delayed(
           Duration(milliseconds: 200 + Random().nextInt(1000)),
         );
         if (!_current(session) || !autoConnect) return;
-        if (device.isAvailable) await requestConnection(device.endpointId);
+        if (device.isAvailable &&
+            !DateTime.now().isBefore(
+              _retryAfter[device.endpointId] ?? DateTime(1970),
+            )) {
+          await requestConnection(device.endpointId);
+        }
       }
     } finally {
       _autoBusy = false;
     }
+  }
+
+  Future<void> _rediscover() => _refreshingDiscovery ??= (() async {
+    final session = _session;
+    if (!autoConnect || !_current(session)) return;
+    await stopDiscovery();
+    if (!autoConnect || !_current(session)) return;
+    await startDiscovery();
+  })().whenComplete(() => _refreshingDiscovery = null);
+
+  Future<void> _recoverConnection(int session, String id) async {
+    _timeouts.remove(id)?.cancel();
+    _accepting.remove(id);
+    _retryAfter[id] = DateTime.now().add(
+      Duration(seconds: 3 + Random().nextInt(5)),
+    );
+    try {
+      await _nearby.disconnectFromEndpoint(id);
+    } catch (e) {
+      _log('Connection cleanup: $e');
+    }
+    if (!_current(session)) return;
+    final device = _devices[id];
+    if (device != null) {
+      device.isConnecting = false;
+      device.isConnected = false;
+    }
+    _update();
+    await _rediscover();
   }
 
   Future<void> _keepSession() async {
@@ -219,6 +291,7 @@ class NearbyService extends ChangeNotifier {
           device.name = name;
           device.isAvailable = true;
           _log('Found $name ($id)');
+          if (autoConnect) unawaited(_connectAvailable());
         },
         onEndpointLost: (id) {
           if (!_current(session)) return;
@@ -235,6 +308,7 @@ class NearbyService extends ChangeNotifier {
       }
       if (!ok) throw StateError('Nearby returned false');
       isDiscovering = true;
+      _lastScan = DateTime.now();
       lastError = null;
       connectionStatus = 'Discovering nearby RescueLink devices...';
       _log('Discovery started');
@@ -247,8 +321,11 @@ class NearbyService extends ChangeNotifier {
     _timeouts.remove(id)?.cancel();
     _timeouts[id] = Timer(const Duration(seconds: 30), () {
       if (!_current(session) || _devices[id]?.isConnecting != true) return;
-      unawaited(disconnect(id));
-      reportError('Connection timed out. Move closer and discover again.');
+      reportError(
+        'อีกเครื่องยังไม่ตอบรับ กรุณาวางเครื่องใกล้กันและเปิดรับการเชื่อมต่อ ระบบจะลองใหม่อัตโนมัติ',
+      );
+      _devices.remove(id);
+      unawaited(_recoverConnection(session, id));
     });
   }
 
@@ -281,12 +358,17 @@ class NearbyService extends ChangeNotifier {
       if (!_current(session)) return;
       _timeouts.remove(id)?.cancel();
       device.isConnecting = false;
-      reportError('Connection failed: $e');
+      _log('Connection failed: $e');
+      reportError(
+        'ยังเชื่อมต่อกับ ${device.name} ไม่สำเร็จ ตรวจว่าอีกเครื่องเปิดรับการเชื่อมต่อและเปิด Bluetooth/Wi-Fi แล้ว ระบบจะลองใหม่อัตโนมัติ',
+      );
+      await _recoverConnection(session, id);
     }
   }
 
   void _initiated(int session, String id, ConnectionInfo info) {
     if (!_current(session)) return;
+    if (_devices[id]?.isConnected == true || !_accepting.add(id)) return;
     final device = _devices.putIfAbsent(
       id,
       () => NearbyDevice(endpointId: id, name: info.endpointName),
@@ -309,9 +391,17 @@ class NearbyService extends ChangeNotifier {
       final ok = await _nearby.acceptConnection(
         id,
         onPayLoadRecieved: (endpointId, payload) {
-          if (!_current(session) ||
-              payload.type != PayloadType.BYTES ||
-              payload.bytes == null) {
+          if (!_current(session)) return;
+
+          // ─── FILE payload ─────────────────────────────────────────────────
+          if (payload.type == PayloadType.FILE) {
+            _pendingFileUris[payload.id] = payload.uri;
+            onFilePayloadStarted?.call(endpointId, payload.id, payload.uri);
+            return;
+          }
+
+          // ─── BYTES payload ────────────────────────────────────────────────
+          if (payload.type != PayloadType.BYTES || payload.bytes == null) {
             return;
           }
           try {
@@ -333,6 +423,34 @@ class NearbyService extends ChangeNotifier {
         },
         onPayloadTransferUpdate: (endpointId, update) {
           if (!_current(session)) return;
+          final isFile =
+              _pendingFileUris.containsKey(update.id) ||
+              _sentFilePayloads.contains(update.id);
+          if (isFile) {
+            if (update.status == PayloadStatus.IN_PROGRESS) {
+              onFileTransferProgress?.call(
+                endpointId,
+                update.id,
+                update.bytesTransferred,
+                update.totalBytes,
+              );
+            } else if (update.status == PayloadStatus.SUCCESS) {
+              _log('Payload ${update.id} file transfer successful');
+              onFileTransferSuccess?.call(endpointId, update.id);
+              _pendingFileUris.remove(update.id);
+              _sentFilePayloads.remove(update.id);
+            } else if (update.status == PayloadStatus.FAILURE ||
+                update.status == PayloadStatus.CANCELED) {
+              reportError(
+                'File payload ${update.id} failed/canceled for $endpointId.',
+              );
+              onFileTransferFailed?.call(endpointId, update.id);
+              _pendingFileUris.remove(update.id);
+              _sentFilePayloads.remove(update.id);
+            }
+            return;
+          }
+          // BYTES payload status updates (ข้อความธรรมดา)
           if (update.status == PayloadStatus.FAILURE ||
               update.status == PayloadStatus.CANCELED) {
             reportError(
@@ -346,8 +464,11 @@ class NearbyService extends ChangeNotifier {
       if (!ok) throw StateError('Nearby returned false');
     } catch (e) {
       if (!_current(session)) return;
-      await disconnect(id);
-      reportError('Accept connection failed: $e');
+      _log('Accept connection failed: $e');
+      reportError(
+        'ตอบรับการเชื่อมต่อไม่สำเร็จ ระบบกำลังค้นหาอีกครั้ง กรุณาเปิดรับการเชื่อมต่อทั้งสองเครื่อง',
+      );
+      await _recoverConnection(session, id);
     }
   }
 
@@ -359,6 +480,8 @@ class NearbyService extends ChangeNotifier {
     device.isConnecting = false;
     device.isConnected = status == Status.CONNECTED;
     if (device.isConnected) {
+      _accepting.remove(id);
+      _retryAfter.remove(id);
       lastError = null;
       connectionStatus = 'Connected to ${device.name}';
       _log(connectionStatus);
@@ -367,19 +490,22 @@ class NearbyService extends ChangeNotifier {
     } else {
       reportError(
         status == Status.REJECTED
-            ? 'Connection rejected by ${device.name}'
-            : 'Connection failed with ${device.name}: $status',
+            ? '${device.name} ยังไม่รับการเชื่อมต่อ กรุณาเปิดรับการเชื่อมต่อบนเครื่องนั้น'
+            : 'เชื่อมต่อกับ ${device.name} ไม่สำเร็จ ระบบจะค้นหาและลองใหม่ กรุณาวางเครื่องใกล้กัน',
       );
+      unawaited(_recoverConnection(session, id));
     }
   }
 
   void _disconnected(int session, String id) {
     if (!_current(session)) return;
     _timeouts.remove(id)?.cancel();
+    _accepting.remove(id);
     final device = _devices.remove(id);
     connectionStatus =
-        'Disconnected from ${device?.name ?? id}. Discover again to reconnect.';
+        'ขาดการเชื่อมต่อกับ ${device?.name ?? id} • กำลังรอเชื่อมต่อใหม่';
     _log(connectionStatus);
+    if (autoConnect) unawaited(_rediscover());
   }
 
   Future<bool> sendTextMessage(String text) async {
@@ -417,6 +543,7 @@ class NearbyService extends ChangeNotifier {
     return allSent;
   }
 
+  /// ส่ง text payload — จำกัด 32 KB ตาม nearby_connections spec
   Future<void> sendMessage(String endpointId, String payload) async {
     if (_disposed ||
         (!_foreground && !backgroundActive) ||
@@ -426,6 +553,25 @@ class NearbyService extends ChangeNotifier {
     final bytes = Uint8List.fromList(utf8.encode(payload));
     if (bytes.length > 32768) throw ArgumentError('Packet exceeds 32 KB');
     await _nearby.sendBytesPayload(endpointId, bytes);
+  }
+
+  /// ส่งไฟล์โดยตรง — คืน payloadId สำหรับติดตาม progress
+  /// ต้องส่ง mediaInit BYTES ตามทันทีเพื่อให้ผู้รับรู้ metadata
+  Future<int> sendFile(String endpointId, String filePath) async {
+    if (_disposed || (!_foreground && !backgroundActive)) {
+      throw StateError('NearbyService not active');
+    }
+    if (!connectedDevices.any((d) => d.endpointId == endpointId)) {
+      throw StateError('Peer disconnected');
+    }
+    final payloadId = await _nearby.sendFilePayload(endpointId, filePath);
+    _sentFilePayloads.add(payloadId);
+    return payloadId;
+  }
+
+  Future<void> copyReceivedFile(String uri, String destination) async {
+    final copied = await _nearby.copyFileAndDeleteOriginal(uri, destination);
+    if (!copied) throw StateError('Cannot copy received file');
   }
 
   Future<void> stopAdvertising() async {
@@ -467,6 +613,10 @@ class NearbyService extends ChangeNotifier {
       timer.cancel();
     }
     _timeouts.clear();
+    _accepting.clear();
+    _retryAfter.clear();
+    _pendingFileUris.clear();
+    _sentFilePayloads.clear();
     // Invalidate local routes immediately, even if native cleanup fails.
     _devices.clear();
     // Lifecycle and STOP can arrive together; share one cleanup operation.

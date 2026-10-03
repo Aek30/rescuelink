@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
+import '../models/media_model.dart';
 import '../models/message_model.dart';
 import 'sos_store.dart';
 
@@ -28,10 +29,19 @@ class LocalDatabaseService {
       return await _factory.openDatabase(
         path ?? p.join(await _factory.getDatabasesPath(), 'rescuelink.db'),
         options: OpenDatabaseOptions(
-          version: 3,
+          version: 6,
           onUpgrade: (db, oldVersion, _) async {
             if (oldVersion < 2) await _createRelaySeen(db);
             if (oldVersion < 3) await SosStore.createSchema(db);
+            if (oldVersion < 4) await _createMediaSchema(db);
+            if (oldVersion < 5) await _createLocalReceiptTime(db);
+            if (oldVersion < 6) {
+              // Reading history before this feature was not tracked. Start with
+              // old conversations read, and count new arrivals after upgrading.
+              await db.execute('''INSERT OR IGNORE INTO settings(key, value)
+                SELECT 'chatRead:' || senderId, CAST(MAX(rowid) AS TEXT)
+                FROM messages GROUP BY senderId''');
+            }
           },
           onCreate: (db, _) async {
             await _createRelaySeen(db);
@@ -49,6 +59,8 @@ class LocalDatabaseService {
               'CREATE INDEX outbox ON messages(senderId, receiverId, status)',
             );
             await SosStore.createSchema(db);
+            await _createMediaSchema(db);
+            await _createLocalReceiptTime(db);
           },
         ),
       );
@@ -60,6 +72,42 @@ class LocalDatabaseService {
 
   static Future<void> _createRelaySeen(Database db) =>
       db.execute('CREATE TABLE relay_seen (id TEXT PRIMARY KEY)');
+
+  static Future<void> _createLocalReceiptTime(Database db) async {
+    final columns = await db.rawQuery('PRAGMA table_info(messages)');
+    if (!columns.any((column) => column['name'] == 'recordedAt')) {
+      await db.execute('ALTER TABLE messages ADD COLUMN recordedAt TEXT');
+    }
+    // Leave old receipt times unknown; reconstruct their order using SQLite rowid.
+    // A trigger covers text, SOS, media and account-import insert paths equally.
+    await db.execute(
+      '''CREATE TRIGGER IF NOT EXISTS message_local_time AFTER INSERT ON messages
+      BEGIN
+        UPDATE messages SET recordedAt = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        WHERE rowid = NEW.rowid;
+      END''',
+    );
+  }
+
+  static Future<void> _createMediaSchema(Database db) => db.execute('''
+    CREATE TABLE media_files (
+      mediaId       TEXT PRIMARY KEY,
+      messageId     TEXT NOT NULL,
+      senderId      TEXT NOT NULL,
+      senderName    TEXT NOT NULL DEFAULT '',
+      receiverId    TEXT NOT NULL,
+      fileName      TEXT NOT NULL,
+      mimeType      TEXT NOT NULL,
+      fileSize      INTEGER NOT NULL,
+      checksum      TEXT NOT NULL,
+      localPath     TEXT NOT NULL,
+      createdAt     TEXT NOT NULL,
+      bytesTransferred INTEGER NOT NULL DEFAULT 0,
+      status        TEXT NOT NULL,
+      retryCount    INTEGER NOT NULL DEFAULT 0,
+      errorMessage  TEXT
+    )
+  ''');
 
   /// Atomic across concurrent arrivals and retained across restarts.
   Future<bool> claimRelay(String id) async {
@@ -150,9 +198,15 @@ class LocalDatabaseService {
     for (final row in await (await database).query('peers'))
       row['id'] as String: row['name'] as String,
   };
-  Future<void> insertMessage(MessageModel message) async {
+  Future<bool> insertMessage(MessageModel message) async {
     final db = await database;
-    await db.transaction((txn) async {
+    return db.transaction((txn) async {
+      final existing = await txn.query(
+        'messages',
+        columns: ['id'],
+        where: 'id = ?',
+        whereArgs: [message.id],
+      );
       await txn.insert(
         'messages',
         message.toMap(),
@@ -173,6 +227,7 @@ class LocalDatabaseService {
           !saved.timestamp.isAtSameMomentAs(message.timestamp)) {
         throw StateError('Conflicting message ID');
       }
+      return existing.isEmpty;
     });
   }
 
@@ -195,8 +250,52 @@ class LocalDatabaseService {
   Future<List<MessageModel>> getMessages() async =>
       (await (await database).query(
         'messages',
-        orderBy: 'timestamp ASC, id ASC',
+        orderBy: 'rowid ASC',
       )).map(MessageModel.fromMap).toList();
+
+  Future<Map<String, int>> getUnreadCounts(String myId) async => {
+    for (final row in await (await database).rawQuery(
+      '''
+      SELECT m.senderId AS peer, COUNT(*) AS total FROM messages m
+      WHERE m.receiverId = ? AND m.senderId != ?
+        AND m.type IN ('message', 'media', 'sos')
+        AND m.rowid > COALESCE((SELECT CAST(value AS INTEGER) FROM settings
+          WHERE key = 'chatRead:' || m.senderId), 0)
+      GROUP BY m.senderId''',
+      [myId, myId],
+    ))
+      row['peer'] as String: (row['total'] as num).toInt(),
+  };
+
+  Future<void> markConversationRead(
+    String myId,
+    String peerId,
+    String messageId,
+  ) async {
+    await (await database).transaction((txn) async {
+      final rows = await txn.rawQuery(
+        'SELECT rowid AS position FROM messages WHERE id = ? AND senderId = ? AND receiverId = ?',
+        [messageId, peerId, myId],
+      );
+      if (rows.isEmpty) return;
+      final position = (rows.single['position'] as num).toInt();
+      final key = 'chatRead:$peerId';
+      final saved = await txn.query(
+        'settings',
+        where: 'key = ?',
+        whereArgs: [key],
+      );
+      final previous = saved.isEmpty
+          ? 0
+          : int.tryParse(saved.single['value'] as String) ?? 0;
+      if (position <= previous) return;
+      await txn.insert('settings', {
+        'key': key,
+        'value': '$position',
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    });
+  }
+
   Future<List<MessageModel>> getConversation({
     required String myId,
     required String peerId,
@@ -207,6 +306,90 @@ class LocalDatabaseService {
             (m.senderId == peerId && m.receiverId == myId),
       )
       .toList();
+  // ─── Media CRUD ───────────────────────────────────────────────────────────
+
+  Future<bool> saveMediaMessage(MediaFile media, MessageModel message) async {
+    return (await database).transaction((txn) async {
+      final rows = await txn.query(
+        'messages',
+        where: 'id = ?',
+        whereArgs: [message.id],
+      );
+      if (rows.isNotEmpty) {
+        final saved = MessageModel.fromMap(rows.single);
+        if (saved.senderId != message.senderId ||
+            saved.receiverId != message.receiverId ||
+            saved.text != message.text ||
+            saved.type != message.type ||
+            saved.senderName != message.senderName ||
+            saved.timestamp != message.timestamp) {
+          throw StateError('Conflicting media message ID');
+        }
+        await txn.insert(
+          'media_files',
+          media.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+        return false;
+      }
+      await txn.insert(
+        'media_files',
+        media.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      await txn.insert('messages', message.toMap());
+      return true;
+    });
+  }
+
+  /// แทรก MediaFile ใหม่ — ถ้า mediaId ซ้ำให้ข้ามเพื่อป้องกัน duplicate
+  Future<void> insertMediaFile(MediaFile media) async {
+    await (await database).insert(
+      'media_files',
+      media.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
+  /// อัพเดตสถานะและ fields ของ MediaFile ที่มีอยู่แล้ว
+  Future<void> updateMediaFile(MediaFile media) async {
+    await (await database).update(
+      'media_files',
+      media.toMap(),
+      where: 'mediaId = ?',
+      whereArgs: [media.mediaId],
+    );
+  }
+
+  Future<MediaFile?> getMediaFile(String mediaId) async {
+    final rows = await (await database).query(
+      'media_files',
+      where: 'mediaId = ?',
+      whereArgs: [mediaId],
+    );
+    return rows.isEmpty ? null : MediaFile.fromMap(rows.single);
+  }
+
+  Future<MediaFile?> getMediaForMessage(String messageId) async {
+    final rows = await (await database).query(
+      'media_files',
+      where: 'messageId = ?',
+      whereArgs: [messageId],
+    );
+    return rows.isEmpty ? null : MediaFile.fromMap(rows.single);
+  }
+
+  /// โหลดสื่อทั้งหมด — ใช้ตอนเริ่มต้นแอปเพื่อ rebuild in-memory cache
+  Future<List<MediaFile>> getAllMedia() async {
+    final rows = await (await database).query(
+      'media_files',
+      orderBy: 'createdAt DESC',
+    );
+    return rows.map(MediaFile.fromMap).toList();
+  }
+
+  // ─── Core ─────────────────────────────────────────────────────────────────
+
   Future<void> close() async {
     await (await database).close();
     _opening = null;

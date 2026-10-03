@@ -136,6 +136,73 @@ void main() {
     },
   );
 
+  test('unread summary is per peer, deduplicated and persists read watermark', () async {
+    await connect();
+    await service.sendTextMessage(receiverId: 'peer', text: 'outbound');
+    expect(service.totalUnread, 0);
+    final first = packet(MessageType.message, id: 'unread-one');
+    await receive(first);
+    await receive(first);
+    await receive(packet(MessageType.message, id: 'unread-two'));
+    expect(service.unreadCounts['peer'], 2);
+    expect(service.totalUnread, 2);
+    expect(service.conversationPreview('peer'), 'สวัสดี 🌍');
+    await service.markConversationRead('peer', first.id);
+    expect(service.unreadCounts['peer'], 1);
+    // Reading an earlier snapshot must leave a newer arrival unread.
+    await service.markConversationRead('peer', first.id);
+    expect(service.totalUnread, 1);
+    await db.close();
+    expect((await db.getUnreadCounts(service.myId!))['peer'], 1);
+    await service.markConversationRead('peer', 'unread-two');
+    expect(service.totalUnread, 0);
+  });
+
+  test('peer role distinguishes current, expired and unknown presence', () async {
+    expect(service.peerRoleLabel('peer'), 'ยังไม่ทราบบทบาท');
+    service.presence['peer'] = PeerPresence(sequence: 1, rescue: true,
+        receivedAt: DateTime.now().toUtc());
+    expect(service.peerRoleLabel('peer'), 'หน่วยกู้ภัย');
+    service.presence['peer'] = PeerPresence(sequence: 2, rescue: false,
+        receivedAt: DateTime.now().toUtc());
+    expect(service.peerRoleLabel('peer'), 'ผู้ใช้ทั่วไป');
+    service.presence['peer'] = PeerPresence(sequence: 3, rescue: true,
+        receivedAt: DateTime.now().toUtc().subtract(const Duration(minutes: 1)));
+    expect(service.peerRoleLabel('peer'), 'หน่วยกู้ภัย • สถานะล่าสุด');
+  });
+
+  test(
+    'clock skew cannot group replies; retries preserve order and notify once',
+    () async {
+      await connect();
+      final notices = <String>[];
+      service.onNotice = (notice) => notices.add(notice.id);
+      await service.sendTextMessage(receiverId: 'peer', text: 'first from A');
+      final firstId = service.messages.single.id;
+      final reply = packet(MessageType.message, id: 'old-clock-reply');
+      await receive(reply);
+      await service.sendTextMessage(receiverId: 'peer', text: 'third from A');
+      final ids = service.messages.map((m) => m.id).toList();
+      expect(ids[0], firstId);
+      expect(ids[1], reply.id);
+      await receive(reply);
+      expect(service.messages.map((m) => m.id), ids);
+      expect(notices, [reply.id]);
+      expect(service.receivedRoutes[reply.id], ['peer', service.myId]);
+      final saved = service.messages[1];
+      expect(saved.timestamp, reply.timestamp);
+      expect(saved.recordedAt, isNotNull);
+      expect(
+        DateTime.now().difference(saved.displayTime).abs(),
+        lessThan(const Duration(seconds: 10)),
+      );
+      expect(service.clockSkewPeers, contains('peer'));
+      await receive(packet(MessageType.ack, id: 'ack-direct', ackFor: firstId));
+      expect(service.messages.first.status, MessageStatus.delivered);
+      expect(service.receivedRoutes[firstId], [service.myId, 'peer']);
+    },
+  );
+
   test(
     'presence persists, rejects stale packets and expires using receiver time',
     () async {
@@ -193,6 +260,7 @@ void main() {
       await connect();
       final alerts = <String>[];
       service.onSosReceived = alerts.add;
+      await service.setRescueMode(true);
       Future<void> status(int sequence, int revision, bool active) async {
         final sos = SosAlert(
           incidentId: 'one',
@@ -230,6 +298,10 @@ void main() {
       expect(alerts, ['B', 'B']);
       await status(4, 3, false);
       expect(service.activeSosCount, 0);
+      expect(alerts, hasLength(2));
+      await service.setRescueMode(false);
+      await status(5, 4, true);
+      expect(service.activeSosCount, 1);
       expect(alerts, hasLength(2));
     },
   );

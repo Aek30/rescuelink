@@ -142,6 +142,7 @@ void main() {
     native = TestNearby();
     permissions = TestPermissions();
     service = NearbyService(nearby: native, permissions: permissions);
+    service.setName('Rescue-0');
   });
   tearDown(() async {
     await service.stopAll();
@@ -211,6 +212,43 @@ void main() {
       expect(service.isDiscovering, isTrue);
     },
   );
+
+  test(
+    'automatic reconnect refreshes discovery without restarting the other phone',
+    () async {
+      await service.startAutomatic();
+      native.found('A', 'Rescue-A', NearbyService.serviceId);
+      await service.startAutomatic();
+      native.initiated('A', ConnectionInfo('Rescue-A', '1234', false));
+      native.initiated('A', ConnectionInfo('Rescue-A', '1234', false));
+      await Future<void>.delayed(Duration.zero);
+      expect(native.accepted, 1);
+      native.result('A', Status.CONNECTED);
+      final scans = native.discoveryCalls;
+      native.disconnected('A');
+      await Future<void>.delayed(Duration.zero);
+      expect(native.discoveryCalls, greaterThan(scans));
+      expect(service.isAdvertising, isTrue);
+      expect(service.autoConnect, isTrue);
+      native.found('A-new', 'Rescue-A', NearbyService.serviceId);
+      await service.startAutomatic();
+      native.initiated('A-new', ConnectionInfo('Rescue-A', '4567', false));
+      await Future<void>.delayed(Duration.zero);
+      native.result('A-new', Status.CONNECTED);
+      expect(service.connectedDevices.single.endpointId, 'A-new');
+    },
+  );
+  test('automatic mode elects one caller and accepts the other phone', () async {
+    service.setName('Rescue-Z');
+    await service.startAutomatic();
+    native.found('A', 'Rescue-A', NearbyService.serviceId);
+    await service.startAutomatic();
+    expect(service.discoveredDevices.single.isConnecting, isFalse);
+    native.initiated('A', ConnectionInfo('Rescue-A', '1234', true));
+    await Future<void>.delayed(Duration.zero);
+    native.result('A', Status.CONNECTED);
+    expect(service.connectedDevices.single.endpointId, 'A');
+  });
   test(
     'stale native advertiser is cleared before starting a fresh session',
     () async {
@@ -331,11 +369,11 @@ void main() {
     native.found('A', 'Rescue-A', NearbyService.serviceId);
     await service.requestConnection('A');
     native.result('A', Status.REJECTED);
-    expect(service.lastError, contains('rejected'));
+    expect(service.lastError, contains('ยังไม่รับการเชื่อมต่อ'));
     expect(service.discoveredDevices.single.isConnecting, isFalse);
     native.requestOk = false;
     await service.requestConnection('A');
-    expect(service.lastError, contains('Connection failed'));
+    expect(service.lastError, contains('ยังเชื่อมต่อ'));
     expect(service.discoveredDevices.single.isConnecting, isFalse);
   });
 
@@ -417,6 +455,6 @@ void main() {
     await service.requestConnection('A');
     await tester.pump(const Duration(seconds: 31));
     expect(service.discoveredDevices, isEmpty);
-    expect(service.lastError, contains('timed out'));
+    expect(service.lastError, contains('ยังไม่ตอบรับ'));
   });
 }

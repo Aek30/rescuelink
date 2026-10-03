@@ -1,19 +1,23 @@
 import '../services/app_preferences.dart';
 import '../services/auth_service.dart';
 import '../models/message_model.dart';
+import '../models/incoming_notice.dart';
+import '../widgets/location_button.dart';
+import 'dart:async';
 import 'settings_panel.dart';
 import 'login_screen.dart';
 import 'package:flutter/material.dart';
 
 import '../services/nearby_service.dart';
+import '../services/media_service.dart';
 import '../services/message_service.dart';
+import '../services/local_database_service.dart';
 import '../services/permission_service.dart';
 import '../widgets/device_tile.dart';
 import '../widgets/presence_list.dart';
 import '../widgets/nearby_mini_map.dart';
 import 'chat_screen.dart';
 import 'sos_screen.dart';
-import 'demo_features_screen.dart';
 import '../widgets/outbox_queue.dart';
 import '../theme/rescue_theme.dart';
 import '../widgets/brand_header.dart';
@@ -31,9 +35,14 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
 
   late final TextEditingController _name;
   late final MessageService _messages;
+  late final MediaService _media;
 
   bool _busy = false;
   int _tab = 0;
+  bool _foreground = true;
+  Timer? _noticeTimer;
+  final List<IncomingNotice> _notices = [];
+  IncomingNotice? _shownNotice;
 
   static const Color _primary = RescueTheme.orangeInk;
   static const Color _success = Color(0xFF2E9B6F);
@@ -45,22 +54,163 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
 
     _name = TextEditingController(text: _service.deviceName);
 
-    _messages = MessageService(nearbyService: _service);
+    // Step 1: สร้าง _messages ก่อนเพื่อให้ได้ database instance
+    final database = LocalDatabaseService.instance;
 
-    _messages.initialize();
+    // Step 2: สร้าง _media โดยใช้ database จาก _messages
+    _media = MediaService(
+      nearby: _service,
+      database: database,
+      getEndpointForPeer: (peerId) {
+        for (final d in _service.connectedDevices) {
+          if (_messages.getPeerForEndpoint(d.endpointId) == peerId) {
+            return d.endpointId;
+          }
+        }
+        return null;
+      },
+    );
+
+    // Step 3: สร้าง _messages ใหม่พร้อม mediaService (late binding pattern)
+    _messages = MessageService(
+      nearbyService: _service,
+      database: database,
+      mediaService: _media,
+    );
+
+    _messages.onNotice = _receiveNotice;
+    _messages
+        .initialize()
+        .then((_) async {
+          if (!mounted) return;
+          await _service.connectionSession.listenForNotifications(_openNotice);
+        })
+        .catchError((Object error) {
+          debugPrint('Notification setup: $error');
+        });
     AppPreferences.instance.load().catchError((Object _) {});
-    _messages.onSosReceived = (name) {
-      if (!mounted || !AppPreferences.instance.alerts) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('SOS: $name')));
-    };
 
     WidgetsBinding.instance.addObserver(this);
   }
 
+  void _receiveNotice(IncomingNotice notice) {
+    if (!mounted) return;
+    if (!_foreground) {
+      unawaited(
+        _service.connectionSession.notify(notice).catchError((Object e) {
+          debugPrint('Notification: $e');
+        }),
+      );
+      return;
+    }
+    _notices.add(notice);
+    if (_shownNotice == null) _showNextNotice();
+  }
+
+  void _showNextNotice() {
+    if (!mounted || _notices.isEmpty) return;
+    final notice = _notices.removeAt(0);
+    _shownNotice = notice;
+    ScaffoldMessenger.of(context).showMaterialBanner(
+      MaterialBanner(
+        leading: Icon(
+          notice.sos == null ? Icons.chat_bubble_outline : Icons.sos,
+        ),
+        content: Text(
+          '${notice.title}\n${notice.body}',
+          maxLines: 5,
+          overflow: TextOverflow.ellipsis,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _dismissNotice();
+              _openNotice(notice);
+            },
+            child: Text(notice.sos == null ? 'เปิดแชต' : 'ดู SOS'),
+          ),
+          if (notice.sos != null)
+            TextButton(
+              onPressed: () {
+                _dismissNotice();
+                _openChat(notice.peerId);
+              },
+              child: const Text('แชต'),
+            ),
+          TextButton(onPressed: _dismissNotice, child: const Text('ปิด')),
+        ],
+      ),
+    );
+    _noticeTimer = Timer(const Duration(seconds: 10), _dismissNotice);
+  }
+
+  void _dismissNotice() {
+    _noticeTimer?.cancel();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).removeCurrentMaterialBanner();
+    _shownNotice = null;
+    _showNextNotice();
+  }
+
+  void _openChat(String peerId) {
+    if (!mounted || !_messages.peers.containsKey(peerId)) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ChatScreen(
+          service: _messages,
+          peerId: peerId,
+          mediaService: _media,
+        ),
+      ),
+    );
+  }
+
+  void _openNotice(IncomingNotice notice) {
+    if (!mounted || !_messages.peers.containsKey(notice.peerId)) return;
+    if (notice.sos == null) {
+      _openChat(notice.peerId);
+      return;
+    }
+    // Prefer current incident data over the notification's older snapshot.
+    final current = _messages.presence[notice.peerId]?.sos;
+    final alert = current?.incidentId == notice.sos!.incidentId
+        ? current!
+        : notice.sos!;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                alert.summary,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              if (alert.location != null)
+                LocationButton(location: alert.location!),
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.pop(sheetContext);
+                  _openChat(notice.peerId);
+                },
+                icon: const Icon(Icons.chat),
+                label: const Text('แชตกับผู้ขอความช่วยเหลือ'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _service.setForeground(false);
@@ -228,8 +378,11 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _noticeTimer?.cancel();
+    _service.connectionSession.detachNotifications();
 
     _messages.dispose();
+    _media.dispose();
     _service.dispose();
     _name.dispose();
 
@@ -353,12 +506,6 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                     eyebrow: 'ข้อความ • อยู่ใกล้กันเสมอ',
                   ),
                   _buildConversations(),
-                  const SizedBox(height: 24),
-                  OutlinedButton.icon(
-                    onPressed: () => _openDemo(media: true),
-                    icon: const Icon(Icons.perm_media_outlined),
-                    label: const Text('ทดลองแชตรูปภาพ / วิดีโอ • จำลอง'),
-                  ),
                 ],
               );
             }
@@ -507,11 +654,6 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
       ),
     );
   }
-
-  void _openDemo({bool media = false}) => Navigator.push(
-    context,
-    MaterialPageRoute<void>(builder: (_) => DemoFeaturesScreen(media: media)),
-  );
 
   Widget _buildQueue() => OutboxQueue(
     messages: _messages.messages
@@ -1253,6 +1395,15 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
 
       children: [
         _ListHeading(title: 'การสนทนาล่าสุด', count: _messages.peers.length),
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            _messages.totalUnread == 0
+                ? 'อ่านข้อความครบแล้ว'
+                : 'ข้อความใหม่ ${_messages.totalUnread} ข้อความ • ${_messages.unreadCounts.length} การสนทนาที่ยังไม่ได้อ่าน',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ),
 
         const SizedBox(height: 12),
 
@@ -1294,12 +1445,18 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
               name: peer.value,
 
               online: _messages.isOnline(peer.key),
+              role: _messages.peerRoleLabel(peer.key),
+              preview: _messages.conversationPreview(peer.key),
+              unread: _messages.unreadCounts[peer.key] ?? 0,
 
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) =>
-                        ChatScreen(service: _messages, peerId: peer.key),
+                    builder: (_) => ChatScreen(
+                      service: _messages,
+                      peerId: peer.key,
+                      mediaService: _media,
+                    ),
                   ),
                 );
               },
@@ -1853,6 +2010,8 @@ class _EmptyState extends StatelessWidget {
 
 class _ConversationTile extends StatelessWidget {
   final String name;
+  final String role, preview;
+  final int unread;
   final bool online;
   final VoidCallback onTap;
 
@@ -1860,6 +2019,9 @@ class _ConversationTile extends StatelessWidget {
     required this.name,
     required this.online,
     required this.onTap,
+    required this.role,
+    required this.preview,
+    required this.unread,
   });
 
   @override
@@ -1956,9 +2118,7 @@ class _ConversationTile extends StatelessWidget {
                     const SizedBox(height: 4),
 
                     Text(
-                      online
-                          ? 'เชื่อมต่อแล้ว • แตะเพื่อสนทนา'
-                          : 'ออฟไลน์ • ยังดูประวัติข้อความได้',
+                      '$role • ${online ? 'ออนไลน์' : 'ออฟไลน์'}',
 
                       style: TextStyle(
                         color: online
@@ -1970,16 +2130,36 @@ class _ConversationTile extends StatelessWidget {
                         fontSize: 12,
                       ),
                     ),
+                    const SizedBox(height: 5),
+                    Text(
+                      preview,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: unread > 0
+                            ? FontWeight.w700
+                            : FontWeight.normal,
+                      ),
+                    ),
                   ],
                 ),
               ),
 
-              const Icon(
-                Icons.arrow_forward_ios_rounded,
+              if (unread > 0)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Badge(
+                    label: Text('$unread'),
+                    child: const Icon(Icons.mark_chat_unread_outlined),
+                  ),
+                ),
+              if (unread == 0)
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
 
-                size: 16,
-                color: Colors.grey,
-              ),
+                  size: 16,
+                  color: Colors.grey,
+                ),
             ],
           ),
         ),

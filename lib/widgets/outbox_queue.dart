@@ -27,7 +27,7 @@ class OutboxQueue extends StatefulWidget {
 
 class _OutboxQueueState extends State<OutboxQueue> {
   int? _filter;
-  static const _labels = ['ค้างส่ง', 'ส่งแล้ว', 'ซิงก์แล้ว'];
+  static const _labels = ['รอการยืนยัน', 'ถึงเครื่องรับแล้ว', 'ซิงก์แล้ว'];
   static const _icons = [
     Icons.schedule,
     Icons.check_circle_outline,
@@ -50,8 +50,8 @@ class _OutboxQueueState extends State<OutboxQueue> {
   ];
 
   int _group(MessageModel m) => switch (m.status) {
-    MessageStatus.pending => 0,
-    MessageStatus.sent || MessageStatus.delivered => 1,
+    MessageStatus.pending || MessageStatus.sent => 0,
+    MessageStatus.delivered => 1,
     MessageStatus.synced => 2,
   };
 
@@ -71,7 +71,7 @@ class _OutboxQueueState extends State<OutboxQueue> {
       'พ.ย.',
       'ธ.ค.',
     ];
-    return '${d.day} ${months[d.month - 1]} ${d.year + 543} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+    return '${d.day} ${months[d.month - 1]} ค.ศ. ${d.year} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
   }
 
   SosAlert? _alert(MessageModel m) {
@@ -128,7 +128,8 @@ class _OutboxQueueState extends State<OutboxQueue> {
 
   String _status(MessageModel m) => switch (m.status) {
     MessageStatus.pending => 'รอเชื่อมต่อเพื่อส่งข้อความ',
-    MessageStatus.sent => 'ส่งต่อแล้ว • รอเครื่องรับยืนยัน',
+    MessageStatus.sent =>
+      'ยังไม่ยืนยันว่าถึงปลายทาง • จะลองส่งซ้ำเมื่อเชื่อมต่อ',
     MessageStatus.delivered => 'เครื่องรับยืนยันแล้ว',
     MessageStatus.synced => 'ซิงก์แล้ว',
   };
@@ -136,13 +137,13 @@ class _OutboxQueueState extends State<OutboxQueue> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final messages =
-        widget.messages
-            .where(
-              (m) => m.type == MessageType.message || m.type == MessageType.sos,
-            )
-            .toList()
-          ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    final messages = widget.messages
+        .where(
+          (m) => m.type == MessageType.message || m.type == MessageType.sos,
+        )
+        .toList()
+        .reversed
+        .toList();
     final visible = messages
         .where((m) => _filter == null || _group(m) == _filter)
         .toList();
@@ -365,12 +366,14 @@ class _OutboxQueueState extends State<OutboxQueue> {
                               children: [
                                 Icon(_icons[group], size: 14, color: color),
                                 const SizedBox(width: 4),
-                                Text(
-                                  _labels[group],
-                                  style: TextStyle(
-                                    color: color,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12,
+                                Flexible(
+                                  child: Text(
+                                    _labels[group],
+                                    style: TextStyle(
+                                      color: color,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                    ),
                                   ),
                                 ),
                               ],

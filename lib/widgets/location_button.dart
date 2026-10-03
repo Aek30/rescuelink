@@ -14,7 +14,10 @@ class LocationButton extends StatelessWidget {
       Text(
         'พิกัดบันทึกเมื่อ ${location.capturedAt.toLocal()} • อายุ ${DateTime.now().difference(location.capturedAt).inMinutes.clamp(0, 999999)} นาที',
       ),
-      const Text('แผนที่ออฟไลน์ต้องมีข้อมูลแผนที่ดาวน์โหลดไว้ในแอปแผนที่'),
+      const Text(
+        'พิกัดและแผนภาพด้านบนใช้ได้โดยไม่ต้องมีอินเทอร์เน็ต\n'
+        'หากต้องการดูถนนหรือเส้นทาง ให้ดาวน์โหลดแผนที่พื้นที่นี้ในแอปแผนที่ขณะมีอินเทอร์เน็ตไว้ล่วงหน้า การเคยเปิดดูออนไลน์อย่างเดียวไม่รับประกันว่าจะใช้แบบออฟไลน์ได้',
+      ),
       SelectableText('${location.latitude}, ${location.longitude}'),
       TextButton.icon(
         icon: const Icon(Icons.copy),
@@ -32,7 +35,9 @@ class LocationButton extends StatelessWidget {
       ),
       TextButton.icon(
         icon: const Icon(Icons.map_outlined),
-        label: const Text('เปิดตำแหน่งบนแผนที่'),
+        label: const Text(
+          'เปิดในแอปแผนที่ (ต้องมีเน็ตหรือแผนที่ที่ดาวน์โหลดไว้)',
+        ),
         onPressed: () async {
           try {
             await const MethodChannel(

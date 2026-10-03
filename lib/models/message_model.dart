@@ -2,7 +2,7 @@ import 'dart:convert';
 
 enum MessageStatus { pending, sent, delivered, synced }
 
-enum MessageType { message, ack, sos, deviceInfo, presence }
+enum MessageType { message, ack, sos, deviceInfo, presence, media }
 
 class MessageModel {
   const MessageModel({
@@ -15,10 +15,20 @@ class MessageModel {
     this.type = MessageType.message,
     this.status = MessageStatus.pending,
     this.ackFor,
+    this.recordedAt,
   });
 
   final String id, senderId, senderName, receiverId, text;
   final DateTime timestamp;
+  // Local receipt/creation time; never trust or transmit it as sender time.
+  final DateTime? recordedAt;
+  DateTime get displayTime => recordedAt ?? timestamp;
+  String get statusLabel => switch (status) {
+    MessageStatus.pending => 'รอเชื่อมต่อ',
+    MessageStatus.sent => 'รอเครื่องรับยืนยัน',
+    MessageStatus.delivered => 'ถึงเครื่องรับแล้ว',
+    MessageStatus.synced => 'ซิงก์แล้ว',
+  };
   final MessageType type;
   final MessageStatus status;
   final String? ackFor;
@@ -33,6 +43,7 @@ class MessageModel {
     type: type,
     status: status ?? this.status,
     ackFor: ackFor,
+    recordedAt: recordedAt,
   );
 
   Map<String, Object?> toMap() => {
@@ -57,6 +68,7 @@ class MessageModel {
       type: MessageType.values.byName(map['type'] as String),
       status: MessageStatus.values.byName(map['status'] as String),
       ackFor: map['ackFor'] as String?,
+      recordedAt: DateTime.tryParse(map['recordedAt'] as String? ?? ''),
     );
     if (message.id.isEmpty ||
         message.senderId.isEmpty ||

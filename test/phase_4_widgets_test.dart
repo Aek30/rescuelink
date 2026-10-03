@@ -97,7 +97,9 @@ void main() {
           ),
         ),
       );
-      await tester.tap(find.text('เปิดตำแหน่งบนแผนที่'));
+      await tester.tap(
+        find.text('เปิดในแอปแผนที่ (ต้องมีเน็ตหรือแผนที่ที่ดาวน์โหลดไว้)'),
+      );
       await tester.pumpAndSettle();
       expect(captured!.method, 'open');
       expect(captured!.arguments, {'latitude': 14.123, 'longitude': 100.456});
@@ -105,7 +107,9 @@ void main() {
         channel,
         (_) async => throw PlatformException(code: 'unavailable'),
       );
-      await tester.tap(find.text('เปิดตำแหน่งบนแผนที่'));
+      await tester.tap(
+        find.text('เปิดในแอปแผนที่ (ต้องมีเน็ตหรือแผนที่ที่ดาวน์โหลดไว้)'),
+      );
       await tester.pumpAndSettle();
       expect(find.textContaining('เปิดแผนที่ไม่ได้'), findsOneWidget);
       expect(tester.takeException(), isNull);
