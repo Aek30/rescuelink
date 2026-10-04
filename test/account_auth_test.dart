@@ -43,13 +43,16 @@ class FakeBackend implements AuthBackend {
   Object? failure;
   Completer<void>? delay;
   int calls = 0;
+  String? receivedName;
   @override
   Future<AccountSession?> authenticate(
     String email,
     String password, {
     required bool register,
+    String? displayName,
   }) async {
     calls++;
+    receivedName = displayName;
     await delay?.future;
     if (failure != null) throw failure!;
     return result;
@@ -231,7 +234,8 @@ void main() {
       backend.result = null;
       expect(await login(claim: true), isFalse);
       expect(storage.owner, 'guest');
-      expect(auth.error, contains('ยืนยันบัญชี'));
+      expect(auth.notice, contains('ยืนยันบัญชี'));
+      expect(auth.error, isNull);
       backend.failure = const AuthException(
         'Invalid',
         code: 'invalid_credentials',
@@ -254,6 +258,42 @@ void main() {
       await expectLater(auth.signOut(), throwsStateError);
       expect(auth.signedIn, isTrue);
       expect(storage.owner, 'user:A');
+    },
+  );
+
+  test('signup passes trimmed name and confirmation is not an error', () async {
+    backend.result = null;
+    expect(
+      await auth.authenticate(
+        'new@example.com',
+        'sample-password',
+        register: true,
+        remember: true,
+        claimGuest: true,
+        displayName: '  Rescue Member  ',
+      ),
+      isFalse,
+    );
+    expect(backend.receivedName, 'Rescue Member');
+    expect(auth.notice, contains('ยืนยันบัญชี'));
+    expect(auth.error, isNull);
+    expect(storage.owner, 'guest');
+    expect(vault.value, isNull);
+  });
+
+  test(
+    'network and email delivery restrictions have actionable errors',
+    () async {
+      backend.failure = const SocketException('Offline');
+      expect(await login(), isFalse);
+      expect(auth.error, contains('ข้อมูลมือถือ'));
+      backend.failure = const AuthException(
+        'Email address not authorized',
+        code: 'email_address_not_authorized',
+      );
+      expect(await login(), isFalse);
+      expect(auth.error, contains('บริการส่งอีเมล'));
+      expect(storage.owner, 'guest');
     },
   );
 

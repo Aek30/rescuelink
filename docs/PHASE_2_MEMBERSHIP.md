@@ -86,5 +86,15 @@ Live tests use only the publishable key and normal Auth/Data APIs:
 
 The member test reads the ignored `config/test-account.local.json` (email/password); keep it private. It deletes only its own temporary installation metadata, logs out its session, and preserves the member account. The regular test suite does not use these credentials, connect to Supabase or send mail.
 
-References: [Supabase Flutter Auth](https://supabase.com/docs/reference/dart/auth-signup), [session recovery](https://supabase.com/docs/reference/dart/auth-recoversession), [Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security).
+### Signup form update — 2026-10-03
 
+- Fixed a real SDK initialization bug: `AuthClientOptions` defaults to PKCE, but standalone clients lacked `pkceAsyncStorage`. Email signup failed before its HTTP request. All backend clients now use an explicit PKCE flow with project-scoped secure verifier storage, separate from remembered sessions.
+- Added a local HTTP-server regression test using the real Supabase SDK to verify signup sends the S256 challenge and display name and handles confirmation-pending responses. Auth/form/backend suite: 14 tests passed. No real signup email is sent by this suite.
+
+- Registration requires a display name, email, password (8+ characters), and matching password confirmation. Login remains email/password only.
+- Display name is stored in Auth user metadata on signup and copied to an empty owned profile on a subsequent successful installation link. It is never used for authorization.
+- A response awaiting email confirmation is an informational message and returns the form to Login without adopting Guest data. Use a real inbox; a plausible email format does not prove mailbox ownership.
+- Network, email delivery restrictions, rate limits and secure-storage failures have separate messages. Default Supabase mail delivery may require custom SMTP before accepting arbitrary new email addresses; see [SMTP setup](https://supabase.com/docs/guides/auth/auth-smtp).
+- Verification: analyzer passed; 13 Auth/form tests passed. New-inbox email delivery and Android manual signup still require device testing.
+
+References: [Supabase Flutter Auth](https://supabase.com/docs/reference/dart/auth-signup), [session recovery](https://supabase.com/docs/reference/dart/auth-recoversession), [Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security).

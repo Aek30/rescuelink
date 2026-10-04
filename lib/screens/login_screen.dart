@@ -15,9 +15,12 @@ class _LoginScreenState extends State<LoginScreen> {
   final form = GlobalKey<FormState>();
   final identity = TextEditingController();
   final password = TextEditingController();
+  final displayName = TextEditingController();
+  final confirmation = TextEditingController();
   bool register = false, hidden = true, remember = true, english = false;
   bool busy = false, claimGuest = false;
   String? error;
+  String? notice;
   AuthService get auth => widget.auth ?? AuthService.instance;
   String t(String th, String en) => english ? en : th;
 
@@ -31,6 +34,8 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     identity.dispose();
     password.dispose();
+    displayName.dispose();
+    confirmation.dispose();
     super.dispose();
   }
 
@@ -39,6 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       busy = true;
       error = null;
+      notice = null;
     });
     final ok = await auth.authenticate(
       identity.text,
@@ -46,12 +52,52 @@ class _LoginScreenState extends State<LoginScreen> {
       register: register,
       remember: remember,
       claimGuest: claimGuest,
+      displayName: displayName.text,
     );
     if (!mounted) return;
     setState(() {
-      busy = false;
+      busy = auth.notice != null;
       error = auth.error;
+      notice = auth.notice;
     });
+    if (notice != null) {
+      FocusScope.of(context).unfocus();
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => PopScope(
+          canPop: false,
+          child: AlertDialog(
+            scrollable: true,
+            icon: const Icon(
+              Icons.mark_email_unread_outlined,
+              color: orange,
+              size: 40,
+            ),
+            title: Text(t('กรุณายืนยันอีเมลก่อน', 'Verify your email first')),
+            content: Text(
+              t(
+                'เปิดกล่องจดหมายของ ${identity.text.trim()} แล้วกดลิงก์ยืนยันบัญชีก่อนเข้าสู่ระบบ\n\nหากไม่พบอีเมล ให้ตรวจโฟลเดอร์สแปม หากเคยยืนยันบัญชีนี้แล้ว สามารถเข้าสู่ระบบได้เลย',
+                'Open the inbox for ${identity.text.trim()} and follow the confirmation link before logging in.\n\nCheck spam if the email is missing. If this account is already verified, you can log in.',
+              ),
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: Text(t('ไปหน้าเข้าสู่ระบบ', 'Go to login')),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        busy = false;
+        register = false;
+        password.clear();
+        confirmation.clear();
+      });
+    }
     if (ok) {
       password.clear();
       Navigator.of(context).pushAndRemoveUntil(
@@ -81,7 +127,7 @@ class _LoginScreenState extends State<LoginScreen> {
       onFieldSubmitted: secret ? (_) => submit() : null,
       validator: (value) => value == null || value.trim().isEmpty
           ? t(
-              secret ? 'กรุณากรอกรหัสผ่าน' : 'กรุณากรอกอีเมลหรือเบอร์โทรศัพท์',
+              secret ? 'กรุณากรอกรหัสผ่าน' : 'กรุณากรอกอีเมล',
               'This field is required',
             )
           : !secret &&
@@ -91,6 +137,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ? t('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร', 'Use at least 8 characters')
           : null,
       decoration: InputDecoration(
+        labelText: secret ? t('รหัสผ่าน', 'Password') : t('อีเมล', 'Email'),
         hintText: secret ? t('รหัสผ่าน', 'Password') : t('อีเมล', 'Email'),
         hintStyle: TextStyle(
           color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF939493),
@@ -155,6 +202,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   register = value;
                   form.currentState?.reset();
                   password.clear();
+                  confirmation.clear();
+                  error = null;
+                  notice = null;
                 }),
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -317,9 +367,90 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                             const SizedBox(height: 16),
+                            if (register) ...[
+                              Text(
+                                t(
+                                  'สร้างบัญชี RescueLink',
+                                  'Create your RescueLink account',
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                t(
+                                  'ใช้อีเมลจริงที่เปิดอ่านได้ คุณต้องยืนยันอีเมลก่อนเข้าสู่ระบบ',
+                                  'Use an email you can access. Verify it before logging in.',
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              TextFormField(
+                                key: const ValueKey('signup-name'),
+                                controller: displayName,
+                                enabled: !busy,
+                                maxLength: 100,
+                                textInputAction: TextInputAction.next,
+                                autofillHints: const [AutofillHints.nickname],
+                                decoration: InputDecoration(
+                                  labelText: t('ชื่อที่แสดง', 'Display name'),
+                                  helperText: t(
+                                    'ชื่อหรือนามเรียกขานที่ต้องการใช้',
+                                    'Your name or preferred nickname',
+                                  ),
+                                  prefixIcon: const Icon(Icons.person_outline),
+                                  border: const OutlineInputBorder(),
+                                ),
+                                validator: (value) =>
+                                    (value?.trim().isEmpty ?? true)
+                                    ? t(
+                                        'กรุณากรอกชื่อที่แสดง',
+                                        'Enter a display name',
+                                      )
+                                    : null,
+                              ),
+                              const SizedBox(height: 12),
+                            ],
                             field(false),
                             const SizedBox(height: 12),
                             field(true),
+                            if (register) ...[
+                              const SizedBox(height: 12),
+                              TextFormField(
+                                key: const ValueKey('signup-confirmation'),
+                                controller: confirmation,
+                                enabled: !busy,
+                                obscureText: hidden,
+                                autocorrect: false,
+                                enableSuggestions: false,
+                                autofillHints: const [
+                                  AutofillHints.newPassword,
+                                ],
+                                textInputAction: TextInputAction.done,
+                                onFieldSubmitted: (_) => submit(),
+                                decoration: InputDecoration(
+                                  labelText: t(
+                                    'ยืนยันรหัสผ่าน',
+                                    'Confirm password',
+                                  ),
+                                  prefixIcon: const Icon(Icons.lock_outline),
+                                  border: const OutlineInputBorder(),
+                                ),
+                                validator: (value) =>
+                                    value == null || value.isEmpty
+                                    ? t(
+                                        'กรุณายืนยันรหัสผ่าน',
+                                        'Confirm your password',
+                                      )
+                                    : value != password.text
+                                    ? t(
+                                        'รหัสผ่านทั้งสองช่องไม่ตรงกัน',
+                                        'Passwords do not match',
+                                      )
+                                    : null,
+                              ),
+                            ],
                             CheckboxListTile(
                               value: claimGuest,
                               onChanged: busy
@@ -346,6 +477,19 @@ class _LoginScreenState extends State<LoginScreen> {
                                 error!,
                                 style: TextStyle(
                                   color: Theme.of(context).colorScheme.error,
+                                ),
+                              ),
+                            if (notice != null)
+                              Semantics(
+                                liveRegion: true,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  child: Text(
+                                    notice!,
+                                    style: TextStyle(color: textColor),
+                                  ),
                                 ),
                               ),
                             Row(

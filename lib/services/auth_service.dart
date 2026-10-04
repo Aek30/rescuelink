@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -17,6 +19,7 @@ abstract interface class AuthBackend {
     String email,
     String password, {
     required bool register,
+    String? displayName,
   });
   Future<AccountSession> restore(String serialized);
   Future<void> linkInstallation(
@@ -46,16 +49,40 @@ class SecureSessionVault implements SessionVault {
   Future<void> clear() => _storage.delete(key: _key);
 }
 
+/// PKCE verifiers are separate from remembered account sessions. Signup needs
+/// this storage before it can send any HTTP request, even with Remember off.
+class SecurePkceStorage extends GotrueAsyncStorage {
+  const SecurePkceStorage(this.project);
+  final String project;
+  static const _storage = FlutterSecureStorage();
+  String _key(String key) => 'rescuelink.auth.pkce.$project.$key';
+  @override
+  Future<String?> getItem({required String key}) =>
+      _storage.read(key: _key(key));
+  @override
+  Future<void> setItem({required String key, required String value}) =>
+      _storage.write(key: _key(key), value: value);
+  @override
+  Future<void> removeItem({required String key}) =>
+      _storage.delete(key: _key(key));
+}
+
 class SupabaseAuthBackend implements AuthBackend {
-  SupabaseAuthBackend(this.url, this.key);
+  SupabaseAuthBackend(this.url, this.key, {GotrueAsyncStorage? pkceStorage})
+    : _pkceStorage = pkceStorage ?? SecurePkceStorage(url);
   final String url, key;
+  final GotrueAsyncStorage _pkceStorage;
   SupabaseClient? _client;
   SupabaseClient get client =>
       _client ?? (throw StateError('กรุณาเข้าสู่ระบบใหม่'));
   SupabaseClient _newClient() => SupabaseClient(
     url,
     key,
-    authOptions: const AuthClientOptions(autoRefreshToken: false),
+    authOptions: AuthClientOptions(
+      autoRefreshToken: false,
+      authFlowType: AuthFlowType.pkce,
+      pkceAsyncStorage: _pkceStorage,
+    ),
   );
   AccountSession _convert(Session s) =>
       AccountSession(s.user.id, s.user.email ?? '', jsonEncode(s.toJson()));
@@ -64,11 +91,16 @@ class SupabaseAuthBackend implements AuthBackend {
     String email,
     String password, {
     required bool register,
+    String? displayName,
   }) async {
     final client = _newClient();
     _client = client;
     final response = register
-        ? await client.auth.signUp(email: email, password: password)
+        ? await client.auth.signUp(
+            email: email,
+            password: password,
+            data: {'display_name': displayName?.trim() ?? ''},
+          )
         : await client.auth.signInWithPassword(
             email: email,
             password: password,
@@ -104,6 +136,14 @@ class SupabaseAuthBackend implements AuthBackend {
     final client = _newClient();
     try {
       await client.auth.recoverSession(session.serialized);
+      final name = client.auth.currentUser?.userMetadata?['display_name'];
+      if (name is String && name.trim().isNotEmpty) {
+        await client
+            .from('profiles')
+            .update({'display_name': name.trim()})
+            .eq('id', session.userId)
+            .eq('display_name', '');
+      }
       await client.from('account_devices').upsert({
         'user_id': session.userId,
         'installation_id': installationId,
@@ -151,6 +191,7 @@ class AuthService extends ChangeNotifier {
   AccountSession? session;
   bool busy = false;
   String? error;
+  String? notice;
   Future<void>? _initializing;
   final _restoreCanceled = Completer<AccountSession?>();
   Future<void> enterGuestFromStartup() async {
@@ -240,6 +281,7 @@ class AuthService extends ChangeNotifier {
     required bool register,
     required bool remember,
     required bool claimGuest,
+    String? displayName,
   }) async {
     if (busy || signedIn) return false;
     if (backend == null) {
@@ -249,13 +291,20 @@ class AuthService extends ChangeNotifier {
     }
     busy = true;
     error = null;
+    notice = null;
     notifyListeners();
     try {
       final result = await backend!
-          .authenticate(email.trim(), password, register: register)
+          .authenticate(
+            email.trim(),
+            password,
+            register: register,
+            displayName: register ? displayName?.trim() : null,
+          )
           .timeout(const Duration(seconds: 20));
       if (result == null) {
-        error = 'ตรวจสอบอีเมลเพื่อยืนยันบัญชี แล้วกลับมาเข้าสู่ระบบ';
+        notice =
+            'ตรวจสอบอีเมลเพื่อยืนยันบัญชี รวมถึงโฟลเดอร์สแปม แล้วกลับมาเข้าสู่ระบบ หากเคยสมัครแล้วให้ใช้บัญชีเดิม';
         return false;
       }
       // Persist before claiming: a secure-storage failure must not transfer data.
@@ -285,6 +334,9 @@ class AuthService extends ChangeNotifier {
         error = 'เข้าสู่ระบบแล้ว แต่ยังเชื่อมข้อมูลเครื่องกับ Cloud ไม่สำเร็จ';
       }
       return true;
+    } on AuthRetryableFetchException {
+      error =
+          'ติดต่อระบบบัญชีไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่ ยังใช้งานแบบ Guest ได้';
     } on AuthException catch (e) {
       error = switch (e.code) {
         'invalid_credentials' => 'อีเมลหรือรหัสผ่านไม่ถูกต้อง',
@@ -293,14 +345,34 @@ class AuthService extends ChangeNotifier {
         'over_request_rate_limit' ||
         'over_email_send_rate_limit' => 'ลองหลายครั้งเกินไป กรุณารอสักครู่',
         'weak_password' => 'รหัสผ่านไม่ผ่านเงื่อนไขความปลอดภัย',
+        'email_address_not_authorized' =>
+          'ระบบยังส่งอีเมลยืนยันไปยังอีเมลใหม่ไม่ได้ กรุณาแจ้งผู้ดูแลตั้งค่าบริการส่งอีเมล ระหว่างนี้ใช้งานแบบ Guest ได้',
+        'email_address_invalid' =>
+          'อีเมลนี้ไม่สามารถใช้สมัครได้ กรุณาตรวจสอบอีเมล',
+        'signup_disabled' => 'ระบบปิดรับสมัครชั่วคราว ยังใช้งานแบบ Guest ได้',
+        'unexpected_failure' =>
+          'ระบบสมัครสมาชิกขัดข้อง กรุณาลองภายหลังหรือแจ้งผู้ดูแล',
         _ => 'ยืนยันตัวตนไม่สำเร็จ กรุณาตรวจสอบข้อมูลแล้วลองใหม่',
       };
     } on StateError catch (e) {
       error = e.message;
     } on TimeoutException {
-      error = 'การเชื่อมต่อหมดเวลา ลองใหม่หรือใช้งานแบบ Guest';
-    } catch (_) {
-      error = 'เชื่อมต่อหรือบันทึกบัญชีไม่สำเร็จ ลองใหม่หรือใช้งานแบบ Guest';
+      error =
+          'การเชื่อมต่อหมดเวลา หากสมัครแล้วให้ตรวจอีเมลยืนยันก่อนลองอีกครั้ง หรือใช้งานแบบ Guest';
+    } on SocketException {
+      error =
+          'เชื่อมต่ออินเทอร์เน็ตไม่ได้ กรุณาตรวจสอบ Wi-Fi หรือข้อมูลมือถือ ยังใช้งานแบบ Guest ได้';
+    } on HandshakeException {
+      error =
+          'เชื่อมต่ออย่างปลอดภัยไม่ได้ กรุณาตรวจวันเวลาในเครื่องหรือเปลี่ยนเครือข่าย';
+    } on PlatformException {
+      error =
+          'เข้าถึงที่เก็บข้อมูลปลอดภัยในเครื่องไม่ได้ กรุณาปิดเปิดแอปแล้วลองใหม่ ยังใช้งานแบบ Guest ได้';
+    } catch (e) {
+      // Record only the type: exception messages can contain credentials.
+      debugPrint('Authentication failed: ${e.runtimeType}');
+      error =
+          'ดำเนินการไม่สำเร็จ หากสมัครแล้วให้ตรวจอีเมลยืนยันก่อน จากนั้นลองเข้าสู่ระบบ หรือใช้งานแบบ Guest';
     } finally {
       if (session == null) {
         try {
