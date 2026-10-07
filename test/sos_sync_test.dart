@@ -221,11 +221,13 @@ void main() {
       await raw.execute('DROP TABLE sos_queue');
       await raw.execute('DROP TABLE sos_records');
       await raw.execute('DROP TABLE media_files');
+      await raw.execute('DROP TABLE relay_queue');
+      await raw.execute('DROP TABLE relay_ack_queue');
       await raw.setVersion(2);
       await db.close();
       expect((await store.list()).single.alert.incidentId, 'incident');
       expect((await store.queue()).length, 1);
-      expect(await (await db.database).getVersion(), 6);
+      expect(await (await db.database).getVersion(), 8);
     },
   );
   test('late response cannot restore a resolved conflict', () async {

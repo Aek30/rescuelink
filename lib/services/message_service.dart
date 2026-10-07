@@ -7,6 +7,7 @@ import '../models/incoming_notice.dart';
 import '../models/relay_packet.dart';
 import '../models/sos_alert.dart';
 import '../models/peer_presence.dart';
+import '../models/peer_advertisement.dart';
 import 'local_database_service.dart';
 import 'media_service.dart';
 import 'nearby_service.dart';
@@ -17,13 +18,19 @@ class MessageService extends ChangeNotifier {
     required this.nearbyService,
     LocalDatabaseService? database,
     this.mediaService,
-  }) : database = database ?? LocalDatabaseService.instance;
+    DateTime Function()? clock,
+  }) : database = database ?? LocalDatabaseService.instance,
+       _clock = clock ?? DateTime.now;
+  final DateTime Function() _clock;
+  DateTime _now() => _clock().toUtc();
   final NearbyService nearbyService;
   final LocalDatabaseService database;
   final MediaService? mediaService;
   final _uuid = const Uuid();
   final Map<String, String> _endpointPeers = {};
-  final Set<String> _relaySent = {};
+  bool _relayDraining = false;
+  bool _resetRelayBackoff = true;
+  DateTime? _lastRelayCleanup;
   Set<String> _connectedEndpoints = {};
   Map<String, String> peers = {};
   List<MessageModel> messages = [];
@@ -37,7 +44,7 @@ class MessageService extends ChangeNotifier {
     final state = presence[peerId];
     if (state == null) return 'ยังไม่ทราบบทบาท';
     final role = state.rescue ? 'หน่วยกู้ภัย' : 'ผู้ใช้ทั่วไป';
-    return state.isFresh(DateTime.now().toUtc()) ? role : '$role • สถานะล่าสุด';
+    return state.isFresh(_now()) ? role : '$role • สถานะล่าสุด';
   }
 
   String conversationPreview(String peerId) {
@@ -82,6 +89,28 @@ class MessageService extends ChangeNotifier {
   String? getPeerForEndpoint(String endpointId) => _endpointPeers[endpointId];
   int _presenceSequence = 0;
   Map<String, PeerPresence> presence = {};
+  final Map<String, PeerAdvertisement> _directory = {};
+  Map<String, Map<String, SosAlert>> _remoteSos = {};
+
+  bool isReachable(String peerId) {
+    if (isOnline(peerId)) return true;
+    final entry = _directory[peerId];
+    return entry != null &&
+        entry.path.length > 2 &&
+        entry.state.isFresh(_now()) &&
+        isOnline(entry.path[entry.path.length - 2]);
+  }
+
+  String connectionLabel(String peerId) {
+    if (isOnline(peerId)) return 'เชื่อมต่อโดยตรง';
+    final entry = _directory[peerId];
+    if (entry != null && isReachable(peerId)) {
+      final via = entry.path[entry.path.length - 2];
+      return 'ส่งต่อผ่าน ${peers[via] ?? 'เครื่องกลาง'} • เครื่องกลาง ${entry.path.length - 2} เครื่อง';
+    }
+    return 'ยังติดต่อไม่ได้ • รอเชื่อมต่อ';
+  }
+
   void Function(String name)? onSosReceived;
   void Function(String name)? onMediaReceived;
   void Function(IncomingNotice notice)? onNotice;
@@ -93,7 +122,7 @@ class MessageService extends ChangeNotifier {
   }
 
   void _sosNotice(String peer, SosAlert alert) {
-    if (!rescueMode || !alert.active) return;
+    if (!rescueMode || !alert.isActiveAt(_now())) return;
     onSosReceived?.call(alert.name);
     _notice(
       IncomingNotice(
@@ -108,9 +137,8 @@ class MessageService extends ChangeNotifier {
     );
   }
 
-  int get activeSosCount => presence.values
-      .where((p) => p.sos?.active == true && p.isFresh(DateTime.now().toUtc()))
-      .length;
+  int get activeSosCount =>
+      presence.values.where((p) => p.sos?.isActiveAt(_now()) == true).length;
   Set<String> _sosRecipients = {};
   Set<String> get sosRecipients => Set.unmodifiable(_sosRecipients);
   List<MessageModel> get receivedSos {
@@ -149,10 +177,11 @@ class MessageService extends ChangeNotifier {
     if (!ready || _disposed) throw StateError('Message service is not ready');
     if (_publishingSos) throw StateError('กำลังบันทึก SOS');
     if (!recipients.every(peers.containsKey)) {
-      throw ArgumentError('กรุณาเลือกผู้รับที่เคยเชื่อมต่อ');
+      throw ArgumentError('กรุณาเลือกผู้รับจากรายชื่อที่รู้จัก');
     }
     // Keep recipients fixed for an incident so cancellation reaches everyone.
-    if (mySos?.active == true && !setEquals(recipients, _sosRecipients)) {
+    if (mySos?.isActiveAt(_now()) == true &&
+        !setEquals(recipients, _sosRecipients)) {
       throw ArgumentError('ยกเลิก SOS เดิมก่อนเปลี่ยนผู้รับ');
     }
     _publishingSos = true;
@@ -160,18 +189,22 @@ class MessageService extends ChangeNotifier {
       await _reloadCurrentSos();
       final previous = mySos;
       if (!active && (previous == null || !previous.active)) return;
+      final sameIncident =
+          previous?.active == true && (!active || previous!.isActiveAt(_now()));
+      final now = _now();
+      final updatedAt = previous != null && !now.isAfter(previous.updatedAt)
+          ? previous.updatedAt.add(const Duration(microseconds: 1))
+          : now;
       final alert = SosAlert(
-        incidentId: previous?.active == true
-            ? previous!.incidentId
-            : _uuid.v4(),
-        revision: previous?.active == true ? previous!.revision + 1 : 1,
+        incidentId: sameIncident ? previous!.incidentId : _uuid.v4(),
+        revision: sameIncident ? previous!.revision + 1 : 1,
         active: active,
         name: name.trim(),
         people: people,
         category: category,
         details: details.trim(),
         location: location,
-        updatedAt: DateTime.now().toUtc(),
+        updatedAt: updatedAt,
       );
       await database.saveSos(
         jsonEncode({
@@ -246,6 +279,27 @@ class MessageService extends ChangeNotifier {
           (id, value) => MapEntry(id, PeerPresence.decode(value as String)),
         );
       }
+      final savedDirectory = await database.getSetting('peerDirectory');
+      if (savedDirectory != null) {
+        for (final value
+            in (jsonDecode(savedDirectory) as Map<String, dynamic>).values) {
+          final entry = PeerAdvertisement.fromStored(
+            value as Map<String, dynamic>,
+          );
+          _directory[entry.peerId] = entry;
+          presence[entry.peerId] = entry.state;
+        }
+      }
+      // Seed revision tombstones from presence saved by older app versions.
+      for (final entry in presence.entries) {
+        if (entry.value.sos != null) {
+          await database.recordRemoteSos(entry.key, entry.value.sos!);
+        }
+      }
+      _remoteSos = await database.getRemoteSos();
+      for (final owner in _remoteSos.keys) {
+        _projectSos(owner);
+      }
       await _refresh();
       // เริ่มต้น MediaService และส่ง myId
       if (mediaService != null) {
@@ -267,9 +321,8 @@ class MessageService extends ChangeNotifier {
       }
       if (_disposed) return;
       nearbyService.onTextPayloadReceived = (endpoint, payload) {
-        _incoming = _incoming.then(
-          (_) =>
-              handleIncomingPayload(endpointId: endpoint, rawPayload: payload),
+        unawaited(
+          handleIncomingPayload(endpointId: endpoint, rawPayload: payload),
         );
       };
       nearbyService.addListener(_connectionChanged);
@@ -302,14 +355,180 @@ class MessageService extends ChangeNotifier {
     _sosRecipients = (state['recipients'] as List).cast<String>().toSet();
   }
 
+  SosAlert? _latestSos(String owner) {
+    final incidents = _remoteSos[owner]?.values.toList();
+    if (incidents == null || incidents.isEmpty) return null;
+    incidents.sort((a, b) {
+      final order = b.updatedAt.compareTo(a.updatedAt);
+      return order != 0 ? order : b.incidentId.compareTo(a.incidentId);
+    });
+    return incidents.first;
+  }
+
+  void _projectSos(String owner) {
+    final alert = _latestSos(owner);
+    if (alert == null) return;
+    final previous = presence[owner];
+    presence[owner] = PeerPresence(
+      sequence: previous?.sequence ?? 1,
+      rescue: previous?.rescue ?? false,
+      // A targeted SOS does not prove that a cached Rescue role is current.
+      receivedAt:
+          previous?.receivedAt ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      sos: alert,
+    );
+  }
+
+  Future<void> _learnSos(String owner, String name, SosAlert alert) async {
+    final changed = await database.recordRemoteSos(owner, alert);
+    if (!peers.containsKey(owner)) {
+      await database.savePeer(owner, name);
+      peers[owner] = name;
+    }
+    if (changed) _remoteSos = await database.getRemoteSos();
+    _projectSos(owner);
+    final latest = _latestSos(owner);
+    if (changed &&
+        latest?.incidentId == alert.incidentId &&
+        latest?.revision == alert.revision) {
+      _sosNotice(owner, alert);
+    }
+  }
+
+  Future<void> _saveDirectory() async {
+    await database.setSetting(
+      'peerDirectory',
+      jsonEncode(_directory.map((id, entry) => MapEntry(id, entry.toStored()))),
+    );
+    await database.setSetting(
+      'peerPresence',
+      jsonEncode(presence.map((id, state) => MapEntry(id, state.encode()))),
+    );
+  }
+
+  Future<void> _acceptAdvertisement(PeerAdvertisement entry) async {
+    if (entry.peerId == myId) return;
+    final previous = _directory[entry.peerId];
+    if (entry.state.sos != null) {
+      await _learnSos(entry.peerId, entry.name, entry.state.sos!);
+    }
+    if (previous != null && entry.state.sequence <= previous.state.sequence) {
+      // An equal sequence may offer a better route, but never a fresh lease.
+      if (entry.state.sequence == previous.state.sequence &&
+          (entry.path.length < previous.path.length ||
+              !isOnline(previous.path[previous.path.length - 2]))) {
+        _directory[entry.peerId] = PeerAdvertisement(
+          peerId: entry.peerId,
+          name: previous.name,
+          state: previous.state,
+          path: entry.path,
+        );
+      }
+      return;
+    }
+    _directory[entry.peerId] = entry;
+    presence[entry.peerId] = entry.state;
+    _projectSos(entry.peerId);
+    await database.savePeer(entry.peerId, entry.name);
+    peers[entry.peerId] = entry.name;
+  }
+
+  Future<void> _receivePresence(MessageModel packet) async {
+    final now = _now();
+    if (packet.senderId.length > 128 ||
+        packet.senderName.trim().isEmpty ||
+        packet.senderName.length > 128) {
+      throw const FormatException('Invalid presence identity');
+    }
+    await _acceptAdvertisement(
+      PeerAdvertisement(
+        peerId: packet.senderId,
+        name: packet.senderName,
+        state: PeerPresence.decode(packet.text, receivedAt: now),
+        path: [packet.senderId, myId!],
+      ),
+    );
+    final body = jsonDecode(packet.text) as Map<String, dynamic>;
+    if (body.containsKey('directory')) {
+      final entries = body['directory'];
+      if (body['directoryVersion'] != 1 ||
+          entries is! List ||
+          entries.length > 64) {
+        throw const FormatException('Invalid peer directory');
+      }
+      for (final data in entries) {
+        try {
+          final entry = PeerAdvertisement.fromWire(
+            data as Map<String, dynamic>,
+            advertiser: packet.senderId,
+            receiver: myId!,
+            now: now,
+          );
+          await _acceptAdvertisement(entry);
+        } on FormatException {
+          // One bad/looped advertisement cannot hide other valid peers.
+          continue;
+        } on TypeError {
+          continue;
+        }
+      }
+    }
+    await _saveDirectory();
+    await _refresh();
+  }
+
+  Iterable<String> _presencePackets(String receiver, PeerPresence local) sync* {
+    final now = _now();
+    final body = jsonDecode(local.encode()) as Map<String, dynamic>;
+    String encode(List<Map<String, Object?>> entries) => _packet(
+      MessageType.presence,
+      receiver: receiver,
+      text: jsonEncode({...body, 'directoryVersion': 1, 'directory': entries}),
+    ).toJson();
+    var chunk = <Map<String, Object?>>[];
+    for (final entry in _directory.values.toList()) {
+      if (entry.path.contains(receiver) ||
+          entry.path.length > RelayPacket.maxHops ||
+          now.isBefore(entry.state.receivedAt) ||
+          now.difference(entry.state.receivedAt) >=
+              PeerAdvertisement.retention) {
+        continue;
+      }
+      final state = entry.state;
+      final wire = PeerAdvertisement(
+        peerId: entry.peerId,
+        name: entry.name,
+        path: entry.path,
+        state: PeerPresence(
+          sequence: state.sequence,
+          rescue: state.rescue,
+          receivedAt: state.receivedAt,
+          sos: _latestSos(entry.peerId) ?? state.sos,
+        ),
+      ).toWire(now);
+      if (chunk.isNotEmpty &&
+          (chunk.length >= 32 ||
+              utf8.encode(encode([...chunk, wire])).length > 24 * 1024)) {
+        yield encode(chunk);
+        chunk = [];
+      }
+      if (utf8.encode(encode([wire])).length <= 24 * 1024) chunk.add(wire);
+    }
+    yield encode(chunk);
+  }
+
+  bool _mayForwardSos(String owner, SosAlert alert) =>
+      !alert.isExpired(_now()) &&
+      alert.revision >= (_remoteSos[owner]?[alert.incidentId]?.revision ?? 0);
+
   void _connectionChanged() {
     final connected = nearbyService.connectedDevices
         .map((d) => d.endpointId)
         .toSet();
     if (setEquals(connected, _connectedEndpoints)) return;
     _connectedEndpoints = connected;
-    // A relay peer may have restarted; permit unacknowledged packets again.
-    _relaySent.clear();
+    _resetRelayBackoff = true;
     _endpointPeers.removeWhere((id, _) => !connected.contains(id));
     if (mediaService != null) unawaited(mediaService!.pauseDisconnected());
     _notify();
@@ -327,7 +546,7 @@ class MessageService extends ChangeNotifier {
     senderName: nearbyService.deviceName,
     receiverId: receiver,
     text: text,
-    timestamp: DateTime.now().toUtc(),
+    timestamp: _now(),
     type: type,
     ackFor: ackFor,
   );
@@ -360,9 +579,18 @@ class MessageService extends ChangeNotifier {
     if (!ready || _disposed || _ticking) return;
     _ticking = true;
     try {
+      await _drainRelayQueues();
       if (!_publishingSos) await _reloadCurrentSos();
       String? retryError;
-      for (final device in nearbyService.connectedDevices) {
+      _presenceSequence++;
+      await database.setSetting('presenceSequence', '$_presenceSequence');
+      final localState = PeerPresence(
+        sequence: _presenceSequence,
+        rescue: rescueMode,
+        sos: mySos,
+        receivedAt: _now(),
+      );
+      for (final device in nearbyService.connectedDevices.toList()) {
         try {
           if (_disposed) return;
           // Repeat introductions so a packet lost during connection setup recovers.
@@ -372,24 +600,9 @@ class MessageService extends ChangeNotifier {
           );
           final peer = _endpointPeers[device.endpointId];
           if (peer == null) continue;
-          _presenceSequence++;
-          await database.setSetting(
-            'presenceSequence',
-            _presenceSequence.toString(),
-          );
-          await nearbyService.sendMessage(
-            device.endpointId,
-            _packet(
-              MessageType.presence,
-              receiver: peer,
-              text: PeerPresence(
-                sequence: _presenceSequence,
-                rescue: rescueMode,
-                sos: mySos,
-                receivedAt: DateTime.now().toUtc(),
-              ).encode(),
-            ).toJson(),
-          );
+          for (final payload in _presencePackets(peer, localState)) {
+            await nearbyService.sendMessage(device.endpointId, payload);
+          }
           // ─── ส่งสื่อที่ค้างไว้ (MediaService) ─────────────────────────────
           if (mediaService != null) {
             try {
@@ -416,6 +629,7 @@ class MessageService extends ChangeNotifier {
             if (_disposed) return;
             if (message.type == MessageType.sos) {
               final alert = SosAlert.fromJson(message.text);
+              if (alert.isExpired(_now())) continue;
               if (alert.revision < (latestSos[alert.incidentId] ?? 0)) continue;
             }
             // ข้ามข้อความ media (จัดการโดย MediaService แยกต่างหาก)
@@ -425,17 +639,17 @@ class MessageService extends ChangeNotifier {
               continue;
             }
             if (message.receiverId != peer) {
-              if (message.type != MessageType.message ||
+              if ((message.type != MessageType.message &&
+                      message.type != MessageType.sos) ||
                   isOnline(message.receiverId)) {
                 continue;
               }
-              final key = '${message.id}:$peer';
-              if (_relaySent.contains(key)) continue;
+              // Keep retrying until the destination ACK arrives, including
+              // when a previous native send succeeded but the packet was lost.
               await nearbyService.sendMessage(
                 device.endpointId,
                 RelayPacket(message, [myId!]).toJson(),
               );
-              _relaySent.add(key);
               await database.updateMessageStatus(
                 message.id,
                 MessageStatus.sent,
@@ -463,6 +677,19 @@ class MessageService extends ChangeNotifier {
   }
 
   Future<void> handleIncomingPayload({
+    required String endpointId,
+    required String rawPayload,
+  }) {
+    _incoming = _incoming.then(
+      (_) => _handleIncomingPayload(
+        endpointId: endpointId,
+        rawPayload: rawPayload,
+      ),
+    );
+    return _incoming;
+  }
+
+  Future<void> _handleIncomingPayload({
     required String endpointId,
     required String rawPayload,
   }) async {
@@ -502,7 +729,10 @@ class MessageService extends ChangeNotifier {
         await database.savePeer(packet.senderId, packet.senderName);
         _endpointPeers[endpointId] = packet.senderId;
         await _refresh();
-        if (existing == null) await retry();
+        if (existing == null) {
+          _resetRelayBackoff = true;
+          await retry();
+        }
         return;
       }
       if (packet.receiverId != myId ||
@@ -512,11 +742,17 @@ class MessageService extends ChangeNotifier {
       switch (packet.type) {
         case MessageType.message:
         case MessageType.sos:
-          if (packet.type == MessageType.sos) SosAlert.fromJson(packet.text);
+          final alert = packet.type == MessageType.sos
+              ? SosAlert.fromJson(packet.text)
+              : null;
           final inserted = await database.insertMessage(
             packet.copyWith(status: MessageStatus.delivered),
           );
           await database.saveReceivedRoute(packet.id, [packet.senderId, myId!]);
+          if (alert != null) {
+            await _learnSos(packet.senderId, packet.senderName, alert);
+            await _saveDirectory();
+          }
           await _refresh();
           if (inserted && packet.type == MessageType.message) {
             _notice(
@@ -555,31 +791,7 @@ class MessageService extends ChangeNotifier {
             await _refresh();
           }
         case MessageType.presence:
-          // (presence handling unchanged)
-          final state = PeerPresence.decode(
-            packet.text,
-            receivedAt: DateTime.now().toUtc(),
-          );
-          if (state.sequence > (presence[packet.senderId]?.sequence ?? 0)) {
-            final previous = presence[packet.senderId]?.sos;
-            final updated = {...presence, packet.senderId: state};
-            await database.setSetting(
-              'peerPresence',
-              jsonEncode(
-                updated.map((id, value) => MapEntry(id, value.encode())),
-              ),
-            );
-            presence = updated;
-            _notify();
-            final alert = state.sos;
-            if (alert != null &&
-                alert.active &&
-                (previous == null ||
-                    previous.incidentId != alert.incidentId ||
-                    previous.revision < alert.revision)) {
-              _sosNotice(packet.senderId, alert);
-            }
-          }
+          await _receivePresence(packet);
         case MessageType.deviceInfo:
           break;
         case MessageType.media:
@@ -598,15 +810,26 @@ class MessageService extends ChangeNotifier {
         relay.path.contains(myId)) {
       return;
     }
+    if (packet.type == MessageType.ack) {
+      await _receiveRelayAck(relay);
+      return;
+    }
+    SosAlert? sos;
+    if (packet.type == MessageType.sos) {
+      sos = SosAlert.fromJson(packet.text);
+      await _learnSos(packet.senderId, packet.senderName, sos);
+      await _saveDirectory();
+    }
     if (packet.receiverId == myId) {
       // SQLite verifies duplicate content and keeps exactly one inbox row.
       final inserted = await database.insertMessage(
         packet.copyWith(status: MessageStatus.delivered),
       );
       await database.savePeer(packet.senderId, packet.senderName);
-      await database.saveReceivedRoute(packet.id, [...relay.path, myId!]);
+      final receivedPath = [...relay.path, myId!];
+      await database.saveReceivedRoute(packet.id, receivedPath);
       await _refresh();
-      if (inserted) {
+      if (inserted && packet.type == MessageType.message) {
         _notice(
           IncomingNotice(
             id: packet.id,
@@ -616,31 +839,41 @@ class MessageService extends ChangeNotifier {
           ),
         );
       }
-      // End-to-end relay ACK is deliberately deferred to Phase 5 part 2.
+      await _sendOrQueueRelayAck(
+        messageId: packet.id,
+        senderId: packet.senderId,
+        receivedPath: receivedPath,
+      );
       return;
     }
     if (relay.path.length >= RelayPacket.maxHops) return;
-    if (!await database.claimRelay(packet.id)) return;
+    if (sos != null && !_mayForwardSos(packet.senderId, sos)) return;
     final forwarded = RelayPacket(packet, [...relay.path, myId!]).toJson();
     if (utf8.encode(forwarded).length > 32768) {
       throw const FormatException('Relay payload exceeds 32 KB');
     }
-    for (final device in nearbyService.connectedDevices.toList()) {
-      if (_disposed) return;
-      final peer = _endpointPeers[device.endpointId];
-      if (peer == null ||
-          device.endpointId == endpointId ||
-          relay.path.contains(peer)) {
-        continue;
-      }
-      try {
-        await nearbyService.sendMessage(device.endpointId, forwarded);
-      } catch (e) {
-        // Try other neighbors even when one link fails. No relay queue yet.
-        error = 'Relay failed: $e';
-        _notify();
-      }
+    await database.enqueueRelay(
+      packetId: packet.id,
+      payload: forwarded,
+      destPeer: packet.receiverId,
+    );
+    final job = await database.relayItem(packet.id);
+    final receipt = job?['ack_payload'] as String?;
+    if (receipt != null) {
+      final cached = RelayPacket.fromMap(
+        jsonDecode(receipt) as Map<String, dynamic>,
+      );
+      // Reuse the proven ACK origin, but return along this incoming path.
+      final route = [...cached.path, ...relay.path.reversed];
+      final ack = RelayPacket(cached.message, cached.path, ackRoute: route);
+      RelayPacket.fromMap(jsonDecode(ack.toJson()) as Map<String, dynamic>);
+      await database.enqueueRelayAck(
+        ackFor: packet.id,
+        payload: ack.toJson(),
+        destPeer: route[cached.path.length],
+      );
     }
+    await _drainRelayQueues();
   }
 
   /// Route packetType packets ไปยัง MediaService
@@ -666,6 +899,164 @@ class MessageService extends ChangeNotifier {
         }
       default:
         debugPrint('[MessageService] Unknown packetType: $packetType');
+    }
+  }
+
+  // ─── Phase 5 Part 2: Relay ACK helpers ──────────────────────────────────
+
+  /// C ส่ง relay ACK กลับ A ตาม path ที่บันทึกไว้
+  /// ถ้าเส้นทางขาดให้ enqueue รอ reconnect
+  Future<void> _sendOrQueueRelayAck({
+    required String messageId,
+    required String senderId,
+    required List<String> receivedPath,
+  }) async {
+    if (!ready || _disposed) return;
+    final ackPath = receivedPath.reversed.toList();
+    if (ackPath.length < 2) return; // direct link — ไม่ใช้ relay ACK
+    final nextHopId = ackPath[1];
+    final ack = MessageModel(
+      id: _uuid.v4(),
+      senderId: myId!,
+      senderName: nearbyService.deviceName,
+      receiverId: senderId,
+      text: '',
+      timestamp: DateTime.now().toUtc(),
+      type: MessageType.ack,
+      ackFor: messageId,
+    );
+    final ackPacket = RelayPacket(ack, [myId!], ackRoute: ackPath).toJson();
+    await database.enqueueRelayAck(
+      ackFor: messageId,
+      payload: ackPacket,
+      destPeer: nextHopId,
+    );
+    await _drainRelayQueues();
+  }
+
+  Future<void> _receiveRelayAck(RelayPacket relay) async {
+    final ack = relay.message;
+    final route = relay.ackRoute!;
+    if (route[relay.path.length] != myId) return;
+    if (ack.receiverId == myId) {
+      final originals = await database.getMessages();
+      final original = originals
+          .where(
+            (m) =>
+                m.id == ack.ackFor &&
+                m.senderId == myId &&
+                m.receiverId == ack.senderId &&
+                (m.type == MessageType.message || m.type == MessageType.sos),
+          )
+          .firstOrNull;
+      if (original == null) return;
+      await database.saveReceivedRoute(ack.ackFor!, route.reversed.toList());
+      if (original.status.index < MessageStatus.delivered.index) {
+        await database.updateMessageStatus(
+          ack.ackFor!,
+          MessageStatus.delivered,
+        );
+      }
+      await _refresh();
+      return; // Never ACK an ACK or insert it into chat history.
+    }
+    final job = await database.relayItem(ack.ackFor!);
+    if (job == null) return;
+    final data = RelayPacket.fromMap(
+      jsonDecode(job['payload'] as String) as Map<String, dynamic>,
+    );
+    // The ACK must return along the path on which this node accepted the data.
+    final forwardPrefix = route.sublist(relay.path.length).reversed.toList();
+    if (!listEquals(data.path, forwardPrefix)) return;
+    final forwarded = RelayPacket(ack, [...relay.path, myId!], ackRoute: route);
+    if (await database.acceptRelayAck(
+      ack: ack,
+      payload: forwarded.toJson(),
+      destPeer: route[relay.path.length + 1],
+    )) {
+      await _drainRelayQueues();
+    }
+  }
+
+  /// One serialized drain serves receipt callbacks, the five-second timer,
+  /// reconnections and restarts. Failed jobs never silently exhaust retries.
+  Future<void> _drainRelayQueues() async {
+    if (!ready || _disposed || _relayDraining) return;
+    _relayDraining = true;
+    try {
+      final now = DateTime.now().toUtc();
+      if (_lastRelayCleanup == null ||
+          now.difference(_lastRelayCleanup!) >= const Duration(hours: 6)) {
+        await database.cleanupExpiredRelayItems();
+        _lastRelayCleanup = now;
+      }
+      if (_resetRelayBackoff) {
+        _resetRelayBackoff = false;
+        await database.resetRelayBackoff();
+      }
+      final neighbors = {
+        for (final device in nearbyService.connectedDevices.toList())
+          if (_endpointPeers[device.endpointId] != null)
+            device.endpointId: _endpointPeers[device.endpointId]!,
+      };
+      // ACKs go only to their prescribed next hop.
+      for (final entry in neighbors.entries) {
+        final acks = await database.pendingRelayAcks(entry.value);
+        for (final item in acks) {
+          if (_disposed) return;
+          final seq = item['seq'] as int;
+          try {
+            await nearbyService.sendMessage(
+              entry.key,
+              item['payload'] as String,
+            );
+            await database.deleteRelayAckItem(seq);
+          } catch (e) {
+            await database.markRelayAckAttempt(seq, item['attempts'] as int);
+            error = 'Relay ACK retry failed: $e';
+            _notify();
+          }
+        }
+      }
+      final jobs = await database.retryableRelayItems();
+      for (final job in jobs) {
+        if (_disposed) return;
+        final payload = job['payload'] as String;
+        final relay = RelayPacket.fromMap(
+          jsonDecode(payload) as Map<String, dynamic>,
+        );
+        if (relay.message.type == MessageType.sos &&
+            !_mayForwardSos(
+              relay.message.senderId,
+              SosAlert.fromJson(relay.message.text),
+            )) {
+          await database.deleteRelayItem(job['seq'] as int);
+          continue;
+        }
+        final eligible = neighbors.entries
+            .where((e) => !relay.path.contains(e.value))
+            .toList();
+        final direct = eligible
+            .where((e) => e.value == relay.message.receiverId)
+            .toList();
+        final targets = direct.isEmpty ? eligible : direct;
+        if (targets.isEmpty) continue; // Keep the job even without a next hop.
+        for (final target in targets) {
+          try {
+            await nearbyService.sendMessage(target.key, payload);
+          } catch (e) {
+            error = 'Relay failed (queued): $e';
+            _notify();
+          }
+        }
+        // Keep successful native sends too, until a destination ACK is proven.
+        await database.markRelayAttempt(
+          job['seq'] as int,
+          job['attempts'] as int,
+        );
+      }
+    } finally {
+      _relayDraining = false;
     }
   }
 

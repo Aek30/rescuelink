@@ -18,7 +18,7 @@ void main() {
         ),
       ),
     );
-    expect(find.text('ผ่าน 2 เครื่อง · 3 hops'), findsOneWidget);
+    expect(find.text('ส่งผ่าน Rescue B → เครื่องที่ไม่ทราบชื่อ'), findsOneWidget);
     await tester.tap(find.byType(ActionChip));
     await tester.pumpAndSettle();
     expect(find.text('Rescue B'), findsOneWidget);

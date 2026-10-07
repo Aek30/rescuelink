@@ -16,7 +16,7 @@ void main() {
     expect(sosDistance(point(0), point(0)), 0);
     expect(sosDistance(point(0), point(.001)), closeTo(111.2, .1));
   });
-  testWidgets('filters range and expires live SOS without inventing distance', (
+  testWidgets('filters range, keeps stale SOS and expires by incident age', (
     tester,
   ) async {
     final service = UiMessages();
@@ -84,7 +84,34 @@ void main() {
       sos: service.presence['peer']!.sos,
     );
     await tester.pump(const Duration(seconds: 5));
+    expect(find.textContaining('นอกระยะที่เลือก'), findsOneWidget);
+    await tester.tap(find.text('200 ม.'));
+    await tester.pumpAndSettle();
+    expect(find.text('ผู้ส่งทดสอบ'), findsOneWidget);
+    expect(
+      find.text('สถานะการเชื่อมต่อเก่า • SOS ยังไม่หมดอายุ'),
+      findsOneWidget,
+    );
+    final old = service.presence['peer']!.sos!;
+    service.presence['peer'] = PeerPresence(
+      sequence: 3,
+      rescue: false,
+      receivedAt: now,
+      sos: SosAlert(
+        incidentId: old.incidentId,
+        revision: old.revision,
+        active: true,
+        name: old.name,
+        people: old.people,
+        category: old.category,
+        details: old.details,
+        location: old.location,
+        updatedAt: now.subtract(const Duration(hours: 25)),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 5));
     expect(find.textContaining('นอกระยะที่เลือก'), findsNothing);
+    expect(find.text('ผู้ส่งทดสอบ'), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

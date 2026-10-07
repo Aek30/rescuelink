@@ -4,7 +4,7 @@
 
 เพิ่ม Supabase Auth สำหรับสมัครด้วยอีเมล/รหัสผ่าน, เข้าสู่ระบบ, ออกจากระบบ และกู้ session จาก secure storage ข้อมูลแชต/SOS/คิวส่งแยกตามบัญชีในเครื่อง และเลือกผูกข้อมูล Guest เดิมได้ก่อนบัญชีมีข้อมูลในเครื่องนี้ **SOS และการสื่อสารออฟไลน์ยังใช้แบบ Guest ได้โดยไม่ต้อง Login** อ่าน schema, การตั้งค่า และผลทดสอบใน [Phase 2 สมาชิก](docs/PHASE_2_MEMBERSHIP.md)
 
-Build ที่เชื่อม Supabase: `.\tool\flutter.ps1 build apk --debug --dart-define-from-file=config/supabase.local.json` ค่าการเชื่อมต่อเฉพาะเครื่องไม่เข้า Git; มีไฟล์ตัวอย่าง `config/supabase.example.json` รายละเอียด Phase เดิมด้านล่างเป็นประวัติของระบบ Nearby ซึ่งนับ Phase แยกจากงานสมาชิกนี้
+Build ที่เชื่อม Supabase: `.\tool\flutter.ps1 build apk --debug` ตัวช่วยจะโหลด `config/supabase.local.json` ให้อัตโนมัติสำหรับ build/run และหยุดหากไม่มีค่าตั้งค่า เพื่อป้องกัน APK ที่สมัครสมาชิกไม่ได้ หากเรียก `flutter` โดยตรงต้องเพิ่ม `--dart-define-from-file=config/supabase.local.json` เอง ค่าการเชื่อมต่อเฉพาะเครื่องไม่เข้า Git; มีไฟล์ตัวอย่าง `config/supabase.example.json` รายละเอียด Phase เดิมด้านล่างเป็นประวัติของระบบ Nearby ซึ่งนับ Phase แยกจากงานสมาชิกนี้
 
 Phase 4 เพิ่มสถานะ SOS สีแดง / Rescue สีน้ำเงินบนหน้าหลักและหน้า SOS ให้ทุกเครื่องที่เชื่อมต่อโดยตรง รวมเครื่องที่เชื่อมต่อภายหลัง เปิด SOS ได้โดยไม่ต้องเลือกผู้รับ สถานะล่าสุดเก็บใน SQLite ส่งซ้ำทุก 5 วินาที และแสดงสีเทาว่าหมดอายุหลังไม่ได้รับข้อมูล 30 วินาที (หน้าจอปรับตามรอบ refresh) แตะสถานะเข้าแชตได้
 

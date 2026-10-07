@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:location/location.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -33,7 +34,7 @@ class PermissionService {
 
   Future<bool> ensureReady() async {
     error = null;
-    if (!Platform.isAndroid) {
+    if (kIsWeb || !Platform.isAndroid) {
       error = 'This POC requires a physical Android phone.';
       return false;
     }

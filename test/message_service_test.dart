@@ -136,40 +136,73 @@ void main() {
     },
   );
 
-  test('unread summary is per peer, deduplicated and persists read watermark', () async {
-    await connect();
-    await service.sendTextMessage(receiverId: 'peer', text: 'outbound');
-    expect(service.totalUnread, 0);
-    final first = packet(MessageType.message, id: 'unread-one');
-    await receive(first);
-    await receive(first);
-    await receive(packet(MessageType.message, id: 'unread-two'));
-    expect(service.unreadCounts['peer'], 2);
-    expect(service.totalUnread, 2);
-    expect(service.conversationPreview('peer'), 'สวัสดี 🌍');
-    await service.markConversationRead('peer', first.id);
-    expect(service.unreadCounts['peer'], 1);
-    // Reading an earlier snapshot must leave a newer arrival unread.
-    await service.markConversationRead('peer', first.id);
-    expect(service.totalUnread, 1);
-    await db.close();
-    expect((await db.getUnreadCounts(service.myId!))['peer'], 1);
-    await service.markConversationRead('peer', 'unread-two');
-    expect(service.totalUnread, 0);
-  });
+  test(
+    'unread summary is per peer, deduplicated and persists read watermark',
+    () async {
+      await connect();
+      await service.sendTextMessage(receiverId: 'peer', text: 'outbound');
+      expect(service.totalUnread, 0);
+      final first = packet(MessageType.message, id: 'unread-one');
+      await receive(first);
+      await receive(first);
+      await receive(packet(MessageType.message, id: 'unread-two'));
+      expect(service.unreadCounts['peer'], 2);
+      expect(service.totalUnread, 2);
+      expect(service.conversationPreview('peer'), 'สวัสดี 🌍');
+      await service.markConversationRead('peer', first.id);
+      expect(service.unreadCounts['peer'], 1);
+      // Reading an earlier snapshot must leave a newer arrival unread.
+      await service.markConversationRead('peer', first.id);
+      expect(service.totalUnread, 1);
+      await db.close();
+      expect((await db.getUnreadCounts(service.myId!))['peer'], 1);
+      await service.markConversationRead('peer', 'unread-two');
+      expect(service.totalUnread, 0);
+    },
+  );
 
-  test('peer role distinguishes current, expired and unknown presence', () async {
-    expect(service.peerRoleLabel('peer'), 'ยังไม่ทราบบทบาท');
-    service.presence['peer'] = PeerPresence(sequence: 1, rescue: true,
-        receivedAt: DateTime.now().toUtc());
-    expect(service.peerRoleLabel('peer'), 'หน่วยกู้ภัย');
-    service.presence['peer'] = PeerPresence(sequence: 2, rescue: false,
-        receivedAt: DateTime.now().toUtc());
-    expect(service.peerRoleLabel('peer'), 'ผู้ใช้ทั่วไป');
-    service.presence['peer'] = PeerPresence(sequence: 3, rescue: true,
-        receivedAt: DateTime.now().toUtc().subtract(const Duration(minutes: 1)));
-    expect(service.peerRoleLabel('peer'), 'หน่วยกู้ภัย • สถานะล่าสุด');
-  });
+  test(
+    'peer updates keep conversation order across refresh and restart',
+    () async {
+      await db.savePeer('A', 'A');
+      await db.savePeer('C', 'C');
+      final original = (await db.getPeers()).keys.toList();
+      for (var i = 0; i < 5; i++) {
+        await db.savePeer('A', 'A updated');
+        expect((await db.getPeers()).keys.toList(), original);
+        await db.savePeer('C', 'C updated');
+        expect((await db.getPeers()).keys.toList(), original);
+      }
+      await db.close();
+      expect((await db.getPeers()).keys.toList(), original);
+      expect((await db.getPeers())['A'], 'A updated');
+    },
+  );
+
+  test(
+    'peer role distinguishes current, expired and unknown presence',
+    () async {
+      expect(service.peerRoleLabel('peer'), 'ยังไม่ทราบบทบาท');
+      service.presence['peer'] = PeerPresence(
+        sequence: 1,
+        rescue: true,
+        receivedAt: DateTime.now().toUtc(),
+      );
+      expect(service.peerRoleLabel('peer'), 'หน่วยกู้ภัย');
+      service.presence['peer'] = PeerPresence(
+        sequence: 2,
+        rescue: false,
+        receivedAt: DateTime.now().toUtc(),
+      );
+      expect(service.peerRoleLabel('peer'), 'ผู้ใช้ทั่วไป');
+      service.presence['peer'] = PeerPresence(
+        sequence: 3,
+        rescue: true,
+        receivedAt: DateTime.now().toUtc().subtract(const Duration(minutes: 1)),
+      );
+      expect(service.peerRoleLabel('peer'), 'หน่วยกู้ภัย • สถานะล่าสุด');
+    },
+  );
 
   test(
     'clock skew cannot group replies; retries preserve order and notify once',

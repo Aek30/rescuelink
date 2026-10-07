@@ -28,6 +28,12 @@ abstract interface class AuthBackend {
     String radioIdentity,
   );
   Future<void> signOut();
+  Future<void> sendPasswordResetEmail(String email);
+  Future<void> resetPasswordWithOtp({
+    required String email,
+    required String token,
+    required String newPassword,
+  });
 }
 
 abstract interface class SessionVault {
@@ -162,6 +168,56 @@ class SupabaseAuthBackend implements AuthBackend {
     _client = null;
     if (client == null) return;
     try {
+      await client.auth.signOut(scope: SignOutScope.local);
+    } finally {
+      await client.dispose();
+    }
+  }
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    final client = _newClient();
+    try {
+      await client.auth.resetPasswordForEmail(email.trim());
+    } finally {
+      await client.dispose();
+    }
+  }
+
+  @override
+  Future<void> resetPasswordWithOtp({
+    required String email,
+    required String token,
+    required String newPassword,
+  }) async {
+    final client = _newClient();
+    try {
+      var raw = token.trim();
+      if (raw.startsWith('http://') || raw.startsWith('https://')) {
+        final uri = Uri.tryParse(raw);
+        if (uri != null) {
+          raw = uri.queryParameters['token'] ??
+              uri.queryParameters['token_hash'] ??
+              uri.queryParameters['code'] ??
+              raw;
+        }
+      }
+      final response = raw.length > 10
+          ? await client.auth.verifyOTP(
+              tokenHash: raw,
+              type: OtpType.recovery,
+            )
+          : await client.auth.verifyOTP(
+              email: email.trim(),
+              token: raw,
+              type: OtpType.recovery,
+            );
+      if (response.session == null) {
+        throw const AuthException('รหัสยืนยันไม่ถูกต้องหรือหมดอายุ');
+      }
+      await client.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
       await client.auth.signOut(scope: SignOutScope.local);
     } finally {
       await client.dispose();
@@ -413,5 +469,27 @@ class AuthService extends ChangeNotifier {
     } finally {
       _signingOut = false;
     }
+  }
+
+  Future<void> sendPasswordResetEmail(String email) async {
+    if (backend == null) {
+      throw StateError('ระบบบัญชียังไม่พร้อมใช้งาน');
+    }
+    await backend!.sendPasswordResetEmail(email.trim());
+  }
+
+  Future<void> resetPasswordWithOtp({
+    required String email,
+    required String token,
+    required String newPassword,
+  }) async {
+    if (backend == null) {
+      throw StateError('ระบบบัญชียังไม่พร้อมใช้งาน');
+    }
+    await backend!.resetPasswordWithOtp(
+      email: email.trim(),
+      token: token.trim(),
+      newPassword: newPassword,
+    );
   }
 }

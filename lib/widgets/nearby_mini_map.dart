@@ -133,11 +133,9 @@ class _NearbyMiniMapState extends State<NearbyMiniMap> {
                             tooltip:
                                 '${widget.service.peers[e.key] ?? 'ไม่ทราบชื่อ'} • แตะดูรายละเอียด',
                             style: IconButton.styleFrom(
-                              backgroundColor: !e.value.isFresh(now)
-                                  ? Colors.grey
-                                  : e.value.sos!.active
+                              backgroundColor: e.value.sos!.isActiveAt(now)
                                   ? const Color(0xFFC83D32)
-                                  : e.value.rescue
+                                  : e.value.isFresh(now) && e.value.rescue
                                   ? Colors.blue
                                   : Colors.grey,
                             ),

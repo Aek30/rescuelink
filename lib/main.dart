@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import 'screens/onboarding_screen.dart';
 import 'theme/rescue_theme.dart';
 import 'services/app_preferences.dart';
+import 'services/platform_database.dart';
 import 'services/auth_service.dart';
 import 'services/sos_sync_service.dart';
 import 'screens/nearby_test_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  configurePlatformDatabase();
   runApp(const RescueLinkApp());
 }
 

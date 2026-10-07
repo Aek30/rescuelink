@@ -1444,7 +1444,8 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
             child: _ConversationTile(
               name: peer.value,
 
-              online: _messages.isOnline(peer.key),
+              online: _messages.isReachable(peer.key),
+              connection: _messages.connectionLabel(peer.key),
               role: _messages.peerRoleLabel(peer.key),
               preview: _messages.conversationPreview(peer.key),
               unread: _messages.unreadCounts[peer.key] ?? 0,
@@ -2010,7 +2011,7 @@ class _EmptyState extends StatelessWidget {
 
 class _ConversationTile extends StatelessWidget {
   final String name;
-  final String role, preview;
+  final String role, preview, connection;
   final int unread;
   final bool online;
   final VoidCallback onTap;
@@ -2018,6 +2019,7 @@ class _ConversationTile extends StatelessWidget {
   const _ConversationTile({
     required this.name,
     required this.online,
+    required this.connection,
     required this.onTap,
     required this.role,
     required this.preview,
@@ -2118,7 +2120,7 @@ class _ConversationTile extends StatelessWidget {
                     const SizedBox(height: 4),
 
                     Text(
-                      '$role • ${online ? 'ออนไลน์' : 'ออฟไลน์'}',
+                      '$role • $connection',
 
                       style: TextStyle(
                         color: online

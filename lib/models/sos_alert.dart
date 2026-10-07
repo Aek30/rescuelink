@@ -45,8 +45,7 @@ class SosLocation {
       '\nความแม่นยำ ±${accuracy.toStringAsFixed(0)} ม. • ${capturedAt.toLocal()}';
 }
 
-// Incident ID + monotonically increasing revision prepare updates for future relay.
-// Phase 3 only sends directly to connected, introduced peers.
+// A revision is owned by the origin. Relaying never renews its expiry.
 class SosAlert {
   SosAlert({
     required this.incidentId,
@@ -76,6 +75,10 @@ class SosAlert {
   final EmergencyType category;
   final DateTime updatedAt;
   final SosLocation? location;
+  static const lifetime = Duration(hours: 24);
+  DateTime get expiresAt => updatedAt.add(lifetime);
+  bool isExpired(DateTime now) => active && !now.isBefore(expiresAt);
+  bool isActiveAt(DateTime now) => active && !isExpired(now);
   String toJson() => jsonEncode({
     'version': 1,
     'incidentId': incidentId,
@@ -108,6 +111,10 @@ class SosAlert {
     );
   }
   String get summary =>
-      '${active ? 'SOS' : 'ยกเลิก SOS'} • ${category.label}'
+      '${!active
+          ? 'ยกเลิก SOS'
+          : isExpired(DateTime.now().toUtc())
+          ? 'SOS หมดอายุ'
+          : 'SOS'} • ${category.label}'
       '\n$name • $people คน\n$details\n${location?.summary ?? 'ไม่ได้แนบพิกัด'}';
 }

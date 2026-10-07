@@ -40,14 +40,18 @@ class PresenceList extends StatelessWidget {
               children: [
                 Icon(
                   Icons.radar_rounded,
-                  color: isDark ? const Color(0xFFFF9E7D) : RescueTheme.orangeInk,
+                  color: isDark
+                      ? const Color(0xFFFF9E7D)
+                      : RescueTheme.orangeInk,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     'ยังไม่มีสถานะ • เชื่อมต่ออุปกรณ์ใกล้เคียงเพื่อรับข้อมูล',
                     style: TextStyle(
-                      color: isDark ? const Color(0xFF94A3B8) : RescueTheme.muted,
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : RescueTheme.muted,
                       fontSize: 13,
                       height: 1.5,
                     ),
@@ -56,78 +60,78 @@ class PresenceList extends StatelessWidget {
               ],
             ),
           ),
-      for (final entry in service.presence.entries)
-        Builder(
-          builder: (context) {
-            final state = entry.value;
-            final fresh = state.isFresh(DateTime.now().toUtc());
-            final sos = state.sos?.active == true;
-            final color = !fresh
-                ? Colors.grey
-                : sos
-                ? Colors.red
-                : state.rescue
-                ? Colors.blue
-                : Colors.grey;
-            final label = !fresh
-                ? 'สถานะหมดอายุ • ข้อมูลล่าสุด'
-                : sos
-                ? 'SOS ขอความช่วยเหลือ'
-                : state.rescue
-                ? 'หน่วยกู้ภัยพร้อมช่วยเหลือ'
-                : 'ปิด SOS / Rescue';
-            return Card(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ListTile(
-                    leading: Icon(
-                      sos ? Icons.sos : Icons.health_and_safety,
-                      color: color,
-                    ),
-                    title: Text(service.peers[entry.key] ?? entry.key),
-                    subtitle: Text(
-                      '$label${fresh && sos && state.rescue ? ' • เปิด Rescue ด้วย' : ''}\n${service.isOnline(entry.key) ? 'เชื่อมต่ออยู่' : 'ขาดการเชื่อมต่อ'} • แตะเพื่อแชต',
-                    ),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute<void>(
-                        builder: (_) =>
-                            ChatScreen(service: service, peerId: entry.key),
+        for (final entry in service.presence.entries)
+          Builder(
+            builder: (context) {
+              final state = entry.value;
+              final fresh = state.isFresh(DateTime.now().toUtc());
+              final sos = state.sos?.isActiveAt(DateTime.now().toUtc()) == true;
+              final color = sos
+                  ? Colors.red
+                  : fresh && state.rescue
+                  ? Colors.blue
+                  : Colors.grey;
+              final label = sos
+                  ? 'SOS ขอความช่วยเหลือ${fresh ? '' : ' • สถานะการเชื่อมต่อเก่า'}'
+                  : state.sos?.isExpired(DateTime.now().toUtc()) == true
+                  ? 'SOS หมดอายุ'
+                  : !fresh
+                  ? 'สถานะหมดอายุ • ข้อมูลล่าสุด'
+                  : state.rescue
+                  ? 'หน่วยกู้ภัยพร้อมช่วยเหลือ'
+                  : 'ปิด SOS / Rescue';
+              return Card(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ListTile(
+                      leading: Icon(
+                        sos ? Icons.sos : Icons.health_and_safety,
+                        color: color,
+                      ),
+                      title: Text(service.peers[entry.key] ?? entry.key),
+                      subtitle: Text(
+                        '$label${fresh && sos && state.rescue ? ' • เปิด Rescue ด้วย' : ''}\n${service.connectionLabel(entry.key)} • แตะเพื่อแชต',
+                      ),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              ChatScreen(service: service, peerId: entry.key),
+                        ),
                       ),
                     ),
-                  ),
-                  if (state.sos != null)
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SelectableText(state.sos!.summary),
-                          TextButton.icon(
-                            icon: const Icon(Icons.article_outlined),
-                            label: const Text('ดูรายละเอียดเหตุ'),
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute<void>(
-                                builder: (_) => IncidentDetailScreen(
-                                  service: service,
-                                  peerId: entry.key,
+                    if (state.sos != null)
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SelectableText(state.sos!.summary),
+                            TextButton.icon(
+                              icon: const Icon(Icons.article_outlined),
+                              label: const Text('ดูรายละเอียดเหตุ'),
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute<void>(
+                                  builder: (_) => IncidentDetailScreen(
+                                    service: service,
+                                    peerId: entry.key,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                          if (state.sos!.location != null)
-                            LocationButton(location: state.sos!.location!),
-                        ],
+                            if (state.sos!.location != null)
+                              LocationButton(location: state.sos!.location!),
+                          ],
+                        ),
                       ),
-                    ),
-                ],
-              ),
-            );
-          },
-        ),
-    ],
+                  ],
+                ),
+              );
+            },
+          ),
+      ],
     );
   }
 }

@@ -30,13 +30,14 @@ class IncidentDetailScreen extends StatelessWidget {
               title: service.peers[peerId] ?? peerId,
               eyebrow: 'รายละเอียดคำขอ • ข้อมูลจากผู้ส่ง',
               icon: Icons.health_and_safety_outlined,
-              subtitle: !fresh
-                  ? 'ข้อมูลล่าสุด • สถานะหมดอายุ กรุณาติดต่อผู้ส่งเพื่อยืนยัน'
-                  : alert?.active == true
-                  ? 'SOS • กำลังขอความช่วยเหลือ'
+              subtitle: alert?.isActiveAt(DateTime.now().toUtc()) == true
+                  ? 'SOS • กำลังขอความช่วยเหลือ${fresh ? '' : ' • สถานะการเชื่อมต่อเก่า'}'
+                  : alert?.isExpired(DateTime.now().toUtc()) == true
+                  ? 'SOS หมดอายุ'
                   : 'ไม่มี SOS ที่เปิดอยู่',
             ),
             const SizedBox(height: 16),
+            Text(service.connectionLabel(peerId)),
             if (alert != null) ...[
               Card(
                 child: Padding(

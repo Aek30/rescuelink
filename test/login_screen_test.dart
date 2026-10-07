@@ -24,10 +24,10 @@ void main() {
       find.byType(TextFormField).at(1),
       'member@example.com',
     );
-    await tester.enterText(find.byType(TextFormField).at(2), 'test-password');
+    await tester.enterText(find.byType(TextFormField).at(2), 'Test@password1');
     await tester.enterText(
       find.byKey(const ValueKey('signup-confirmation')),
-      'test-password',
+      'Test@password1',
     );
     final submit = find.widgetWithText(FilledButton, 'สมัครใช้งาน');
     await tester.ensureVisible(submit);

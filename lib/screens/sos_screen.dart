@@ -80,7 +80,7 @@ class _SosScreenState extends State<SosScreen> {
         title: const Text('ยืนยันข้อมูล SOS'),
         content: SingleChildScrollView(
           child: Text(
-            'ประกาศสถานะให้ทุกเครื่องที่เชื่อมต่อ รวมเครื่องที่เชื่อมต่อภายหลัง'
+            'ประกาศสถานะให้เครื่องที่เชื่อมต่อและผู้ใช้ผ่านเครื่องส่งต่อ รวมเครื่องที่เชื่อมต่อภายหลัง'
             '\nผู้รับข้อความเพิ่มเติม: ${_recipients.map((id) => widget.service.peers[id] ?? id).join(', ')}'
             '\n${_name.text} • ${_people.text} คน\n${_category.label}\n${_details.text}'
             '\n\n${_location?.summary ?? 'ส่งโดยไม่แนบพิกัด'}'
@@ -121,7 +121,9 @@ class _SosScreenState extends State<SosScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              alert.active
+              alert.isExpired(DateTime.now().toUtc())
+                  ? 'SOS หมดอายุ'
+                  : alert.active
                   ? 'ประวัติข้อความขอความช่วยเหลือ'
                   : 'ยกเลิกโดยผู้ส่ง',
               style: Theme.of(context).textTheme.titleMedium,
@@ -131,11 +133,7 @@ class _SosScreenState extends State<SosScreen> {
             if (alert.location != null)
               LocationButton(location: alert.location!),
             Text('อัปเดต: ${alert.updatedAt.toLocal()}'),
-            Text(
-              widget.service.isOnline(message.senderId)
-                  ? 'ผู้ส่งเชื่อมต่ออยู่'
-                  : 'ผู้ส่งออฟไลน์ • ข้อมูลล่าสุดที่ได้รับ',
-            ),
+            Text(widget.service.connectionLabel(message.senderId)),
             TextButton.icon(
               onPressed: () => Navigator.push(
                 context,
@@ -332,7 +330,7 @@ class _SosScreenState extends State<SosScreen> {
     builder: (context, _) {
       final service = widget.service;
       final current = service.mySos;
-      final active = current?.active == true;
+      final active = current?.isActiveAt(DateTime.now().toUtc()) == true;
       final deliveries = service.messages
           .where(
             (m) =>
@@ -751,9 +749,7 @@ class _SosScreenState extends State<SosScreen> {
                               CheckboxListTile(
                                 title: Text(peer.value),
                                 subtitle: Text(
-                                  service.isOnline(peer.key)
-                                      ? 'เชื่อมต่ออยู่'
-                                      : 'ออฟไลน์ — รอส่งเมื่อเชื่อมต่อ',
+                                  service.connectionLabel(peer.key),
                                 ),
                                 value: _recipients.contains(peer.key),
                                 onChanged: _busy || active

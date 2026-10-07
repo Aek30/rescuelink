@@ -67,6 +67,16 @@ class FakeBackend implements AuthBackend {
 
   @override
   Future<void> signOut() async {}
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {}
+
+  @override
+  Future<void> resetPasswordWithOtp({
+    required String email,
+    required String token,
+    required String newPassword,
+  }) async {}
 }
 
 class BrokenCatalog extends AccountStorage {

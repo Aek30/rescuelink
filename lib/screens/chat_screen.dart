@@ -269,9 +269,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       ),
                     ),
                     Text(
-                      service.isOnline(widget.peerId)
-                          ? '${service.peerRoleLabel(widget.peerId)} • ออนไลน์'
-                          : '${service.peerRoleLabel(widget.peerId)} • ออฟไลน์',
+                      '${service.peerRoleLabel(widget.peerId)} • ${service.connectionLabel(widget.peerId)}',
                       style: TextStyle(
                         fontSize: 11,
                         color: isDark
@@ -472,7 +470,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                         : message.text,
                                   ),
                                   const SizedBox(height: 4),
-                                  if (message.type == MessageType.message &&
+                                  if ((message.type == MessageType.message ||
+                                          message.type == MessageType.sos) &&
                                       service.receivedRoutes[message.id] !=
                                           null)
                                     RelayBadge(

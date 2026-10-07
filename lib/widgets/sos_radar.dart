@@ -85,8 +85,7 @@ class _SosRadarState extends State<SosRadar> {
               .where(
                 (e) =>
                     e.key != widget.service.myId &&
-                    e.value.sos?.active == true &&
-                    e.value.isFresh(now),
+                    e.value.sos?.isActiveAt(now) == true,
               )
               .toList()
             ..sort(
@@ -114,7 +113,9 @@ class _SosRadarState extends State<SosRadar> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E3A8A) : const Color(0xFF347CF5),
+                color: isDark
+                    ? const Color(0xFF1E3A8A)
+                    : const Color(0xFF347CF5),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Text(
@@ -233,6 +234,9 @@ class _SosRadarState extends State<SosRadar> {
                       Text(
                         'รับสถานะ ${now.difference(entry.value.receivedAt).inSeconds} วินาทีที่แล้ว',
                       ),
+                      Text(widget.service.connectionLabel(entry.key)),
+                      if (!entry.value.isFresh(now))
+                        const Text('สถานะการเชื่อมต่อเก่า • SOS ยังไม่หมดอายุ'),
                       Wrap(
                         spacing: 8,
                         children: [
@@ -272,7 +276,7 @@ class _SosRadarState extends State<SosRadar> {
               ),
             const SizedBox(height: 8),
             Text(
-              'แสดงสถานะ SOS ที่ได้รับภายใน 30 วินาที ผ่านอุปกรณ์ที่เชื่อมต่อ '
+              'แสดง SOS ที่ยังไม่ยกเลิกและไม่เกิน 24 ชั่วโมงจากการอัปเดตของผู้ส่ง '
               'รัศมีเป็นตัวกรองจาก GPS ไม่ใช่ระยะรับสัญญาณที่รับประกัน',
               style: TextStyle(
                 fontSize: 12,

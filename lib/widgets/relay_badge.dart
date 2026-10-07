@@ -10,6 +10,17 @@ class RelayBadge extends StatelessWidget {
     final path = route;
     final known = path != null && path.length >= 2;
     final relays = known ? path.length - 2 : 0;
+    final relayNames = known
+        ? path
+              .sublist(1, path.length - 1)
+              .map((id) {
+                final name = peers[id]?.trim();
+                return name == null || name.isEmpty
+                    ? 'เครื่องที่ไม่ทราบชื่อ'
+                    : name;
+              })
+              .join(' → ')
+        : '';
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: ActionChip(
@@ -21,9 +32,11 @@ class RelayBadge extends StatelessWidget {
           !known
               ? 'ยังไม่ทราบเส้นทาง'
               : relays == 0
-              ? 'รับโดยตรง · 1 hop'
-              : 'ผ่าน $relays เครื่อง · ${path.length - 1} hops',
+              ? 'ส่งถึงกันโดยตรง'
+              : 'ส่งผ่าน $relayNames',
           style: const TextStyle(fontSize: 11),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         onPressed: () => showModalBottomSheet<void>(
           context: context,
@@ -63,7 +76,9 @@ class RelayBadge extends StatelessWidget {
                         ),
                       ),
                     Text(
-                      '${path.length - 1} hops = จำนวนช่วงการส่ง • $relays เครื่อง = ตัวกลาง',
+                      relays == 0
+                          ? 'ข้อความส่งจากต้นทางถึงปลายทางโดยตรง'
+                          : 'ส่งผ่าน $relayNames ก่อนถึงปลายทาง',
                     ),
                   ],
                 ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'nearby_test_screen.dart';
+import 'forgot_password_screen.dart';
 import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -104,6 +105,30 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute<void>(builder: (_) => const NearbyTestScreen()),
         (_) => false,
       );
+    }
+  }
+
+  Future<void> _openForgotPassword() async {
+    final updatedEmail = await Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(
+        builder: (_) => ForgotPasswordScreen(
+          auth: auth,
+          initialEmail: identity.text.trim(),
+        ),
+      ),
+    );
+    if (updatedEmail != null && updatedEmail.isNotEmpty && mounted) {
+      setState(() {
+        register = false;
+        identity.text = updatedEmail;
+        password.clear();
+        confirmation.clear();
+        error = null;
+        notice = t(
+          'ตั้งรหัสผ่านใหม่เรียบร้อย กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่',
+          'Password updated. Please log in with your new password.',
+        );
+      });
     }
   }
 
@@ -530,6 +555,24 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                                 const Spacer(),
+                                if (!register)
+                                  TextButton(
+                                    key: const ValueKey('forgot-password-button'),
+                                    onPressed: busy ? null : _openForgotPassword,
+                                    style: TextButton.styleFrom(
+                                      padding: EdgeInsets.zero,
+                                      minimumSize: Size.zero,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: Text(
+                                      t('ลืมรหัสผ่าน?', 'Forgot password?'),
+                                      style: const TextStyle(
+                                        color: orange,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
                               ],
                             ),
                             DecoratedBox(
