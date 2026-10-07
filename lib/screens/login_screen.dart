@@ -125,17 +125,34 @@ class _LoginScreenState extends State<LoginScreen> {
             : AutofillHints.username,
       ],
       onFieldSubmitted: secret ? (_) => submit() : null,
-      validator: (value) => value == null || value.trim().isEmpty
-          ? t(
-              secret ? 'กรุณากรอกรหัสผ่าน' : 'กรุณากรอกอีเมล',
-              'This field is required',
-            )
-          : !secret &&
-                !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value.trim())
-          ? t('กรุณากรอกอีเมลที่ถูกต้อง', 'Enter a valid email')
-          : secret && register && value.length < 8
-          ? t('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร', 'Use at least 8 characters')
-          : null,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) {
+          return t(
+            secret ? 'กรุณากรอกรหัสผ่าน' : 'กรุณากรอกอีเมล',
+            'This field is required',
+          );
+        }
+        if (!secret &&
+            !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value.trim())) {
+          return t('กรุณากรอกอีเมลที่ถูกต้อง', 'Enter a valid email');
+        }
+        if (secret && register) {
+          if (value.length < 8) {
+            return t('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร', 'Use at least 8 characters');
+          }
+          if (!RegExp(r'[a-z]').hasMatch(value)) {
+            return t('ต้องมีตัวพิมพ์เล็กอย่างน้อย 1 ตัว', 'Must contain at least one lowercase letter');
+          }
+          if (!RegExp(r'[A-Z]').hasMatch(value)) {
+            return t('ต้องมีตัวพิมพ์ใหญ่อย่างน้อย 1 ตัว', 'Must contain at least one uppercase letter');
+          }
+          if (!RegExp(r'[!@#\$&*~_.]').hasMatch(value)) {
+            return t('ต้องมีอักขระพิเศษอย่างน้อย 1 ตัว (!@#\$&*~_.)', 'Must contain at least one special character');
+          }
+        }
+        return null;
+      },
       decoration: InputDecoration(
         labelText: secret ? t('รหัสผ่าน', 'Password') : t('อีเมล', 'Email'),
         hintText: secret ? t('รหัสผ่าน', 'Password') : t('อีเมล', 'Email'),
