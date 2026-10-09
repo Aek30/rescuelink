@@ -88,6 +88,25 @@ class AccountStorage {
     return handle;
   }
 
+  Future<void> removeOwner(String userId) async {
+    final target = 'user:$userId';
+    if (owner == target) throw StateError('ออกจากบัญชีก่อนลบข้อมูลในเครื่อง');
+    final db = await catalog;
+    final rows = await db.query(
+      'owners',
+      where: 'owner = ?',
+      whereArgs: [target],
+    );
+    for (final row in rows) {
+      final file = row['file'] as String;
+      await _handles.remove(file)?.retire();
+      await _factory.deleteDatabase(
+        p.join(directory ?? p.dirname(db.path), file),
+      );
+    }
+    await db.delete('owners', where: 'owner = ?', whereArgs: [target]);
+  }
+
   Future<void> close() async {
     for (final handle in _handles.values) {
       await handle.close();

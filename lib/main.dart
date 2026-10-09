@@ -6,7 +6,9 @@ import 'services/app_preferences.dart';
 import 'services/platform_database.dart';
 import 'services/auth_service.dart';
 import 'services/sos_sync_service.dart';
+import 'services/chat_sync_service.dart';
 import 'screens/nearby_test_screen.dart';
+import 'screens/login_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -44,13 +46,14 @@ class _StartupScreen extends StatefulWidget {
 
 class _StartupScreenState extends State<_StartupScreen> {
   late Future<void> _ready;
-  bool _guest = false;
+
   @override
   void initState() {
     super.initState();
     _ready = AuthService.instance.initialize().then((_) async {
       await AppPreferences.instance.load().catchError((Object _) {});
       SosSyncCoordinator.instance.start();
+      ChatSyncCoordinator.instance.start();
     });
   }
 
@@ -60,31 +63,76 @@ class _StartupScreenState extends State<_StartupScreen> {
     builder: (context, snapshot) {
       if (snapshot.connectionState == ConnectionState.done &&
           !snapshot.hasError) {
-        return _guest || AuthService.instance.signedIn
+        // Session restored → go to main screen. Otherwise → onboarding/login.
+        return AuthService.instance.signedIn
             ? const NearbyTestScreen()
             : const OnboardingScreen();
       }
+      // Loading / error state — no Guest option.
       return Scaffold(
         body: SafeArea(
           child: Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (!snapshot.hasError) const CircularProgressIndicator(),
+                if (!snapshot.hasError)
+                  const CircularProgressIndicator()
+                else
+                  const Icon(
+                    Icons.wifi_off_rounded,
+                    size: 48,
+                    color: Color(0xFF94A3B8),
+                  ),
                 const SizedBox(height: 20),
                 Text(
                   snapshot.hasError
-                      ? 'เปิด session ไม่สำเร็จ กรุณาลองใหม่'
-                      : 'กำลังกู้ session',
+                      ? 'กู้ session ไม่สำเร็จ'
+                      : 'กำลังกู้ session…',
+                  style: const TextStyle(fontSize: 15),
                 ),
-                const SizedBox(height: 20),
-                FilledButton(
-                  onPressed: () => setState(() {
-                    _guest = true;
-                    _ready = AuthService.instance.enterGuestFromStartup();
-                  }),
-                  child: const Text('ใช้ SOS / สื่อสารแบบ Guest ทันที'),
-                ),
+                if (snapshot.hasError) ...[
+                  const SizedBox(height: 8),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 32),
+                    child: Text(
+                      'กรุณาตรวจสอบอินเทอร์เน็ตหรือเปิดแอปใหม่อีกครั้ง\n'
+                      'หากเคยเข้าสู่ระบบแล้ว ฟีเจอร์ Nearby และ SOS '
+                      'สามารถใช้งานได้โดยไม่ต้องออนไลน์',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF94A3B8),
+                        height: 1.55,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _ready = AuthService.instance
+                            .initialize()
+                            .then((_) async {
+                          await AppPreferences.instance
+                              .load()
+                              .catchError((Object _) {});
+                          SosSyncCoordinator.instance.start();
+                          ChatSyncCoordinator.instance.start();
+                        });
+                      });
+                    },
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('ลองใหม่'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pushReplacement(
+                      MaterialPageRoute<void>(
+                          builder: (_) => const LoginScreen()),
+                    ),
+                    child: const Text('ไปหน้าเข้าสู่ระบบ'),
+                  ),
+                ],
               ],
             ),
           ),

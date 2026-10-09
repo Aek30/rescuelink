@@ -50,7 +50,6 @@ void main() {
             fixture['password'],
             register: false,
             remember: false,
-            claimGuest: false,
           ),
           true,
         );

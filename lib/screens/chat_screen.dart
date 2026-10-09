@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'chat_history_screen.dart';
 import '../services/media_service.dart';
 import '../services/message_service.dart';
 import '../services/connection_session.dart';
@@ -243,6 +244,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           .toList();
       return Scaffold(
         appBar: AppBar(
+          actions: [
+            IconButton(
+              tooltip: 'ประวัติข้อความ / Cloud',
+              icon: const Icon(Icons.cloud_outlined),
+              onPressed: () => Navigator.push<void>(
+                context,
+                MaterialPageRoute(builder: (_) => const ChatHistoryScreen()),
+              ),
+            ),
+          ],
           title: Row(
             children: [
               CircleAvatar(

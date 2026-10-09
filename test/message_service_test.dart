@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:nearby_connections/nearby_connections.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -94,6 +95,34 @@ void main() {
   );
 
   test(
+    'switching to rescue cancels SOS through the existing pending outbox',
+    () async {
+      await connect();
+      transport.devices.clear();
+      await publish();
+      final incident = service.mySos!.incidentId;
+      await service.setRescueMode(true);
+      expect(service.rescueMode, isTrue);
+      expect(service.mySos!.active, isFalse);
+      expect(service.mySos!.incidentId, incident);
+      expect(service.mySos!.revision, 2);
+      expect(service.sosRecipients, {'peer'});
+      expect(service.messages.last.type, MessageType.sos);
+      expect(SosAlert.fromJson(service.messages.last.text).active, isFalse);
+      expect(service.messages.last.status, MessageStatus.pending);
+      service.dispose();
+      service = MessageService(nearbyService: transport, database: db);
+      await service.initialize();
+      expect(service.rescueMode, isTrue);
+      expect(service.mySos!.active, isFalse);
+      await publish();
+      expect(service.rescueMode, isFalse);
+      expect(service.mySos!.active, isTrue);
+      expect(await db.getSetting('rescueMode'), 'false');
+    },
+  );
+
+  test(
     'broadcast state reaches a newly connected peer and repeats cancellation',
     () async {
       await service.publishSos(
@@ -103,13 +132,12 @@ void main() {
         details: 'Help',
         recipients: {},
       );
-      await service.setRescueMode(true);
       await connect();
       var state = PeerPresence.decode(
         transport.packets.lastWhere((p) => p.type == MessageType.presence).text,
       );
       expect(state.sos!.active, isTrue);
-      expect(state.rescue, isTrue);
+      expect(state.rescue, isFalse);
       final first = state.sequence;
       await service.cancelSos();
       await service.setRescueMode(false);
@@ -375,7 +403,6 @@ void main() {
       await connect();
       transport.devices.clear();
       await publish();
-      await service.setRescueMode(true);
       final id = service.messages.single.id;
       service.dispose();
       await db.close();
@@ -383,7 +410,7 @@ void main() {
       await service.initialize();
       expect(service.mySos!.active, isTrue);
       expect(service.mySos!.location, isNull);
-      expect(service.rescueMode, isTrue);
+      expect(service.rescueMode, isFalse);
       expect(service.sosRecipients, {'peer'});
       expect(service.messages.single.status, MessageStatus.pending);
       await connect();
@@ -522,8 +549,20 @@ void main() {
   );
   test('transport log notifications do not trigger a resend loop', () async {
     await connect();
+    transport.packets.clear();
+    final initialRetryFinished = Completer<void>();
+    void retryFinished() {
+      if (!initialRetryFinished.isCompleted &&
+          transport.packets.any((m) => m.type == MessageType.presence)) {
+        initialRetryFinished.complete();
+      }
+    }
+
+    service.addListener(retryFinished);
     transport.changed();
-    await Future<void>.delayed(const Duration(milliseconds: 50));
+    // Wait for the connection retry rather than assuming SQLite finishes in 50 ms.
+    await initialRetryFinished.future.timeout(const Duration(seconds: 5));
+    service.removeListener(retryFinished);
     transport.packets.clear();
     transport.changed();
     transport.changed();

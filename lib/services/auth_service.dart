@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'account_storage.dart';
 import 'local_database_service.dart';
 import 'app_preferences.dart';
+import 'emergency_profile_store.dart';
 
 class AccountSession {
   const AccountSession(this.userId, this.email, this.serialized);
@@ -20,6 +21,7 @@ abstract interface class AuthBackend {
     String password, {
     required bool register,
     String? displayName,
+    Map<String, dynamic>? extraMetadata,
   });
   Future<AccountSession> restore(String serialized);
   Future<void> linkInstallation(
@@ -29,6 +31,7 @@ abstract interface class AuthBackend {
   );
   Future<void> signOut();
   Future<void> sendPasswordResetEmail(String email);
+  Future<void> resendConfirmation(String email);
   Future<void> resetPasswordWithOtp({
     required String email,
     required String token,
@@ -74,8 +77,14 @@ class SecurePkceStorage extends GotrueAsyncStorage {
 }
 
 class SupabaseAuthBackend implements AuthBackend {
-  SupabaseAuthBackend(this.url, this.key, {GotrueAsyncStorage? pkceStorage})
-    : _pkceStorage = pkceStorage ?? SecurePkceStorage(url);
+  SupabaseAuthBackend(
+    this.url,
+    this.key, {
+    GotrueAsyncStorage? pkceStorage,
+    EmergencyProfileStore? profiles,
+  }) : _pkceStorage = pkceStorage ?? SecurePkceStorage(url),
+       profiles = profiles ?? EmergencyProfileStore(SecureProfileVault(url));
+  final EmergencyProfileStore profiles;
   final String url, key;
   final GotrueAsyncStorage _pkceStorage;
   SupabaseClient? _client;
@@ -98,19 +107,41 @@ class SupabaseAuthBackend implements AuthBackend {
     String password, {
     required bool register,
     String? displayName,
+    Map<String, dynamic>? extraMetadata,
   }) async {
+    final profile = register && extraMetadata != null
+        ? normalizeProfile(extraMetadata)
+        : null;
     final client = _newClient();
     _client = client;
     final response = register
         ? await client.auth.signUp(
             email: email,
             password: password,
-            data: {'display_name': displayName?.trim() ?? ''},
+            data: {
+              'display_name': displayName?.trim() ?? '',
+              if (profile != null)
+                for (final field in [
+                  'full_name',
+                  'phone',
+                  'date_of_birth',
+                  'terms_version',
+                ])
+                  field: profile[field],
+            },
           )
         : await client.auth.signInWithPassword(
             email: email,
             password: password,
           );
+    final user = response.user;
+    // Duplicate signup can return an obfuscated user. Never replace old data.
+    if (register &&
+        profile != null &&
+        user != null &&
+        (response.session != null || user.identities?.isNotEmpty == true)) {
+      await profiles.save(user.id, profile);
+    }
     return response.session == null ? null : _convert(response.session!);
   }
 
@@ -126,9 +157,25 @@ class SupabaseAuthBackend implements AuthBackend {
         saved.expiresAt == null) {
       throw const AuthException('Session missing');
     }
-    final response = saved.isExpired
-        ? await client.auth.setSession(saved.refreshToken!)
-        : await client.auth.recoverSession(serialized);
+    AuthResponse response;
+    try {
+      response = saved.isExpired
+          ? await client.auth
+                .setSession(saved.refreshToken!)
+                .timeout(const Duration(seconds: 8))
+          : await client.auth.recoverSession(serialized);
+    } catch (e) {
+      if ((e is AuthRetryableFetchException ||
+              e is SocketException ||
+              e is TimeoutException) &&
+          saved.user.emailConfirmedAt != null &&
+          !saved.user.isAnonymous) {
+        // The secure vault contains a previously authenticated identity. Only
+        // local radio/storage is unlocked; Cloud still requires a refresh.
+        return _convert(saved);
+      }
+      rethrow;
+    }
     if (response.session == null) throw const AuthException('Session expired');
     return _convert(response.session!);
   }
@@ -185,6 +232,16 @@ class SupabaseAuthBackend implements AuthBackend {
   }
 
   @override
+  Future<void> resendConfirmation(String email) async {
+    final client = _newClient();
+    try {
+      await client.auth.resend(type: OtpType.signup, email: email.trim());
+    } finally {
+      await client.dispose();
+    }
+  }
+
+  @override
   Future<void> resetPasswordWithOtp({
     required String email,
     required String token,
@@ -196,17 +253,15 @@ class SupabaseAuthBackend implements AuthBackend {
       if (raw.startsWith('http://') || raw.startsWith('https://')) {
         final uri = Uri.tryParse(raw);
         if (uri != null) {
-          raw = uri.queryParameters['token'] ??
+          raw =
+              uri.queryParameters['token'] ??
               uri.queryParameters['token_hash'] ??
               uri.queryParameters['code'] ??
               raw;
         }
       }
       final response = raw.length > 10
-          ? await client.auth.verifyOTP(
-              tokenHash: raw,
-              type: OtpType.recovery,
-            )
+          ? await client.auth.verifyOTP(tokenHash: raw, type: OtpType.recovery)
           : await client.auth.verifyOTP(
               email: email.trim(),
               token: raw,
@@ -215,9 +270,7 @@ class SupabaseAuthBackend implements AuthBackend {
       if (response.session == null) {
         throw const AuthException('รหัสยืนยันไม่ถูกต้องหรือหมดอายุ');
       }
-      await client.auth.updateUser(
-        UserAttributes(password: newPassword),
-      );
+      await client.auth.updateUser(UserAttributes(password: newPassword));
       await client.auth.signOut(scope: SignOutScope.local);
     } finally {
       await client.dispose();
@@ -249,13 +302,6 @@ class AuthService extends ChangeNotifier {
   String? error;
   String? notice;
   Future<void>? _initializing;
-  final _restoreCanceled = Completer<AccountSession?>();
-  Future<void> enterGuestFromStartup() async {
-    if (!_restoreCanceled.isCompleted) _restoreCanceled.complete(null);
-    await initialize();
-    if (signedIn) await signOut();
-  }
-
   bool get configured => backend != null;
   bool get signedIn => session != null;
 
@@ -279,9 +325,29 @@ class AuthService extends ChangeNotifier {
     }
     final client = (backend as SupabaseAuthBackend).client;
     if (client.auth.currentSession?.isExpired != false) {
-      final refreshed = await client.auth.refreshSession().timeout(
-        const Duration(seconds: 15),
-      );
+      AuthResponse refreshed;
+      try {
+        final saved = Session.fromJson(
+          jsonDecode(original.serialized) as Map<String, dynamic>,
+        );
+        refreshed = await client.auth
+            .refreshSession(saved?.refreshToken)
+            .timeout(const Duration(seconds: 15));
+      } on AuthException catch (e) {
+        if (e is! AuthRetryableFetchException &&
+            const [
+              'refresh_token_not_found',
+              'refresh_token_already_used',
+              'session_not_found',
+              'user_banned',
+              'user_not_found',
+              'bad_jwt',
+              'session_expired',
+            ].contains(e.code)) {
+          await _invalidate(original);
+        }
+        rethrow;
+      }
       if (!identical(session, original)) throw StateError('บัญชีเปลี่ยนแล้ว');
       if (refreshed.session == null) throw StateError('กรุณาเข้าสู่ระบบใหม่');
       final value = AccountSession(
@@ -299,7 +365,26 @@ class AuthService extends ChangeNotifier {
     if (session?.userId != owner || client.auth.currentUser?.id != owner) {
       throw StateError('บัญชีเปลี่ยนแล้ว');
     }
+    // Pending profile writes retry with ordinary Cloud access, without gating
+    // Chat/SOS sync on the availability of the profile endpoint.
+    try {
+      await (backend as SupabaseAuthBackend).profiles
+          .sync(client, owner, () => !_signingOut && session?.userId == owner)
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {}
     return client;
+  }
+
+  Future<void> _invalidate(AccountSession original) async {
+    if (!identical(session, original)) return;
+    await vault.clear();
+    session = null;
+    LocalDatabaseService.instance = LocalDatabaseService(
+      factory: storage.factory,
+      blocked: true,
+    );
+    error = 'บัญชีหมดอายุหรือถูกยกเลิก กรุณาเข้าสู่ระบบใหม่';
+    notifyListeners();
   }
 
   Future<void> initialize() => _initializing ??= _restore();
@@ -315,18 +400,21 @@ class AuthService extends ChangeNotifier {
       if (backend == null) return;
       final saved = await vault.read();
       if (saved == null) return;
-      final recovered = await Future.any<AccountSession?>([
-        backend!.restore(saved).timeout(const Duration(seconds: 15)),
-        _restoreCanceled.future,
-      ]);
-      if (recovered == null || _restoreCanceled.isCompleted) return;
+      final recovered = await backend!
+          .restore(saved)
+          .timeout(const Duration(seconds: 15));
       final handle = await storage.select(recovered.userId);
       await vault.write(recovered.serialized);
       LocalDatabaseService.instance = handle;
       session = recovered;
-    } catch (_) {
+    } catch (e) {
+      if (e is AuthException && e is! AuthRetryableFetchException) {
+        try {
+          await vault.clear();
+        } catch (_) {}
+      }
       // Never unlock a previous account on a failed/expired recovery.
-      error = 'กู้ session ไม่สำเร็จ กรุณาเข้าสู่ระบบใหม่ หรือใช้งานแบบ Guest';
+      error = 'กู้ session ไม่สำเร็จ กรุณาเข้าสู่ระบบใหม่';
     }
     notifyListeners();
   }
@@ -336,8 +424,8 @@ class AuthService extends ChangeNotifier {
     String password, {
     required bool register,
     required bool remember,
-    required bool claimGuest,
     String? displayName,
+    Map<String, dynamic>? extraMetadata,
   }) async {
     if (busy || signedIn) return false;
     if (backend == null) {
@@ -356,6 +444,7 @@ class AuthService extends ChangeNotifier {
             password,
             register: register,
             displayName: register ? displayName?.trim() : null,
+            extraMetadata: register ? extraMetadata : null,
           )
           .timeout(const Duration(seconds: 20));
       if (result == null) {
@@ -369,10 +458,7 @@ class AuthService extends ChangeNotifier {
       } else {
         await vault.clear();
       }
-      final handle = await storage.select(
-        result.userId,
-        claimGuest: claimGuest,
-      );
+      final handle = await storage.select(result.userId, claimGuest: false);
       LocalDatabaseService.instance = handle;
       session = result;
       AppPreferences.instance.reset();
@@ -391,21 +477,25 @@ class AuthService extends ChangeNotifier {
       }
       return true;
     } on AuthRetryableFetchException {
-      error =
-          'ติดต่อระบบบัญชีไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่ ยังใช้งานแบบ Guest ได้';
+      error = 'ติดต่อระบบบัญชีไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่';
     } on AuthException catch (e) {
+      if (e.code == 'email_not_confirmed') {
+        notice = 'กรุณายืนยันอีเมลก่อนเข้าสู่ระบบ';
+      }
       error = switch (e.code) {
         'invalid_credentials' => 'อีเมลหรือรหัสผ่านไม่ถูกต้อง',
         'email_not_confirmed' => 'กรุณายืนยันอีเมลก่อนเข้าสู่ระบบ',
-        'user_already_exists' => 'อีเมลนี้ถูกใช้งานแล้ว',
-        'over_request_rate_limit' ||
-        'over_email_send_rate_limit' => 'ลองหลายครั้งเกินไป กรุณารอสักครู่',
-        'weak_password' => 'รหัสผ่านไม่ผ่านเงื่อนไขความปลอดภัย',
+        'user_already_exists' =>
+          'อีเมลนี้ถูกใช้งานแล้ว กรุณาเข้าสู่ระบบด้วยบัญชีเดิม',
+        'over_request_rate_limit' || 'over_email_send_rate_limit' =>
+          'ลองหลายครั้งเกินไป กรุณารอสักครู่แล้วลองใหม่',
+        'weak_password' =>
+          'รหัสผ่านไม่ผ่านเงื่อนไขความปลอดภัย กรุณาใช้รหัสผ่านที่แข็งแกร่งขึ้น',
         'email_address_not_authorized' =>
-          'ระบบยังส่งอีเมลยืนยันไปยังอีเมลใหม่ไม่ได้ กรุณาแจ้งผู้ดูแลตั้งค่าบริการส่งอีเมล ระหว่างนี้ใช้งานแบบ Guest ได้',
+          'ระบบยังส่งอีเมลยืนยันไปยังอีเมลนี้ไม่ได้ กรุณาแจ้งผู้ดูแลตั้งค่าบริการส่งอีเมล',
         'email_address_invalid' =>
-          'อีเมลนี้ไม่สามารถใช้สมัครได้ กรุณาตรวจสอบอีเมล',
-        'signup_disabled' => 'ระบบปิดรับสมัครชั่วคราว ยังใช้งานแบบ Guest ได้',
+          'อีเมลนี้ไม่สามารถใช้สมัครได้ กรุณาตรวจสอบอีเมลให้ถูกต้อง',
+        'signup_disabled' => 'ระบบปิดรับสมัครชั่วคราว กรุณาลองใหม่ภายหลัง',
         'unexpected_failure' =>
           'ระบบสมัครสมาชิกขัดข้อง กรุณาลองภายหลังหรือแจ้งผู้ดูแล',
         _ => 'ยืนยันตัวตนไม่สำเร็จ กรุณาตรวจสอบข้อมูลแล้วลองใหม่',
@@ -414,21 +504,20 @@ class AuthService extends ChangeNotifier {
       error = e.message;
     } on TimeoutException {
       error =
-          'การเชื่อมต่อหมดเวลา หากสมัครแล้วให้ตรวจอีเมลยืนยันก่อนลองอีกครั้ง หรือใช้งานแบบ Guest';
+          'การเชื่อมต่อหมดเวลา หากสมัครแล้วให้ตรวจอีเมลยืนยันก่อนลองอีกครั้ง';
     } on SocketException {
-      error =
-          'เชื่อมต่ออินเทอร์เน็ตไม่ได้ กรุณาตรวจสอบ Wi-Fi หรือข้อมูลมือถือ ยังใช้งานแบบ Guest ได้';
+      error = 'เชื่อมต่ออินเทอร์เน็ตไม่ได้ กรุณาตรวจสอบ Wi-Fi หรือข้อมูลมือถือ';
     } on HandshakeException {
       error =
           'เชื่อมต่ออย่างปลอดภัยไม่ได้ กรุณาตรวจวันเวลาในเครื่องหรือเปลี่ยนเครือข่าย';
     } on PlatformException {
       error =
-          'เข้าถึงที่เก็บข้อมูลปลอดภัยในเครื่องไม่ได้ กรุณาปิดเปิดแอปแล้วลองใหม่ ยังใช้งานแบบ Guest ได้';
+          'เข้าถึงที่เก็บข้อมูลปลอดภัยในเครื่องไม่ได้ กรุณาปิดเปิดแอปแล้วลองใหม่';
     } catch (e) {
       // Record only the type: exception messages can contain credentials.
       debugPrint('Authentication failed: ${e.runtimeType}');
       error =
-          'ดำเนินการไม่สำเร็จ หากสมัครแล้วให้ตรวจอีเมลยืนยันก่อน จากนั้นลองเข้าสู่ระบบ หรือใช้งานแบบ Guest';
+          'ดำเนินการไม่สำเร็จ หากสมัครแล้วให้ตรวจอีเมลยืนยันก่อน จากนั้นลองเข้าสู่ระบบ';
     } finally {
       if (session == null) {
         try {
@@ -476,6 +565,26 @@ class AuthService extends ChangeNotifier {
       throw StateError('ระบบบัญชียังไม่พร้อมใช้งาน');
     }
     await backend!.sendPasswordResetEmail(email.trim());
+  }
+
+  final _resendAfter = <String, DateTime>{};
+  bool _resending = false;
+  Future<void> resendConfirmation(String email) async {
+    if (backend == null) throw StateError('ระบบบัญชียังไม่พร้อมใช้งาน');
+    final value = email.trim().toLowerCase();
+    if (_resending ||
+        DateTime.now().isBefore(_resendAfter[value] ?? DateTime(1970))) {
+      throw StateError('กรุณารอ 60 วินาทีก่อนส่งอีเมลอีกครั้ง');
+    }
+    _resending = true;
+    _resendAfter[value] = DateTime.now().add(const Duration(seconds: 60));
+    try {
+      await backend!
+          .resendConfirmation(email.trim())
+          .timeout(const Duration(seconds: 20));
+    } finally {
+      _resending = false;
+    }
   }
 
   Future<void> resetPasswordWithOtp({

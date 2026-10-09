@@ -25,7 +25,8 @@ class RelayPacket {
     if (data['relayVersion'] != 1 ||
         (message.type != MessageType.message &&
             message.type != MessageType.sos &&
-            message.type != MessageType.ack) ||
+            message.type != MessageType.ack &&
+            message.type != MessageType.media) ||
         path.isEmpty ||
         path.length > maxHops ||
         path.any((id) => id.isEmpty || id.length > 128) ||

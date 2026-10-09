@@ -84,6 +84,7 @@ class MessageService extends ChangeNotifier {
   SosAlert? mySos;
   bool _publishingSos = false;
   bool rescueMode = false;
+  bool _changingRescue = false;
 
   /// คืน peerId (deviceId) ที่ตรงกับ endpointId — ใช้โดย MediaService
   String? getPeerForEndpoint(String endpointId) => _endpointPeers[endpointId];
@@ -109,6 +110,15 @@ class MessageService extends ChangeNotifier {
       return 'ส่งต่อผ่าน ${peers[via] ?? 'เครื่องกลาง'} • เครื่องกลาง ${entry.path.length - 2} เครื่อง';
     }
     return 'ยังติดต่อไม่ได้ • รอเชื่อมต่อ';
+  }
+
+  /// Origin to destination route when the first radio link is currently up.
+  List<String>? relayPathForPeer(String peerId) {
+    final entry = _directory[peerId];
+    if (entry == null || !entry.state.isFresh(_now()) || !isReachable(peerId)) {
+      return null;
+    }
+    return entry.path.reversed.toList();
   }
 
   void Function(String name)? onSosReceived;
@@ -159,10 +169,20 @@ class MessageService extends ChangeNotifier {
 
   Future<void> setRescueMode(bool value) async {
     if (!ready || _disposed) throw StateError('Message service is not ready');
-    await database.setSetting('rescueMode', '$value');
-    rescueMode = value;
-    _notify();
-    await retry();
+    if (_publishingSos || _changingRescue) {
+      throw StateError('กำลังเปลี่ยนโหมด กรุณารอสักครู่');
+    }
+    _changingRescue = true;
+    try {
+      // Use the existing cancellation revision and outbox for every recipient.
+      if (value && mySos?.isActiveAt(_now()) == true) await cancelSos();
+      await database.setSetting('rescueMode', '$value');
+      rescueMode = value;
+      _notify();
+      await retry();
+    } finally {
+      _changingRescue = false;
+    }
   }
 
   Future<void> publishSos({
@@ -176,6 +196,7 @@ class MessageService extends ChangeNotifier {
   }) async {
     if (!ready || _disposed) throw StateError('Message service is not ready');
     if (_publishingSos) throw StateError('กำลังบันทึก SOS');
+    if (active && _changingRescue) throw StateError('กำลังเปลี่ยนโหมด');
     if (!recipients.every(peers.containsKey)) {
       throw ArgumentError('กรุณาเลือกผู้รับจากรายชื่อที่รู้จัก');
     }
@@ -206,6 +227,11 @@ class MessageService extends ChangeNotifier {
         location: location,
         updatedAt: updatedAt,
       );
+      if (active && rescueMode) {
+        await database.setSetting('rescueMode', 'false');
+        rescueMode = false;
+        _notify();
+      }
       await database.saveSos(
         jsonEncode({
           'alert': alert.toJson(),
@@ -270,6 +296,10 @@ class MessageService extends ChangeNotifier {
         _sosRecipients = (saved['recipients'] as List).cast<String>().toSet();
       }
       rescueMode = await database.getSetting('rescueMode') == 'true';
+      if (rescueMode && mySos?.isActiveAt(_now()) == true) {
+        rescueMode = false;
+        await database.setSetting('rescueMode', 'false');
+      }
       _presenceSequence = int.parse(
         await database.getSetting('presenceSequence') ?? '0',
       );
@@ -304,6 +334,14 @@ class MessageService extends ChangeNotifier {
       // เริ่มต้น MediaService และส่ง myId
       if (mediaService != null) {
         mediaService!.onMessagesChanged = _refresh;
+        mediaService!.onRelayReceived = (media, route) async {
+          await _sendOrQueueRelayAck(
+            messageId: media.messageId,
+            senderId: media.senderId,
+            receivedPath: route,
+          );
+        };
+        mediaService!.onRelayFileReady = _drainRelayQueues;
         mediaService!.onReceived = (media) {
           if (!AppPreferences.instance.alerts) return;
           onMediaReceived?.call(media.senderName);
@@ -820,6 +858,16 @@ class MessageService extends ChangeNotifier {
       await _learnSos(packet.senderId, packet.senderName, sos);
       await _saveDirectory();
     }
+    if (packet.type == MessageType.media) {
+      final metadata = jsonDecode(packet.text) as Map<String, dynamic>;
+      final route = [...relay.path, myId!];
+      await mediaService?.handleRelayMediaInit(endpointId, metadata, route);
+      if (packet.receiverId == myId) {
+        await database.savePeer(packet.senderId, packet.senderName);
+        await database.saveReceivedRoute(packet.id, route);
+        return; // The media service sends the end-to-end ACK after verification.
+      }
+    }
     if (packet.receiverId == myId) {
       // SQLite verifies duplicate content and keeps exactly one inbox row.
       final inserted = await database.insertMessage(
@@ -946,7 +994,9 @@ class MessageService extends ChangeNotifier {
                 m.id == ack.ackFor &&
                 m.senderId == myId &&
                 m.receiverId == ack.senderId &&
-                (m.type == MessageType.message || m.type == MessageType.sos),
+                (m.type == MessageType.message ||
+                    m.type == MessageType.sos ||
+                    m.type == MessageType.media),
           )
           .firstOrNull;
       if (original == null) return;
@@ -956,6 +1006,9 @@ class MessageService extends ChangeNotifier {
           ack.ackFor!,
           MessageStatus.delivered,
         );
+      }
+      if (original.type == MessageType.media) {
+        await mediaService?.acceptOriginRelayMediaAck(original.id);
       }
       await _refresh();
       return; // Never ACK an ACK or insert it into chat history.
@@ -974,6 +1027,9 @@ class MessageService extends ChangeNotifier {
       payload: forwarded.toJson(),
       destPeer: route[relay.path.length + 1],
     )) {
+      if (data.message.type == MessageType.media) {
+        await mediaService?.acceptRelayMediaAck(data.message.id);
+      }
       await _drainRelayQueues();
     }
   }
@@ -1039,21 +1095,43 @@ class MessageService extends ChangeNotifier {
         final direct = eligible
             .where((e) => e.value == relay.message.receiverId)
             .toList();
-        final targets = direct.isEmpty ? eligible : direct;
+        final mediaRoute = relay.message.type == MessageType.media
+            ? relayPathForPeer(relay.message.receiverId)
+            : null;
+        final targets = relay.message.type == MessageType.media
+            ? mediaRoute != null && mediaRoute.length > 1
+                  ? eligible.where((e) => e.value == mediaRoute[1]).toList()
+                  : direct
+            : direct.isEmpty
+            ? eligible
+            : direct;
         if (targets.isEmpty) continue; // Keep the job even without a next hop.
+        var sentAny = false;
         for (final target in targets) {
           try {
-            await nearbyService.sendMessage(target.key, payload);
+            if (relay.message.type == MessageType.media) {
+              final sent = await mediaService?.forwardRelayMedia(
+                target.key,
+                relay,
+              );
+              if (sent != true) continue;
+              sentAny = true;
+            } else {
+              await nearbyService.sendMessage(target.key, payload);
+              sentAny = true;
+            }
           } catch (e) {
             error = 'Relay failed (queued): $e';
             _notify();
           }
         }
         // Keep successful native sends too, until a destination ACK is proven.
-        await database.markRelayAttempt(
-          job['seq'] as int,
-          job['attempts'] as int,
-        );
+        if (sentAny || relay.message.type != MessageType.media) {
+          await database.markRelayAttempt(
+            job['seq'] as int,
+            job['attempts'] as int,
+          );
+        }
       }
     } finally {
       _relayDraining = false;

@@ -6,6 +6,7 @@ import '../models/media_model.dart';
 import '../models/message_model.dart';
 import '../models/sos_alert.dart';
 import 'sos_store.dart';
+import 'chat_store.dart';
 
 class LocalDatabaseService {
   LocalDatabaseService({
@@ -20,7 +21,8 @@ class LocalDatabaseService {
   final String? path;
   final bool blocked;
   Future<Database>? _opening;
-  Future<Database> get database => blocked
+  bool _removed = false;
+  Future<Database> get database => blocked || _removed
       ? Future.error(
           StateError('ไม่สามารถอ่านเจ้าของข้อมูลได้ กรุณาเปิดแอปใหม่'),
         )
@@ -30,7 +32,7 @@ class LocalDatabaseService {
       return await _factory.openDatabase(
         path ?? p.join(await _factory.getDatabasesPath(), 'rescuelink.db'),
         options: OpenDatabaseOptions(
-          version: 8,
+          version: 9,
           onUpgrade: (db, oldVersion, _) async {
             if (oldVersion < 2) await _createRelaySeen(db);
             if (oldVersion < 3) await SosStore.createSchema(db);
@@ -45,6 +47,7 @@ class LocalDatabaseService {
             }
             if (oldVersion < 7) await _createRelayQueueSchema(db);
             if (oldVersion < 8) await _upgradeRelayQueues(db);
+            if (oldVersion < 9) await ChatStore.createSchema(db);
           },
           onCreate: (db, _) async {
             await _createRelaySeen(db);
@@ -66,6 +69,7 @@ class LocalDatabaseService {
             await _createLocalReceiptTime(db);
             await _createRelayQueueSchema(db);
             await _upgradeRelayQueues(db);
+            await ChatStore.createSchema(db);
           },
         ),
       );
@@ -565,6 +569,7 @@ class LocalDatabaseService {
           !saved.timestamp.isAtSameMomentAs(message.timestamp)) {
         throw StateError('Conflicting message ID');
       }
+      await ChatStore.capture(txn, saved);
       return existing.isEmpty;
     });
   }
@@ -730,6 +735,13 @@ class LocalDatabaseService {
 
   Future<void> close() async {
     await (await database).close();
+    _opening = null;
+  }
+
+  Future<void> retire() async {
+    _removed = true;
+    final opening = _opening;
+    if (opening != null) await (await opening).close();
     _opening = null;
   }
 }

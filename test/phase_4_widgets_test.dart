@@ -8,11 +8,17 @@ import 'package:rescuelink/widgets/location_button.dart';
 import 'package:rescuelink/widgets/presence_list.dart';
 import 'sos_screen_test.dart' show UiMessages;
 
+class ReachableMessages extends UiMessages {
+  bool reachable = false;
+  @override
+  bool isReachable(String peerId) => reachable;
+}
+
 void main() {
   testWidgets(
     'presence uses red SOS, blue rescue, grey expired and opens chat',
     (tester) async {
-      final service = UiMessages();
+      final service = ReachableMessages();
       addTearDown(() {
         service.dispose();
         service.nearbyService.dispose();
@@ -65,6 +71,11 @@ void main() {
         Colors.grey,
       );
       expect(find.textContaining('สถานะหมดอายุ'), findsOneWidget);
+      await tester.tap(find.text('Phone B'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ChatScreen), findsNothing);
+      service.reachable = true;
+      await show();
       await tester.tap(find.text('Phone B'));
       await tester.pumpAndSettle();
       expect(find.byType(ChatScreen), findsOneWidget);

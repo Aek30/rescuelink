@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'dart:io';
 import 'package:crypto/crypto.dart';
@@ -9,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import '../models/media_model.dart';
 import '../models/message_model.dart';
+import '../models/relay_packet.dart';
 import 'local_database_service.dart';
 import 'nearby_service.dart';
 import 'auth_service.dart';
@@ -23,12 +25,14 @@ class MediaService extends ChangeNotifier {
     required this.getEndpointForPeer,
     this.directoryProvider,
     this.ackTimeout = const Duration(seconds: 30),
+    this.getRelayPathForPeer,
   });
 
   final NearbyService nearby;
   final LocalDatabaseService database;
   final Future<Directory> Function()? directoryProvider;
   final Duration ackTimeout;
+  final List<String>? Function(String peerId)? getRelayPathForPeer;
   late final uploads = MediaUploadService(
     database: database,
     cloud: SupabaseMediaCloud(AuthService.instance),
@@ -44,6 +48,8 @@ class MediaService extends ChangeNotifier {
   String? error;
   Future<void> Function()? onMessagesChanged;
   void Function(MediaFile)? onReceived;
+  Future<void> Function(MediaFile media, List<String> route)? onRelayReceived;
+  Future<void> Function()? onRelayFileReady;
   final Set<int> _completedPayloads = {};
   final Map<int, String> _payloadEndpoints = {};
   final Set<String> _starting = {};
@@ -56,6 +62,7 @@ class MediaService extends ChangeNotifier {
   // ─── Receiver side mappings ─────────────────────────────────────────────
   /// nearbyPayloadId → mediaId (เชื่อม FILE payload กับ mediaInit ที่รับมา)
   final Map<int, String> _payloadToMedia = {};
+  final Map<String, List<String>> _relayRoutes = {};
 
   /// nearbyPayloadId → file URI (เก็บ URI ของ FILE payload ที่กำลังรับ)
   final Map<int, String?> _payloadUris = {};
@@ -186,10 +193,18 @@ class MediaService extends ChangeNotifier {
       throw StateError('File not found: $sourcePath');
     }
 
-    // 2. ตรวจสอบขนาด (จำกัด 50 MB)
+    final requestedRoute = getRelayPathForPeer?.call(receiverId);
+    final useRelay = requestedRoute != null && requestedRoute.length > 2;
+
+    // 2. จำกัดสื่อที่ส่งผ่านเครื่องกลางไว้ที่ 5 MB ในรุ่นแรก
     final fileSize = await sourceFile.length();
-    if (fileSize <= 0 || fileSize > 50 * 1024 * 1024) {
-      throw ArgumentError('ไฟล์ต้องไม่เกิน 50 MB');
+    final maxSize = useRelay ? 5 * 1024 * 1024 : 50 * 1024 * 1024;
+    if (fileSize <= 0 || fileSize > maxSize) {
+      throw ArgumentError(
+        useRelay
+            ? 'ไฟล์ที่ส่งผ่านเครื่องกลางต้องไม่เกิน 5 MB'
+            : 'ไฟล์ต้องไม่เกิน 50 MB',
+      );
     }
 
     // 3. ตรวจ MIME type จาก extension
@@ -245,9 +260,19 @@ class MediaService extends ChangeNotifier {
     _notify();
 
     // 7. ส่งทันทีถ้า peer ออนไลน์
-    final endpointId = getEndpointForPeer(receiverId);
+    final relayPath = requestedRoute;
+    final firstHop = relayPath != null && relayPath.length > 2
+        ? relayPath[1]
+        : receiverId;
+    final endpointId = getEndpointForPeer(firstHop);
     if (endpointId != null) {
-      unawaited(_sendMedia(media, endpointId));
+      unawaited(
+        _sendMedia(
+          media,
+          endpointId,
+          relayPath: firstHop == receiverId ? null : relayPath,
+        ),
+      );
     }
 
     return media;
@@ -265,7 +290,8 @@ class MediaService extends ChangeNotifier {
         .where(
           (m) =>
               m.senderId == myId &&
-              m.receiverId == peerId &&
+              (m.receiverId == peerId ||
+                  _nextRelayHop(m.receiverId) == peerId) &&
               m.retryCount < 5 &&
               (m.status == MediaStatus.localReady ||
                   m.status == MediaStatus.paused ||
@@ -278,11 +304,20 @@ class MediaService extends ChangeNotifier {
       if (_disposed) return;
       // ไม่ส่งซ้ำถ้ากำลัง active อยู่
       if (_activeSending.containsKey(media.mediaId)) continue;
-      await _sendMedia(media, endpointId);
+      final route = getRelayPathForPeer?.call(media.receiverId);
+      await _sendMedia(
+        media,
+        endpointId,
+        relayPath: media.receiverId == peerId ? null : route,
+      );
     }
   }
 
-  Future<void> _sendMedia(MediaFile media, String endpointId) async {
+  Future<void> _sendMedia(
+    MediaFile media,
+    String endpointId, {
+    List<String>? relayPath,
+  }) async {
     if (_disposed || !_starting.add(media.mediaId)) return;
 
     // ตรวจว่าไฟล์ยังอยู่ในเครื่อง
@@ -316,7 +351,23 @@ class MediaService extends ChangeNotifier {
       // ส่ง BYTES metadata ทันทีหลัง FILE payload เริ่ม
       // (ผู้รับต้องรู้ payloadId เพื่อ map ได้ถูกต้อง)
       final initJson = media.toInitJson(nearbyPayloadId: payloadId);
-      await nearby.sendMessage(endpointId, initJson);
+      if (relayPath != null && relayPath.length > 2) {
+        final packet = MessageModel(
+          id: media.messageId,
+          senderId: media.senderId,
+          senderName: media.senderName,
+          receiverId: media.receiverId,
+          text: initJson,
+          timestamp: media.createdAt,
+          type: MessageType.media,
+        );
+        await nearby.sendMessage(
+          endpointId,
+          RelayPacket(packet, [media.senderId]).toJson(),
+        );
+      } else {
+        await nearby.sendMessage(endpointId, initJson);
+      }
       _ackTimers.remove(media.mediaId)?.cancel();
       _ackTimers[media.mediaId] = Timer(const Duration(minutes: 5), () {
         unawaited(_pauseExpired(media.mediaId));
@@ -341,6 +392,99 @@ class MediaService extends ChangeNotifier {
     } finally {
       _starting.remove(media.mediaId);
     }
+  }
+
+  String? _nextRelayHop(String peerId) {
+    final path = getRelayPathForPeer?.call(peerId);
+    return path != null && path.length > 2 ? path[1] : null;
+  }
+
+  /// Persisted relay jobs call this to resend the original file through one
+  /// directly connected neighbor. The receiver still sees the origin sender.
+  Future<bool> forwardRelayMedia(String endpointId, RelayPacket relay) async {
+    if (_disposed || relay.message.type != MessageType.media) return false;
+    final data = jsonDecode(relay.message.text) as Map<String, dynamic>;
+    final mediaId = data['mediaId'] as String?;
+    final media = mediaId == null ? null : _cache[mediaId];
+    if (media == null ||
+        media.status != MediaStatus.relayQueued ||
+        !await File(media.localPath).exists() ||
+        _activeSending.containsKey(media.mediaId)) {
+      return false;
+    }
+    try {
+      final payloadId = await nearby.sendFile(endpointId, media.localPath);
+      _activeSending[media.mediaId] = payloadId;
+      final init =
+          jsonDecode(media.toInitJson(nearbyPayloadId: payloadId))
+              as Map<String, dynamic>;
+      init['relayPath'] = relay.path;
+      final forwarded = relay.message.copyWith(status: MessageStatus.pending);
+      final packet = MessageModel(
+        id: forwarded.id,
+        senderId: forwarded.senderId,
+        senderName: forwarded.senderName,
+        receiverId: forwarded.receiverId,
+        text: jsonEncode(init),
+        timestamp: forwarded.timestamp,
+        type: MessageType.media,
+      );
+      await nearby.sendMessage(
+        endpointId,
+        RelayPacket(packet, relay.path).toJson(),
+      );
+      return true;
+    } catch (e) {
+      _activeSending.remove(media.mediaId);
+      error = 'Relay media send failed: $e';
+      _notify();
+      return false;
+    }
+  }
+
+  Future<void> handleRelayMediaInit(
+    String endpointId,
+    Map<String, dynamic> data,
+    List<String> route,
+  ) async {
+    final myId = _myId;
+    if (myId == null || route.isEmpty || route.last != myId) return;
+    _relayRoutes[data['mediaId'] as String] = List.unmodifiable(route);
+    await handleMediaInit(endpointId, {...data, 'relayPath': route});
+  }
+
+  Future<void> acceptRelayMediaAck(String messageId) async {
+    final media = _cache.values
+        .where((m) => m.messageId == messageId)
+        .firstOrNull;
+    if (media == null || media.senderId == _myId) return;
+    _activeSending.remove(media.mediaId);
+    final local = File(media.localPath);
+    if (await local.exists()) await local.delete();
+    await (await database.database).delete(
+      'media_files',
+      where: 'mediaId = ?',
+      whereArgs: [media.mediaId],
+    );
+    _cache.remove(media.mediaId);
+    _notify();
+  }
+
+  Future<void> acceptOriginRelayMediaAck(String messageId) async {
+    final media = _cache.values
+        .where((m) => m.messageId == messageId)
+        .firstOrNull;
+    if (media == null || media.senderId != _myId) return;
+    _ackTimers.remove(media.mediaId)?.cancel();
+    _activeSending.remove(media.mediaId);
+    final delivered = media.copyWith(
+      status: MediaStatus.delivered,
+      bytesTransferred: media.fileSize,
+      errorMessage: null,
+    );
+    _updateCache(delivered);
+    await database.updateMediaFile(delivered);
+    await onMessagesChanged?.call();
   }
 
   Future<void> _pauseExpired(String id) async {
@@ -434,6 +578,13 @@ class MediaService extends ChangeNotifier {
         .firstOrNull;
     if (senderEntry != null) {
       _activeSending.remove(senderEntry.key);
+      final senderMedia = _cache[senderEntry.key];
+      if (senderMedia != null && senderMedia.senderId != _myId) {
+        // Intermediary waits for the end-to-end ACK in MessageService. The
+        // durable relay queue controls retries if the next packet is lost.
+        debugPrint('[Media] Relay file sent; waiting for destination ACK');
+        return;
+      }
       _ackTimers.remove(senderEntry.key)?.cancel();
       _ackTimers[senderEntry.key] = Timer(ackTimeout, () {
         unawaited(_pauseExpired(senderEntry.key));
@@ -514,6 +665,27 @@ class MediaService extends ChangeNotifier {
         throw StateError('Size mismatch: expected=${media.fileSize}');
       }
 
+      final relayRoute = _relayRoutes[media.mediaId];
+      if (media.receiverId != _myId) {
+        if (relayRoute == null || relayRoute.last != _myId) {
+          throw StateError('Relay route is missing for intermediary media');
+        }
+        final relayDir = Directory(p.join(dir.path, 'relay_media'));
+        if (!await relayDir.exists()) await relayDir.create(recursive: true);
+        final relayPath = p.join(relayDir.path, p.basename(destPath));
+        await savedFile.rename(relayPath);
+        final queued = media.copyWith(
+          status: MediaStatus.relayQueued,
+          localPath: relayPath,
+          bytesTransferred: media.fileSize,
+          errorMessage: null,
+        );
+        await database.updateMediaFile(queued);
+        _updateCache(queued);
+        await onRelayFileReady?.call();
+        return;
+      }
+
       // บันทึก chat message row (ปรากฏในแชตหลังรับครบและตรวจผ่านแล้วเท่านั้น)
       final myId = _myId!;
       final message = MessageModel(
@@ -540,7 +712,9 @@ class MediaService extends ChangeNotifier {
 
       // ส่ง ACK กลับไปหาผู้ส่งเพื่อยืนยัน
       final senderEndpoint = getEndpointForPeer(media.senderId);
-      if (senderEndpoint != null) {
+      if (relayRoute != null && relayRoute.length > 2) {
+        await onRelayReceived?.call(received, relayRoute);
+      } else if (senderEndpoint != null) {
         final ack = MediaAck(
           mediaId: media.mediaId,
           messageId: media.messageId,
@@ -595,7 +769,9 @@ class MediaService extends ChangeNotifier {
       if (m != null) {
         _updateCache(
           m.copyWith(
-            status: MediaStatus.paused,
+            status: m.senderId == _myId
+                ? MediaStatus.paused
+                : MediaStatus.relayQueued,
             errorMessage: 'การส่งถูกยกเลิก จะลองใหม่เมื่อเชื่อมต่ออีกครั้ง',
           ),
         );
@@ -634,7 +810,20 @@ class MediaService extends ChangeNotifier {
       final media = MediaFile.fromInitMap(data);
       final nearbyPayloadId = data['nearbyPayloadId'] as int;
       final myId = _myId;
-      if (myId == null || media.receiverId != myId) return;
+      if (myId == null) return;
+      final relayRoute = (data['relayPath'] as List?)?.cast<String>();
+      final isRelay = relayRoute != null;
+      if (media.receiverId != myId && !isRelay) return;
+      if (isRelay &&
+          (relayRoute.isEmpty ||
+              relayRoute.last != myId ||
+              relayRoute.first != media.senderId ||
+              relayRoute.toSet().length != relayRoute.length)) {
+        throw const FormatException('Invalid media relay route');
+      }
+      if (isRelay && media.fileSize > 5 * 1024 * 1024) {
+        throw const FormatException('Relay media exceeds 5 MB');
+      }
       if (media.fileSize <= 0 ||
           media.fileSize > 50 * 1024 * 1024 ||
           !RegExp(r'^[a-f0-9]{64}$').hasMatch(media.checksum) ||
@@ -663,6 +852,10 @@ class MediaService extends ChangeNotifier {
       if (existing != null &&
           (existing.status == MediaStatus.received ||
               existing.status == MediaStatus.delivered)) {
+        if (isRelay) {
+          await onRelayReceived?.call(existing, relayRoute);
+          return;
+        }
         final ack = MediaAck(
           mediaId: media.mediaId,
           messageId: media.messageId,
@@ -672,6 +865,7 @@ class MediaService extends ChangeNotifier {
         await nearby.sendMessage(endpointId, ack.toJson());
         return;
       }
+      if (existing?.status == MediaStatus.relayQueued) return;
       // กำลังรับอยู่แล้ว → แค่อัพเดต payloadId mapping
       if (existing != null && existing.status == MediaStatus.receiving) {
         _payloadToMedia[nearbyPayloadId] = media.mediaId;

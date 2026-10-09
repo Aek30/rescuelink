@@ -4,7 +4,7 @@
 ใช้เป็น contract ร่วมระหว่างส่วนต่าง ๆ ของ Phase 5
 
 สถานะปัจจุบัน: Implement ข้อความ คิวถาวร ACK รายชื่อผ่านเครือข่าย และ SOS/Rescue ผ่าน Relay แล้ว
-ส่วนสื่อผ่าน Relay ยังเป็นข้อกำหนดสำหรับงานถัดไป ยังไม่ได้ implement
+สื่อผ่าน Relay จำกัด 5 MiB ในรุ่นแรก; การทดสอบบนมือถือจริงยังต้องยืนยัน
 รายละเอียดและขั้นตอนทดสอบมือถือดู PHASE_5_DIRECTORY_SOS_VERIFICATION.md
 ผล automated tests ไม่ใช่หลักฐานมือถือจริง
 
@@ -219,35 +219,25 @@ sos เป็น JSON string หรือ null; path เริ่มจากเ
 - แสดงขีดจำกัดก่อน picker เปิด (ถ้าปลายทางต้องส่งผ่าน relay)
 
 ### Flow สำหรับ relay (A to B to C)
-1. A ส่ง `mediaInit` (BYTES) + FILE payload ไปหา B
-2. B รับครบ ตรวจ checksum/ขนาด บันทึกถาวร
-3. B เก็บงานใน `relay_media_queue` พร้อม `dest_peer = C`
-4. B ส่ง `mediaInit` (ใช้ origin's mediaId/messageId เดิม) + FILE ไปหา C
-5. C รับครบ ตรวจ checksum บันทึก ส่ง `mediaAck` กลับ A (ผ่าน relay)
-6. A รับ `mediaAck` จาก C เปลี่ยนสถานะเป็น `delivered`
+1. A ส่ง FILE payload และ RelayPacket ชนิด `media` ที่มี metadata ไปยัง B
+2. B ตรวจ checksum/ขนาด คัดลอกลง `rescuelink_media/<B>/relay_media` และเก็บ MediaFile สถานะ `relayQueued`
+3. B เก็บ RelayPacket ไว้ใน `relay_queue` เดิม คิวจึงอยู่หลัง restart และรอ C เชื่อมต่อ
+4. B ส่ง FILE กับ RelayPacket ชุดเดิมไปยัง C โดยสร้าง payload ID ของลิงก์ B–C ใหม่
+5. C รับครบ ตรวจ checksum บันทึกสื่อในแชต แล้วส่ง ACK กลับ A ตามเส้นทาง A–B–C
+6. A รับ ACK จาก C แล้วเปลี่ยนสถานะสื่อและข้อความเป็น `delivered`
 
 ### B ไม่แสดงสื่อ relay เป็นแชตส่วนตัว
-- B บันทึกไฟล์ชั่วคราวใน `relay_media` directory แยกจาก `rescuelink_media/<myId>`
+- B บันทึกไฟล์ใน `rescuelink_media/<myId>/relay_media` แยกจากสื่อในแชต
 - B ไม่บันทึก row ใน `messages` table
+- ไฟล์ relay รุ่นแรกจำกัดไม่เกิน 5 MiB; สื่อส่งตรงยังจำกัด 50 MiB
 
-### ตาราง relay_media_queue (ข้อเสนอสำหรับงานสื่อถัดไป ยังไม่สร้าง)
-```sql
-CREATE TABLE relay_media_queue (
-  seq         INTEGER PRIMARY KEY AUTOINCREMENT,
-  media_id    TEXT NOT NULL,
-  message_id  TEXT NOT NULL,
-  origin_id   TEXT NOT NULL,
-  dest_peer   TEXT NOT NULL,
-  local_path  TEXT NOT NULL,
-  meta_json   TEXT NOT NULL,
-  attempts    INTEGER NOT NULL DEFAULT 0,
-  created_at  TEXT NOT NULL
-);
-CREATE UNIQUE INDEX relay_media_uniq ON relay_media_queue(media_id, dest_peer);
-```
+### Queue storage
+- ใช้ `relay_queue` และ `relay_seen` เดิม โดย message ID เป็น packet ID
+- ไฟล์ที่ตรวจแล้วอ้างจาก `media_files.localPath` และสถานะ `relayQueued`
+- ACK ผ่าน `relay_ack_queue` เดิม; คิวต้นทางยังอยู่จน ACK ยืนยันปลายทาง
 
 ### TTL และ cleanup
-- สื่อ relay: 48 ชั่วโมง cleanup ลบทั้ง row และไฟล์ชั่วคราว
+- สื่อ relay: metadata queue หมดอายุ 48 ชั่วโมงตาม cleanup ของ relay queue
 - ห้ามลบไฟล์ของงานที่ยังค้างอยู่ในคิว
 
 ### retry
@@ -263,7 +253,7 @@ CREATE UNIQUE INDEX relay_media_uniq ON relay_media_queue(media_id, dest_peer);
 - Version 7 → 8: เพิ่ม `relay_queue.ack_payload` และ `relay_ack_queue.next_attempt`
 - แปลง ACK รุ่น 7 ที่มี path เต็มให้แยก `relayAckRoute` กับ `relayPath`
 - คงงานค้าง payload ตัวตน และประวัติเดิม ไม่ล้างหรือสร้างคิวใหม่ทับของเดิม
-- `relay_media_queue` ยังไม่ได้สร้างในงานรอบนี้
+- Relay media ใช้ schema เดิม ไม่มี migration เพิ่ม
 
 ---
 

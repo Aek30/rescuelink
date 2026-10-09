@@ -6,6 +6,7 @@ import 'package:nearby_connections/nearby_connections.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:rescuelink/models/media_model.dart';
 import 'package:rescuelink/models/message_model.dart';
+import 'package:rescuelink/models/relay_packet.dart';
 import 'package:rescuelink/services/local_database_service.dart';
 import 'package:rescuelink/services/media_service.dart';
 import 'package:rescuelink/services/nearby_service.dart';
@@ -109,6 +110,45 @@ void main() {
       expect(transport.packets.last['success'], true);
     },
   );
+
+  test(
+    'intermediary forwards a verified file with origin and route intact',
+    () async {
+      await db.insertMediaFile(
+        media.copyWith(status: MediaStatus.relayQueued, localPath: source.path),
+      );
+      service = MediaService(
+        nearby: transport,
+        database: db,
+        getEndpointForPeer: (_) => 'endpoint',
+        directoryProvider: () async => dir,
+        getRelayPathForPeer: (_) => ['relay', 'receiver'],
+      );
+      await service.initialize('relay');
+      final original = MessageModel(
+        id: media.messageId,
+        senderId: media.senderId,
+        senderName: media.senderName,
+        receiverId: media.receiverId,
+        text: media.toInitJson(nearbyPayloadId: 17),
+        timestamp: media.createdAt,
+        type: MessageType.media,
+      );
+      final sent = await service.forwardRelayMedia(
+        'endpoint',
+        RelayPacket(original, [media.senderId, 'relay']),
+      );
+      expect(sent, isTrue);
+      expect(transport.sends, 1);
+      final relayed = RelayPacket.fromMap(transport.packets.last);
+      expect(relayed.path, [media.senderId, 'relay']);
+      expect(relayed.message.senderId, media.senderId);
+      expect(relayed.message.receiverId, media.receiverId);
+      final metadata = jsonDecode(relayed.message.text) as Map<String, dynamic>;
+      expect(metadata['nearbyPayloadId'], 1);
+      expect(metadata['relayPath'], [media.senderId, 'relay']);
+    },
+  );
   test(
     'SUCCESS before init is retained and verified after metadata arrives',
     () async {
@@ -196,7 +236,12 @@ void main() {
               as Map<String, dynamic>;
       await service.handleMediaAck(ack, peerId: 'imposter');
       expect(service.getCached(media.mediaId)!.status, MediaStatus.sending);
-      for (var i = 0; i < 100 && service.getCached(media.mediaId)!.status == MediaStatus.sending; i++) {
+      for (
+        var i = 0;
+        i < 100 &&
+            service.getCached(media.mediaId)!.status == MediaStatus.sending;
+        i++
+      ) {
         await Future<void>.delayed(const Duration(milliseconds: 10));
       }
       expect(service.getCached(media.mediaId)!.status, MediaStatus.paused);

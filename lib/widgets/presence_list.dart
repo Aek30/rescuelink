@@ -5,11 +5,30 @@ import '../screens/incident_detail_screen.dart';
 import 'location_button.dart';
 import '../theme/rescue_theme.dart';
 
+enum PresenceFilter { all, sos, rescue }
+
 class PresenceList extends StatelessWidget {
-  const PresenceList({super.key, required this.service});
+  const PresenceList({
+    super.key,
+    required this.service,
+    this.filter = PresenceFilter.all,
+  });
   final MessageService service;
+  final PresenceFilter filter;
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now().toUtc();
+    final entries = service.presence.entries.where((entry) {
+      if (entry.key == service.myId) return false;
+      final state = entry.value;
+      final sos = state.sos?.isActiveAt(now) == true;
+      final rescue = state.isFresh(now) && state.rescue && !sos;
+      return switch (filter) {
+        PresenceFilter.sos => sos,
+        PresenceFilter.rescue => rescue,
+        PresenceFilter.all => true,
+      };
+    }).toList();
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -17,7 +36,11 @@ class PresenceList extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
           child: Text(
-            'สถานะ SOS / หน่วยกู้ภัยใกล้เคียง',
+            switch (filter) {
+              PresenceFilter.sos => 'ผู้ขอความช่วยเหลือ',
+              PresenceFilter.rescue => 'หน่วยกู้ภัยใกล้เคียง',
+              PresenceFilter.all => 'สถานะ SOS / หน่วยกู้ภัยใกล้เคียง',
+            },
             style: TextStyle(
               color: isDark ? const Color(0xFFF1F5F9) : RescueTheme.navy,
               fontWeight: FontWeight.w700,
@@ -25,7 +48,7 @@ class PresenceList extends StatelessWidget {
             ),
           ),
         ),
-        if (service.presence.isEmpty)
+        if (entries.isEmpty)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(18),
@@ -47,7 +70,14 @@ class PresenceList extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'ยังไม่มีสถานะ • เชื่อมต่ออุปกรณ์ใกล้เคียงเพื่อรับข้อมูล',
+                    switch (filter) {
+                      PresenceFilter.sos =>
+                        'ยังไม่มีคำขอความช่วยเหลือใกล้เคียง',
+                      PresenceFilter.rescue =>
+                        'ยังไม่พบหน่วยกู้ภัยใกล้เคียง กำลังค้นหาต่อ...',
+                      PresenceFilter.all =>
+                        'ยังไม่มีสถานะ • เชื่อมต่ออุปกรณ์ใกล้เคียงเพื่อรับข้อมูล',
+                    },
                     style: TextStyle(
                       color: isDark
                           ? const Color(0xFF94A3B8)
@@ -60,7 +90,7 @@ class PresenceList extends StatelessWidget {
               ],
             ),
           ),
-        for (final entry in service.presence.entries)
+        for (final entry in entries)
           Builder(
             builder: (context) {
               final state = entry.value;
@@ -91,15 +121,19 @@ class PresenceList extends StatelessWidget {
                       ),
                       title: Text(service.peers[entry.key] ?? entry.key),
                       subtitle: Text(
-                        '$label${fresh && sos && state.rescue ? ' • เปิด Rescue ด้วย' : ''}\n${service.connectionLabel(entry.key)} • แตะเพื่อแชต',
+                        '$label\n${service.connectionLabel(entry.key)}${service.isReachable(entry.key) ? ' • แตะเพื่อแชต' : ''}',
                       ),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute<void>(
-                          builder: (_) =>
-                              ChatScreen(service: service, peerId: entry.key),
-                        ),
-                      ),
+                      onTap: !service.isReachable(entry.key)
+                          ? null
+                          : () => Navigator.push(
+                              context,
+                              MaterialPageRoute<void>(
+                                builder: (_) => ChatScreen(
+                                  service: service,
+                                  peerId: entry.key,
+                                ),
+                              ),
+                            ),
                     ),
                     if (state.sos != null)
                       Padding(

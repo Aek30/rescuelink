@@ -216,6 +216,8 @@ void main() {
       await database.execute('DROP TABLE media_files');
       await database.execute('DROP TABLE relay_queue');
       await database.execute('DROP TABLE relay_ack_queue');
+      await database.execute('DROP TABLE chat_queue');
+      await database.execute('DROP TABLE chat_records');
       await database.setVersion(1);
       await dbs[1].close();
       nodes[1] = MessageService(nearbyService: wires[1], database: dbs[1]);
@@ -512,6 +514,8 @@ void main() {
     final db = await dbs[1].database;
     await db.execute('ALTER TABLE relay_queue DROP COLUMN ack_payload');
     await db.execute('ALTER TABLE relay_ack_queue DROP COLUMN next_attempt');
+    await db.execute('DROP TABLE chat_queue');
+    await db.execute('DROP TABLE chat_records');
     await db.setVersion(7);
     await dbs[1].close();
     final after = (await dbs[1].relayItem(nodes[0].messages.single.id))!;
@@ -521,7 +525,7 @@ void main() {
     expect(after['ack_payload'], isNull);
     expect(await dbs[1].getDeviceId(), identity);
     expect((await dbs[1].getMessages()).single.text, 'keep history');
-    expect(await (await dbs[1].database).getVersion(), 8);
+    expect(await (await dbs[1].database).getVersion(), 9);
     nodes[1] = MessageService(nearbyService: wires[1], database: dbs[1]);
     wires[1].devices.clear();
     await nodes[1].initialize();
@@ -549,6 +553,8 @@ void main() {
     final db = await dbs[2].database;
     await db.execute('ALTER TABLE relay_queue DROP COLUMN ack_payload');
     await db.execute('ALTER TABLE relay_ack_queue DROP COLUMN next_attempt');
+    await db.execute('DROP TABLE chat_queue');
+    await db.execute('DROP TABLE chat_records');
     await db.setVersion(7);
     await dbs[2].close();
     final rows = await dbs[2].pendingRelayAcks(route[1]);

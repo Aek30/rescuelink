@@ -183,6 +183,28 @@ void main() {
   );
 
   test(
+    'home search discovers without auto connecting and keeps scanning after manual connection',
+    () async {
+      await Future.wait([service.startNearby(), service.startNearby()]);
+      expect(native.advertiseCalls, 1);
+      expect(native.discoveryCalls, 1);
+      native.found('A', 'Rescue-A', NearbyService.serviceId);
+      expect(service.discoveredDevices.single.isConnecting, isFalse);
+      expect(service.autoConnect, isFalse);
+      await service.requestConnection('A');
+      native.initiated('A', ConnectionInfo('Rescue-A', '1234', false));
+      await Future<void>.delayed(Duration.zero);
+      native.result('A', Status.CONNECTED);
+      expect(service.connectedDevices, hasLength(1));
+      expect(service.isDiscovering, isTrue);
+      await service.startNearby();
+      expect(native.discoveryCalls, 1);
+      await service.stopAll();
+      expect(service.continuousDiscovery, isFalse);
+    },
+  );
+
+  test(
     'automatic mode requests discovered peers and continues discovery after connection',
     () async {
       await service.startAutomatic();
@@ -238,17 +260,20 @@ void main() {
       expect(service.connectedDevices.single.endpointId, 'A-new');
     },
   );
-  test('automatic mode elects one caller and accepts the other phone', () async {
-    service.setName('Rescue-Z');
-    await service.startAutomatic();
-    native.found('A', 'Rescue-A', NearbyService.serviceId);
-    await service.startAutomatic();
-    expect(service.discoveredDevices.single.isConnecting, isFalse);
-    native.initiated('A', ConnectionInfo('Rescue-A', '1234', true));
-    await Future<void>.delayed(Duration.zero);
-    native.result('A', Status.CONNECTED);
-    expect(service.connectedDevices.single.endpointId, 'A');
-  });
+  test(
+    'automatic mode elects one caller and accepts the other phone',
+    () async {
+      service.setName('Rescue-Z');
+      await service.startAutomatic();
+      native.found('A', 'Rescue-A', NearbyService.serviceId);
+      await service.startAutomatic();
+      expect(service.discoveredDevices.single.isConnecting, isFalse);
+      native.initiated('A', ConnectionInfo('Rescue-A', '1234', true));
+      await Future<void>.delayed(Duration.zero);
+      native.result('A', Status.CONNECTED);
+      expect(service.connectedDevices.single.endpointId, 'A');
+    },
+  );
   test(
     'stale native advertiser is cleared before starting a fresh session',
     () async {

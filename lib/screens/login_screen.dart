@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'nearby_test_screen.dart';
 import 'forgot_password_screen.dart';
+import 'register_screen.dart';
 import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -12,14 +13,12 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   static const navy = Color(0xFF102D43);
-  static const orange = Color(0xFFFF6826);
+  static const orange = Color(0xFFFFB37B);
   final form = GlobalKey<FormState>();
   final identity = TextEditingController();
   final password = TextEditingController();
-  final displayName = TextEditingController();
-  final confirmation = TextEditingController();
-  bool register = false, hidden = true, remember = true, english = false;
-  bool busy = false, claimGuest = false;
+  bool hidden = true, english = false;
+  bool busy = false;
   String? error;
   String? notice;
   AuthService get auth => widget.auth ?? AuthService.instance;
@@ -35,8 +34,6 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     identity.dispose();
     password.dispose();
-    displayName.dispose();
-    confirmation.dispose();
     super.dispose();
   }
 
@@ -50,10 +47,8 @@ class _LoginScreenState extends State<LoginScreen> {
     final ok = await auth.authenticate(
       identity.text,
       password.text,
-      register: register,
-      remember: remember,
-      claimGuest: claimGuest,
-      displayName: displayName.text,
+      register: false,
+      remember: true,
     );
     if (!mounted) return;
     setState(() {
@@ -63,40 +58,16 @@ class _LoginScreenState extends State<LoginScreen> {
     });
     if (notice != null) {
       FocusScope.of(context).unfocus();
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) => PopScope(
-          canPop: false,
-          child: AlertDialog(
-            scrollable: true,
-            icon: const Icon(
-              Icons.mark_email_unread_outlined,
-              color: orange,
-              size: 40,
-            ),
-            title: Text(t('กรุณายืนยันอีเมลก่อน', 'Verify your email first')),
-            content: Text(
-              t(
-                'เปิดกล่องจดหมายของ ${identity.text.trim()} แล้วกดลิงก์ยืนยันบัญชีก่อนเข้าสู่ระบบ\n\nหากไม่พบอีเมล ให้ตรวจโฟลเดอร์สแปม หากเคยยืนยันบัญชีนี้แล้ว สามารถเข้าสู่ระบบได้เลย',
-                'Open the inbox for ${identity.text.trim()} and follow the confirmation link before logging in.\n\nCheck spam if the email is missing. If this account is already verified, you can log in.',
-              ),
-            ),
-            actions: [
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: Text(t('ไปหน้าเข้าสู่ระบบ', 'Go to login')),
-              ),
-            ],
-          ),
-        ),
+      // Show the new email verification dialog
+      await EmailVerificationDialog.show(
+        context,
+        email: identity.text.trim(),
+        onResend: () => auth.resendConfirmation(identity.text.trim()),
       );
       if (!mounted) return;
       setState(() {
         busy = false;
-        register = false;
         password.clear();
-        confirmation.clear();
       });
     }
     if (ok) {
@@ -119,10 +90,8 @@ class _LoginScreenState extends State<LoginScreen> {
     );
     if (updatedEmail != null && updatedEmail.isNotEmpty && mounted) {
       setState(() {
-        register = false;
         identity.text = updatedEmail;
         password.clear();
-        confirmation.clear();
         error = null;
         notice = t(
           'ตั้งรหัสผ่านใหม่เรียบร้อย กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่',
@@ -132,79 +101,58 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Widget field(bool secret) {
+  void _openRegister() {
+    Navigator.of(context)
+        .push<String>(
+          MaterialPageRoute<String>(builder: (_) => RegisterScreen(auth: auth)),
+        )
+        .then((email) {
+          if (mounted && email != null) {
+            setState(() {
+              identity.text = email;
+              password.clear();
+            });
+          }
+        });
+  }
+
+  Widget _emailField() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return TextFormField(
-      controller: secret ? password : identity,
+      controller: identity,
       enabled: !busy,
-      obscureText: secret && hidden,
       autocorrect: false,
-      enableSuggestions: !secret,
-      keyboardType: secret
-          ? TextInputType.visiblePassword
-          : TextInputType.emailAddress,
-      textInputAction: secret ? TextInputAction.done : TextInputAction.next,
-      autofillHints: [
-        secret
-            ? (register ? AutofillHints.newPassword : AutofillHints.password)
-            : AutofillHints.username,
-      ],
-      onFieldSubmitted: secret ? (_) => submit() : null,
+      enableSuggestions: true,
+      keyboardType: TextInputType.emailAddress,
+      textInputAction: TextInputAction.next,
+      autofillHints: const [AutofillHints.username],
       autovalidateMode: AutovalidateMode.onUserInteraction,
       validator: (value) {
         if (value == null || value.trim().isEmpty) {
-          return t(
-            secret ? 'กรุณากรอกรหัสผ่าน' : 'กรุณากรอกอีเมล',
-            'This field is required',
-          );
+          return t('กรุณากรอกอีเมล', 'This field is required');
         }
-        if (!secret &&
-            !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value.trim())) {
+        if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value.trim())) {
           return t('กรุณากรอกอีเมลที่ถูกต้อง', 'Enter a valid email');
-        }
-        if (secret && register) {
-          if (value.length < 8) {
-            return t('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร', 'Use at least 8 characters');
-          }
-          if (!RegExp(r'[a-z]').hasMatch(value)) {
-            return t('ต้องมีตัวพิมพ์เล็กอย่างน้อย 1 ตัว', 'Must contain at least one lowercase letter');
-          }
-          if (!RegExp(r'[A-Z]').hasMatch(value)) {
-            return t('ต้องมีตัวพิมพ์ใหญ่อย่างน้อย 1 ตัว', 'Must contain at least one uppercase letter');
-          }
-          if (!RegExp(r'[!@#\$&*~_.]').hasMatch(value)) {
-            return t('ต้องมีอักขระพิเศษอย่างน้อย 1 ตัว (!@#\$&*~_.)', 'Must contain at least one special character');
-          }
         }
         return null;
       },
       decoration: InputDecoration(
-        labelText: secret ? t('รหัสผ่าน', 'Password') : t('อีเมล', 'Email'),
-        hintText: secret ? t('รหัสผ่าน', 'Password') : t('อีเมล', 'Email'),
+        labelText: t('อีเมล', 'Email'),
+        hintText: t('กรอกอีเมลของคุณ', 'Enter your email'),
         hintStyle: TextStyle(
           color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF939493),
           fontSize: 14,
         ),
         prefixIcon: Icon(
-          secret ? Icons.lock_outline_rounded : Icons.mail_outline_rounded,
+          Icons.mail_outline_rounded,
           size: 21,
           color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF85898A),
         ),
         suffixIcon: IconButton(
-          tooltip: secret
-              ? (hidden
-                    ? t('แสดงรหัสผ่าน', 'Show password')
-                    : t('ซ่อนรหัสผ่าน', 'Hide password'))
-              : t('ล้างข้อมูล', 'Clear'),
-          onPressed: secret
-              ? () => setState(() => hidden = !hidden)
-              : identity.clear,
+          tooltip: t('ล้างข้อมูล', 'Clear'),
+          onPressed: identity.clear,
           icon: Icon(
-            secret
-                ? (hidden
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined)
-                : Icons.close_rounded,
+            Icons.close_rounded,
             size: 20,
             color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF969A9B),
           ),
@@ -232,43 +180,66 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget tab(bool value, String label) {
+  Widget _passwordField() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Expanded(
-      child: Semantics(
-        selected: register == value,
-        child: InkWell(
-          onTap: busy
-              ? null
-              : () => setState(() {
-                  register = value;
-                  form.currentState?.reset();
-                  password.clear();
-                  confirmation.clear();
-                  error = null;
-                  notice = null;
-                }),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: register == value ? orange : Colors.transparent,
-                  width: 2,
-                ),
-              ),
-            ),
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: register == value
-                    ? (isDark ? Colors.white : navy)
-                    : (isDark ? const Color(0xFF94A3B8) : Colors.grey),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+    return TextFormField(
+      controller: password,
+      enabled: !busy,
+      obscureText: hidden,
+      autocorrect: false,
+      enableSuggestions: false,
+      keyboardType: TextInputType.visiblePassword,
+      textInputAction: TextInputAction.done,
+      autofillHints: const [AutofillHints.password],
+      onFieldSubmitted: (_) => submit(),
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) {
+          return t('กรุณากรอกรหัสผ่าน', 'This field is required');
+        }
+        return null;
+      },
+      decoration: InputDecoration(
+        labelText: t('รหัสผ่าน', 'Password'),
+        hintText: t('กรอกรหัสผ่าน', 'Enter your password'),
+        hintStyle: TextStyle(
+          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF939493),
+          fontSize: 14,
+        ),
+        prefixIcon: Icon(
+          Icons.lock_outline_rounded,
+          size: 21,
+          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF85898A),
+        ),
+        suffixIcon: IconButton(
+          tooltip: hidden
+              ? t('แสดงรหัสผ่าน', 'Show password')
+              : t('ซ่อนรหัสผ่าน', 'Hide password'),
+          onPressed: () => setState(() => hidden = !hidden),
+          icon: Icon(
+            hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+            size: 20,
+            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF969A9B),
           ),
+        ),
+        filled: true,
+        fillColor: isDark
+            ? const Color(0xFF161C24)
+            : Colors.white.withValues(alpha: .9),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(13)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(13),
+          borderSide: BorderSide(
+            color: isDark ? const Color(0xFF283442) : const Color(0xFFE3E1DE),
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(13),
+          borderSide: const BorderSide(color: orange, width: 1.5),
         ),
       ),
     );
@@ -314,6 +285,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
+                            // Language picker
                             Align(
                               alignment: Alignment.centerRight,
                               child: PopupMenuButton<bool>(
@@ -350,6 +322,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                             const SizedBox(height: 14),
+                            // Logo
                             Center(
                               child: Image.asset(
                                 isDark
@@ -392,133 +365,83 @@ class _LoginScreenState extends State<LoginScreen> {
                               textAlign: TextAlign.center,
                               style: const TextStyle(fontSize: 14),
                             ),
-                            const SizedBox(height: 26),
-                            Container(
-                              clipBehavior: Clip.antiAlias,
-                              decoration: BoxDecoration(
+                            const SizedBox(height: 28),
+                            // Section title
+                            Text(
+                              t('เข้าสู่ระบบ', 'Sign in'),
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: textColor,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              t(
+                                'เข้าสู่ระบบด้วยบัญชี RescueLink ของคุณ',
+                                'Sign in to your RescueLink account',
+                              ),
+                              style: TextStyle(
+                                fontSize: 13.5,
                                 color: isDark
-                                    ? const Color(0xFF1E2631)
-                                    : Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Row(
-                                children: [
-                                  tab(false, t('เข้าสู่ระบบ', 'Log in')),
-                                  tab(true, t('สมัครใช้งาน', 'Sign up')),
-                                ],
+                                    ? const Color(0xFF94A3B8)
+                                    : const Color(0xFF555F6D),
                               ),
                             ),
-                            const SizedBox(height: 16),
-                            if (register) ...[
-                              Text(
-                                t(
-                                  'สร้างบัญชี RescueLink',
-                                  'Create your RescueLink account',
-                                ),
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                t(
-                                  'ใช้อีเมลจริงที่เปิดอ่านได้ คุณต้องยืนยันอีเมลก่อนเข้าสู่ระบบ',
-                                  'Use an email you can access. Verify it before logging in.',
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              TextFormField(
-                                key: const ValueKey('signup-name'),
-                                controller: displayName,
-                                enabled: !busy,
-                                maxLength: 100,
-                                textInputAction: TextInputAction.next,
-                                autofillHints: const [AutofillHints.nickname],
-                                decoration: InputDecoration(
-                                  labelText: t('ชื่อที่แสดง', 'Display name'),
-                                  helperText: t(
-                                    'ชื่อหรือนามเรียกขานที่ต้องการใช้',
-                                    'Your name or preferred nickname',
+                            const SizedBox(height: 20),
+                            _emailField(),
+                            const SizedBox(height: 14),
+                            _passwordField(),
+                            const SizedBox(height: 10),
+                            // Session stays in secure storage for off-grid startup.
+                            Row(
+                              children: [
+                                const Spacer(),
+                                TextButton(
+                                  key: const ValueKey('forgot-password-button'),
+                                  onPressed: busy ? null : _openForgotPassword,
+                                  style: TextButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    minimumSize: Size.zero,
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
                                   ),
-                                  prefixIcon: const Icon(Icons.person_outline),
-                                  border: const OutlineInputBorder(),
-                                ),
-                                validator: (value) =>
-                                    (value?.trim().isEmpty ?? true)
-                                    ? t(
-                                        'กรุณากรอกชื่อที่แสดง',
-                                        'Enter a display name',
-                                      )
-                                    : null,
-                              ),
-                              const SizedBox(height: 12),
-                            ],
-                            field(false),
-                            const SizedBox(height: 12),
-                            field(true),
-                            if (register) ...[
-                              const SizedBox(height: 12),
-                              TextFormField(
-                                key: const ValueKey('signup-confirmation'),
-                                controller: confirmation,
-                                enabled: !busy,
-                                obscureText: hidden,
-                                autocorrect: false,
-                                enableSuggestions: false,
-                                autofillHints: const [
-                                  AutofillHints.newPassword,
-                                ],
-                                textInputAction: TextInputAction.done,
-                                onFieldSubmitted: (_) => submit(),
-                                decoration: InputDecoration(
-                                  labelText: t(
-                                    'ยืนยันรหัสผ่าน',
-                                    'Confirm password',
+                                  child: Text(
+                                    t('ลืมรหัสผ่าน?', 'Forgot password?'),
+                                    style: const TextStyle(
+                                      color: orange,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
-                                  prefixIcon: const Icon(Icons.lock_outline),
-                                  border: const OutlineInputBorder(),
                                 ),
-                                validator: (value) =>
-                                    value == null || value.isEmpty
-                                    ? t(
-                                        'กรุณายืนยันรหัสผ่าน',
-                                        'Confirm your password',
-                                      )
-                                    : value != password.text
-                                    ? t(
-                                        'รหัสผ่านทั้งสองช่องไม่ตรงกัน',
-                                        'Passwords do not match',
-                                      )
-                                    : null,
-                              ),
-                            ],
-                            CheckboxListTile(
-                              value: claimGuest,
-                              onChanged: busy
-                                  ? null
-                                  : (value) =>
-                                        setState(() => claimGuest = value!),
-                              title: Text(
-                                t(
-                                  'ผูกข้อมูล Guest เดิมกับบัญชีนี้',
-                                  'Move guest data to this account',
-                                ),
-                              ),
-                              subtitle: Text(
-                                t(
-                                  'ย้ายประวัติ SOS และคิวส่งทั้งหมด ใช้ได้เมื่อบัญชียังไม่มีข้อมูลในเครื่องนี้',
-                                  'Moves history, SOS and outbox; available before this account has local data',
-                                ),
-                              ),
-                              contentPadding: EdgeInsets.zero,
-                              controlAffinity: ListTileControlAffinity.leading,
+                              ],
                             ),
+                            // Error / notice
                             if (error != null)
-                              Text(
-                                error!,
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.error,
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  top: 8,
+                                  bottom: 4,
+                                ),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? const Color(0xFF3D181C)
+                                        : const Color(0xFFFFEBEE),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    error!,
+                                    style: const TextStyle(
+                                      color: Color(0xFFE04C4C),
+                                      fontSize: 13,
+                                    ),
+                                  ),
                                 ),
                               ),
                             if (notice != null)
@@ -534,47 +457,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                               ),
-                            Row(
-                              children: [
-                                Checkbox(
-                                  value: remember,
-                                  activeColor: orange,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  onChanged: busy
-                                      ? null
-                                      : (value) =>
-                                            setState(() => remember = value!),
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                                Flexible(
-                                  child: Text(
-                                    t('จดจำฉัน', 'Remember me'),
-                                    style: const TextStyle(fontSize: 13),
-                                  ),
-                                ),
-                                const Spacer(),
-                                if (!register)
-                                  TextButton(
-                                    key: const ValueKey('forgot-password-button'),
-                                    onPressed: busy ? null : _openForgotPassword,
-                                    style: TextButton.styleFrom(
-                                      padding: EdgeInsets.zero,
-                                      minimumSize: Size.zero,
-                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                    ),
-                                    child: Text(
-                                      t('ลืมรหัสผ่าน?', 'Forgot password?'),
-                                      style: const TextStyle(
-                                        color: orange,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
+                            const SizedBox(height: 14),
+                            // Login button
                             DecoratedBox(
                               decoration: BoxDecoration(
                                 gradient: const LinearGradient(
@@ -590,26 +474,32 @@ class _LoginScreenState extends State<LoginScreen> {
                                   backgroundColor: Colors.transparent,
                                   foregroundColor: Colors.white,
                                   shadowColor: Colors.transparent,
-                                  minimumSize: const Size.fromHeight(50),
+                                  minimumSize: const Size.fromHeight(52),
                                   shape: const StadiumBorder(),
                                 ),
                                 onPressed: busy ? null : submit,
-                                child: Text(
-                                  busy
-                                      ? t('กำลังดำเนินการ…', 'Please wait…')
-                                      : register
-                                      ? t('สมัครใช้งาน', 'Create account')
-                                      : t('เข้าสู่ระบบ', 'Log in'),
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
+                                child: busy
+                                    ? const SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2.5,
+                                        ),
+                                      )
+                                    : Text(
+                                        t('เข้าสู่ระบบ', 'Log in'),
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
                               ),
                             ),
+                            const SizedBox(height: 18),
+                            // Divider
                             Padding(
                               padding: const EdgeInsets.symmetric(
-                                vertical: 14,
                                 horizontal: 18,
                               ),
                               child: Row(
@@ -625,7 +515,15 @@ class _LoginScreenState extends State<LoginScreen> {
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 12,
                                     ),
-                                    child: Text(t('หรือ', 'or')),
+                                    child: Text(
+                                      t('ยังไม่มีบัญชี?', 'No account yet?'),
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: isDark
+                                            ? const Color(0xFF94A3B8)
+                                            : Colors.grey,
+                                      ),
+                                    ),
                                   ),
                                   Expanded(
                                     child: Divider(
@@ -637,85 +535,75 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 18),
-                            Material(
-                              color: isDark
-                                  ? const Color(0xFF161C24)
-                                  : const Color(0xFFF0EBE3),
-                              borderRadius: BorderRadius.circular(22),
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(22),
-                                onTap: busy
-                                    ? null
-                                    : () =>
-                                          Navigator.of(context).pushReplacement(
-                                            MaterialPageRoute<void>(
-                                              builder: (_) =>
-                                                  const NearbyTestScreen(),
-                                            ),
-                                          ),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 16,
+                            const SizedBox(height: 14),
+                            // Register button
+                            OutlinedButton.icon(
+                              key: const ValueKey('register-button'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: orange,
+                                side: const BorderSide(
+                                  color: orange,
+                                  width: 1.5,
+                                ),
+                                minimumSize: const Size.fromHeight(50),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(28),
+                                ),
+                              ),
+                              onPressed: busy ? null : _openRegister,
+                              icon: const Icon(Icons.person_add_outlined),
+                              label: Text(
+                                t('สมัครสมาชิก RescueLink', 'Create account'),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            // Info about offline mode
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? const Color(0xFF161C24)
+                                    : const Color(0xFFF0EBE3),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: isDark
+                                      ? const Color(0xFF283442)
+                                      : const Color(0xFFE3E1DE),
+                                ),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(
+                                    Icons.wifi_off_rounded,
+                                    size: 18,
+                                    color: isDark
+                                        ? const Color(0xFF94A3B8)
+                                        : const Color(0xFF555F6D),
                                   ),
-                                  child: Row(
-                                    children: [
-                                      CircleAvatar(
-                                        backgroundColor: isDark
-                                            ? const Color(0xFF382314)
-                                            : const Color(0xFFFFEECF),
-                                        foregroundColor: const Color(
-                                          0xFFFF8A00,
-                                        ),
-                                        radius: 22,
-                                        child: const Icon(
-                                          Icons.person_rounded,
-                                          size: 33,
-                                        ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      t(
+                                        'ต้องมีอินเทอร์เน็ตเพื่อสมัครและเข้าสู่ระบบครั้งแรกบนเครื่องนี้ '
+                                            'หลังจากนั้น '
+                                            'คุณสามารถใช้ SOS และสื่อสารผ่าน Nearby ได้โดยไม่ต้องมีอินเทอร์เน็ต',
+                                        'After your first sign-in, you can use SOS and Nearby messaging without internet.',
                                       ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              t(
-                                                'เข้าใช้งานแบบผู้เยี่ยมชม (Guest)',
-                                                'Continue as a guest',
-                                              ),
-                                              style: const TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 3),
-                                            Text(
-                                              t(
-                                                'ใช้งานได้ทันที ไม่ต้องสมัครบัญชี',
-                                                'Get started without an account',
-                                              ),
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: isDark
-                                                    ? const Color(0xFF94A3B8)
-                                                    : const Color(0xFF858585),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Icon(
-                                        Icons.chevron_right_rounded,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        height: 1.5,
                                         color: isDark
                                             ? const Color(0xFF94A3B8)
-                                            : const Color(0xFF727778),
-                                        size: 22,
+                                            : const Color(0xFF555F6D),
                                       ),
-                                    ],
+                                    ),
                                   ),
-                                ),
+                                ],
                               ),
                             ),
                             const SizedBox(height: 20),

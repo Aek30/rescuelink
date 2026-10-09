@@ -4,13 +4,14 @@ import 'package:flutter/material.dart';
 abstract final class RescueTheme {
   static const cream = Color(0xFFFCF8F1);
   static const navy = Color(0xFF102D43);
-  static const orange = Color(0xFFFF6826);
+  static const orange = Color(0xFFFFB37B);
   static const orangeInk = Color(0xFFB94612);
   static const peach = Color(0xFFFFEADB);
   static const muted = Color(0xFF687782);
   static const border = Color(0xFFEAE2D8);
-  static const success = Color(0xFF23765B);
-  static const danger = Color(0xFFC83F49);
+  static const success = Color(0xFF22C55E);
+  static const danger = Color(0xFFFF4D4D);
+  static const rescue = Color(0xFF3B82F6);
 
   static Color mutedFor(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark ? darkTextMuted : muted;

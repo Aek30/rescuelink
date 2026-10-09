@@ -49,3 +49,6 @@ app.*.map.json
 /config/supabase.local.json
 /config/test-account.local.json
 /supabase/.temp/
+
+# Temporary report rendering and optional Thai shaping dependencies.
+/tmp/

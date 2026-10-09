@@ -23,6 +23,8 @@ class NearbyService extends ChangeNotifier {
   final ConnectionSession connectionSession;
   bool backgroundActive = false;
   bool autoConnect = false;
+  bool continuousDiscovery = false;
+  Future<void>? _startingNearby;
   Timer? _autoTimer;
   bool _autoBusy = false;
   Future<void>? _refreshingDiscovery;
@@ -82,6 +84,20 @@ class NearbyService extends ChangeNotifier {
     _foreground = value;
     if (!value && !backgroundActive) unawaited(stopAll());
   }
+
+  /// Discover continuously while leaving outbound connections to the user.
+  Future<void> startNearby() => _startingNearby ??= (() async {
+    await _stopping;
+    if (!_foreground || _disposed) return;
+    continuousDiscovery = true;
+    final session = _session;
+    // Resume can return from Android settings while native flags are still up.
+    if ((isAdvertising || isDiscovering) && !await checkPermissions()) return;
+    if (!_current(session)) return;
+    await startAdvertising();
+    if (!_current(session) || !continuousDiscovery || !isAdvertising) return;
+    await startDiscovery();
+  })().whenComplete(() => _startingNearby = null);
 
   Future<void> startAutomatic() => _startingAutomatic ??= _startAutomatic()
       .whenComplete(() => _startingAutomatic = null);
@@ -486,7 +502,7 @@ class NearbyService extends ChangeNotifier {
       connectionStatus = 'Connected to ${device.name}';
       _log(connectionStatus);
       // Reduce radio contention after finding the intended peer.
-      if (!autoConnect) unawaited(stopDiscovery());
+      if (!autoConnect && !continuousDiscovery) unawaited(stopDiscovery());
     } else {
       reportError(
         status == Status.REJECTED
@@ -606,6 +622,7 @@ class NearbyService extends ChangeNotifier {
 
   Future<void> stopAll() {
     autoConnect = false;
+    continuousDiscovery = false;
     _autoTimer?.cancel();
     if (_stopping != null) return _stopping!;
     ++_session; // Ignore late callbacks from the previous session.

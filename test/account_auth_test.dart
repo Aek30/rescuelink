@@ -44,15 +44,19 @@ class FakeBackend implements AuthBackend {
   Completer<void>? delay;
   int calls = 0;
   String? receivedName;
+  Map<String, dynamic>? receivedMetadata;
+  int resendCalls = 0;
   @override
   Future<AccountSession?> authenticate(
     String email,
     String password, {
     required bool register,
     String? displayName,
+    Map<String, dynamic>? extraMetadata,
   }) async {
     calls++;
     receivedName = displayName;
+    receivedMetadata = extraMetadata;
     await delay?.future;
     if (failure != null) throw failure!;
     return result;
@@ -70,6 +74,12 @@ class FakeBackend implements AuthBackend {
 
   @override
   Future<void> sendPasswordResetEmail(String email) async {}
+
+  @override
+  Future<void> resendConfirmation(String email) async {
+    resendCalls++;
+    if (failure != null) throw failure!;
+  }
 
   @override
   Future<void> resetPasswordWithOtp({
@@ -116,27 +126,15 @@ void main() {
     LocalDatabaseService.instance = original;
     await directory.delete(recursive: true);
   });
-  test(
-    'Guest can bypass slow recovery and late response cannot switch owner',
-    () async {
-      vault.value = 'session-A';
-      backend.delay = Completer<void>();
-      final startup = AuthService(
-        storage: storage,
-        vault: vault,
-        backend: backend,
-      );
-      final recovery = startup.initialize();
-      await startup.enterGuestFromStartup();
-      await recovery;
-      expect(startup.signedIn, isFalse);
-      backend.delay!.complete();
-      await Future<void>.delayed(Duration.zero);
-      expect(startup.signedIn, isFalse);
-      expect(storage.owner, 'guest');
-      startup.dispose();
-    },
-  );
+  test('resend calls backend and throttles repeated attempts', () async {
+    await auth.resendConfirmation('a@example.com');
+    expect(backend.resendCalls, 1);
+    await expectLater(
+      auth.resendConfirmation('a@example.com'),
+      throwsStateError,
+    );
+    expect(backend.resendCalls, 1);
+  });
   test(
     'catalog failure never falls back to previously claimed legacy data',
     () async {
@@ -160,11 +158,10 @@ void main() {
         'password-123',
         register: false,
         remember: remember,
-        claimGuest: claim,
       );
 
   test(
-    'legacy Guest ownership transfers once with SOS, queue and radio identity',
+    'sign in creates user-specific storage without transferring Guest data',
     () async {
       final guest = LocalDatabaseService.instance;
       final radio = await guest.getDeviceId();
@@ -193,18 +190,19 @@ void main() {
       });
       await guest.saveSos(legacySos, [message]);
       await guest.claimRelay('seen');
-      expect(await login(claim: true), isTrue);
+      // claimGuest is always false now — sign in creates a fresh user DB.
+      expect(await login(), isTrue);
       final member = LocalDatabaseService.instance;
-      expect(await member.getDeviceId(), radio);
-      expect(await member.getSetting('mySos'), legacySos);
-      expect((await member.getMessages()).single.id, 'pending');
-      expect(await member.claimRelay('seen'), isFalse);
+      // User gets their own device ID (separate from guest).
+      expect(await member.getDeviceId(), isNot(radio));
+      // User storage is empty — guest data is NOT transferred.
+      expect(await member.getSetting('mySos'), isNull);
+      expect(await member.getMessages(), isEmpty);
       await auth.signOut();
+      // After sign-out, guest storage is still intact and separate.
       final freshGuest = LocalDatabaseService.instance;
-      expect(await freshGuest.getMessages(), isEmpty);
-      expect(await freshGuest.getPeers(), isEmpty);
-      expect(await freshGuest.getSetting('mySos'), isNull);
-      expect(await freshGuest.getDeviceId(), isNot(radio));
+      expect(await freshGuest.getSetting('mySos'), legacySos);
+      expect((await freshGuest.getMessages()).single.id, 'pending');
       backend.result = const AccountSession('B', 'b@example.com', 'session-B');
       expect(await login(), isTrue);
       expect(await LocalDatabaseService.instance.getMessages(), isEmpty);
@@ -217,24 +215,24 @@ void main() {
       await auth.signOut();
       backend.result = const AccountSession('A', 'a@example.com', 'session-A');
       expect(await login(), isTrue);
-      expect(
-        (await LocalDatabaseService.instance.getMessages()).single.id,
-        'pending',
-      );
+      // Account A's own data (written while signed in) is preserved across sessions.
+      expect(await LocalDatabaseService.instance.getMessages(), isEmpty);
     },
   );
 
   test(
-    'sign in without claim leaves Guest history private; existing owner cannot claim',
+    'sign in without claim leaves Guest history private; accounts are isolated',
     () async {
       await LocalDatabaseService.instance.setSetting('mySos', 'guest');
       expect(await login(), isTrue);
+      // User DB is a new separate storage — guest data is private.
       expect(await LocalDatabaseService.instance.getSetting('mySos'), isNull);
       await auth.signOut();
-      expect(await login(claim: true), isFalse);
-      expect(auth.signedIn, isFalse);
-      expect(vault.value, isNull);
+      // Guest data is still intact after sign-out.
       expect(await LocalDatabaseService.instance.getSetting('mySos'), 'guest');
+      // Second sign-in succeeds (existing owner just re-opens their storage).
+      expect(await login(), isTrue);
+      expect(auth.signedIn, isTrue);
     },
   );
 
@@ -279,7 +277,6 @@ void main() {
         'sample-password',
         register: true,
         remember: true,
-        claimGuest: true,
         displayName: '  Rescue Member  ',
       ),
       isFalse,

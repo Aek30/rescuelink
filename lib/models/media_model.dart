@@ -11,6 +11,7 @@ enum MediaStatus {
   // ฝั่งผู้รับ
   receiving, // กำลังรับไฟล์
   received, // รับครบ + ตรวจ checksum ผ่าน + บันทึกสำเร็จ
+  relayQueued, // เก็บไฟล์ถาวร รอส่งต่อไปยังปลายทาง
   // Cloud (Phase 4 ช่วงที่ 2)
   uploadPending,
   uploading,

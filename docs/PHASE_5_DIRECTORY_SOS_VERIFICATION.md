@@ -9,6 +9,8 @@
 - active SOS หมดอายุเมื่อครบ 24 ชั่วโมงจาก updatedAt; presence เก่าไม่เท่ากับ SOS ยกเลิก
 - คิวเครื่องกลางหยุดส่ง active SOS ที่หมดอายุหรือ revision ที่ถูกแทนแล้ว
 - เก็บ directory, presence และ SOS ledger ใน settings เดิม ไม่ล้างข้อมูลผู้ใช้และไม่เพิ่ม schema version
+- ส่งรูป/วิดีโอผ่าน Relay โดยเก็บไฟล์ที่ B ตรวจแล้วในโฟลเดอร์ relay_media และใช้ relay_queue / relay_ack_queue เดิม
+- จำกัดไฟล์ผ่าน Relay ไม่เกิน 5 MiB; ตรวจ checksum และขนาดทุก hop; B ไม่สร้างข้อความสื่อในแชตของตัวเอง
 
 ## Wire format ที่ใช้งานจริง
 
@@ -26,8 +28,9 @@
 
 ## ผลทดสอบอัตโนมัติ
 
-flutter test --no-pub: ผ่าน 138 tests; ข้าม 4 opt-in/live tests
-ตรวจขั้นสุดท้ายวันที่ 2026-10-06: flutter analyze --no-pub ไม่มี issues
+ตรวจวันที่ 2026-10-08: flutter test --no-pub ผ่าน 145 tests; ข้าม 4 opt-in/live tests
+เพิ่มเคส relay media ตรวจไฟล์ที่เก็บในเครื่องกลาง, payload ID ของ hop ใหม่, และการคง origin/destination/path
+flutter analyze --no-pub ไม่มี issues
 flutter build apk --debug --no-pub สำเร็จ: build/app/outputs/flutter-apk/app-debug.apk
 เพิ่ม 11 tests ใน network_presence_sos_test.dart ใช้ transport ทดสอบและ SQLite แยกสามเครื่อง
 ครอบคลุม discovery, chat/ACK, Rescue, stale replay, path วน/ผิดผู้ส่ง, payload ใหญ่,
@@ -51,4 +54,4 @@ SOS lifecycle, targeted relay, offline/restart, cancellation ก่อน open �
 
 หากบังคับจังหวะ ACK หายหรือ packet ซ้ำไม่ได้ ให้ระบุว่ายังไม่ตรวจบนเครื่องจริง
 การทดสอบเส้นทางวนใช้ topology ที่มีวงจรแยกจากเคส A–B–C และต้องยืนยันว่า traffic หยุด
-สื่อรูป/วิดีโอผ่าน Relay ยังอยู่นอกงานรอบนี้ และ Phase 5 ยังต้องผ่านการทดสอบมือถือจริงก่อนปิดงาน
+ทดสอบสื่อผ่าน Relay บนมือถือจริงสามเครื่อง และหลักฐานเส้นทาง A–B–C ยังต้องบันทึกก่อนปิด Phase 5

@@ -3,6 +3,7 @@ import '../services/app_preferences.dart';
 import '../services/auth_service.dart';
 import '../services/sos_sync_service.dart';
 import 'sync_screen.dart';
+import 'member_screen.dart';
 import '../theme/rescue_theme.dart';
 
 class SettingsPanel extends StatelessWidget {
@@ -16,11 +17,13 @@ class SettingsPanel extends StatelessWidget {
     required this.onDevice,
     required this.onConnection,
     required this.onExit,
+    this.beforeAccountExit,
   });
   final int pending;
   final bool rescue, ready;
   final ValueChanged<bool> onRescue;
   final VoidCallback onQueue, onDevice, onConnection, onExit;
+  final Future<void> Function()? beforeAccountExit;
 
   @override
   Widget build(BuildContext context) {
@@ -151,6 +154,17 @@ class SettingsPanel extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
+                    if (AuthService.instance.signedIn)
+                      TextButton.icon(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                MemberScreen(beforeExit: beforeAccountExit),
+                          ),
+                        ),
+                        icon: const Icon(Icons.manage_accounts),
+                        label: const Text('ดู / แก้ไขข้อมูลสมาชิก'),
+                      ),
                     Text(
                       AuthService.instance.session?.email ??
                           t('ผู้ใช้ Guest', 'Guest user'),

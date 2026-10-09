@@ -56,6 +56,10 @@ class MainActivity : FlutterActivity() {
         sessionChannel!!.setMethodCallHandler { call, result ->
                 try {
                     when (call.method) {
+                        "wifiEnabled" -> {
+                            val wifi = applicationContext.getSystemService(android.content.Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+                            result.success(wifi.isWifiEnabled)
+                        }
                         "dateSettings" -> {
                             startActivity(Intent(android.provider.Settings.ACTION_DATE_SETTINGS))
                             result.success(null)

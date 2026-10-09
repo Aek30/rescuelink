@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:location/location.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -10,6 +11,7 @@ class PermissionService {
     'Nearby Devices': 'Not checked',
     'Location': 'Not checked',
     'Location service': 'Not checked',
+    'Wi-Fi': 'Not checked',
   };
   String? error;
 
@@ -83,6 +85,15 @@ class PermissionService {
       if (radio == ServiceStatus.disabled) {
         statuses['Bluetooth'] = 'Permission granted; radio off';
         error = 'Turn on Bluetooth and Wi-Fi radio, then try again.';
+        return false;
+      }
+      final wifiEnabled = await const MethodChannel(
+        'com.rmutt.rescuelink/session',
+      ).invokeMethod<bool>('wifiEnabled');
+      statuses['Wi-Fi'] = wifiEnabled == true ? 'On' : 'Off';
+      if (wifiEnabled != true) {
+        error =
+            'เปิด Wi-Fi เพื่อค้นหาอุปกรณ์ใกล้เคียง ไม่จำเป็นต้องเชื่อมต่ออินเทอร์เน็ต';
         return false;
       }
       return true;
