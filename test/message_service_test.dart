@@ -17,6 +17,7 @@ class Transport extends NearbyService {
   Transport() : super(nearby: NativeStub());
   final devices = <NearbyDevice>[];
   final packets = <MessageModel>[];
+  final endpointPackets = <(String, MessageModel)>[];
   bool fail = false;
   final failedEndpoints = <String>{};
   Future<void> Function(MessageModel)? onSend;
@@ -29,6 +30,7 @@ class Transport extends NearbyService {
     }
     final packet = MessageModel.fromJson(payload);
     packets.add(packet);
+    endpointPackets.add((endpointId, packet));
     await onSend?.call(packet);
   }
 
@@ -569,6 +571,36 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 50));
     expect(transport.packets, isEmpty);
   });
+
+  test(
+    'a new direct endpoint receives an introduction while retry is busy',
+    () async {
+      await connect();
+      final blocked = Completer<void>();
+      final entered = Completer<void>();
+      transport.onSend = (packet) async {
+        if (packet.type == MessageType.presence && !entered.isCompleted) {
+          entered.complete();
+          await blocked.future;
+        }
+      };
+      final retry = service.retry();
+      await entered.future;
+      transport.packets.clear();
+      transport.devices.add(
+        NearbyDevice(endpointId: 'second', name: 'Phone C')..isConnected = true,
+      );
+      transport.changed();
+      await Future<void>.delayed(Duration.zero);
+      final intros = transport.endpointPackets.where(
+        (entry) =>
+            entry.$1 == 'second' && entry.$2.type == MessageType.deviceInfo,
+      );
+      expect(intros, isNotEmpty);
+      blocked.complete();
+      await retry;
+    },
+  );
   test(
     'identity, history and queued messages survive reopening SQLite',
     () async {

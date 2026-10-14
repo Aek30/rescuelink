@@ -47,6 +47,9 @@ class TestNearby extends Fake implements Nearby {
   bool nativeAdvertising = false;
   int accepted = 0;
   int stopped = 0;
+  int discoveryStops = 0;
+  final List<String> requested = [];
+  Completer<bool>? pendingRequest;
   Uint8List? sent;
 
   @override
@@ -93,10 +96,11 @@ class TestNearby extends Fake implements Nearby {
     required OnConnectionResult onConnectionResult,
     required OnDisconnected onDisconnected,
   }) async {
+    requested.add(id);
     initiated = onConnectionInitiated;
     result = onConnectionResult;
     disconnected = onDisconnected;
-    return requestOk;
+    return pendingRequest == null ? requestOk : await pendingRequest!.future;
   }
 
   @override
@@ -123,7 +127,10 @@ class TestNearby extends Fake implements Nearby {
   }
 
   @override
-  Future<void> stopDiscovery() async {}
+  Future<void> stopDiscovery() async {
+    discoveryStops++;
+  }
+
   @override
   Future<void> stopAllEndpoints() async {
     stopped++;
@@ -183,15 +190,15 @@ void main() {
   );
 
   test(
-    'home search discovers without auto connecting and keeps scanning after manual connection',
+    'home search connects automatically and keeps scanning after connection',
     () async {
       await Future.wait([service.startNearby(), service.startNearby()]);
       expect(native.advertiseCalls, 1);
       expect(native.discoveryCalls, 1);
       native.found('A', 'Rescue-A', NearbyService.serviceId);
-      expect(service.discoveredDevices.single.isConnecting, isFalse);
-      expect(service.autoConnect, isFalse);
-      await service.requestConnection('A');
+      await service.startNearby();
+      expect(service.discoveredDevices.single.isConnecting, isTrue);
+      expect(service.autoConnect, isTrue);
       native.initiated('A', ConnectionInfo('Rescue-A', '1234', false));
       await Future<void>.delayed(Duration.zero);
       native.result('A', Status.CONNECTED);
@@ -272,6 +279,67 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       native.result('A', Status.CONNECTED);
       expect(service.connectedDevices.single.endpointId, 'A');
+    },
+  );
+  test(
+    'manual scan connects two advertisers without stopping at the first',
+    () async {
+      await service.startDiscovery();
+      final stops = native.discoveryStops;
+      native.found('A', 'Rescue-A', NearbyService.serviceId);
+      await service.requestConnection('A');
+      native.initiated('A', ConnectionInfo('Rescue-A', '1234', false));
+      await Future<void>.delayed(Duration.zero);
+      native.result('A', Status.CONNECTED);
+      expect(service.isDiscovering, isTrue);
+      expect(native.discoveryStops, stops);
+      native.found('C', 'Rescue-C', NearbyService.serviceId);
+      await service.requestConnection('C');
+      native.initiated('C', ConnectionInfo('Rescue-C', '5678', false));
+      await Future<void>.delayed(Duration.zero);
+      native.result('C', Status.CONNECTED);
+      expect(service.connectedDevices.map((d) => d.endpointId), ['A', 'C']);
+    },
+  );
+
+  testWidgets('automatic caller falls back when the peer only advertises', (
+    tester,
+  ) async {
+    await service.stopAll();
+    service.dispose();
+    var now = DateTime(2026);
+    service = NearbyService(
+      nearby: native,
+      permissions: permissions,
+      clock: () => now,
+    );
+    service.setName('Rescue-Z');
+    await service.startAutomatic();
+    native.found('A', 'Rescue-A', NearbyService.serviceId);
+    await tester.pump();
+    expect(native.requested, isEmpty);
+    now = now.add(const Duration(seconds: 4));
+    await tester.pump(const Duration(seconds: 4));
+    expect(native.requested, ['A']);
+    native.initiated('A', ConnectionInfo('Rescue-A', '1234', false));
+    await tester.pump();
+    native.result('A', Status.CONNECTED);
+    expect(service.connectedDevices, hasLength(1));
+    await service.stopAll();
+  });
+
+  test(
+    'peer found during another request is connected without waiting for a timer',
+    () async {
+      await service.startAutomatic();
+      native.pendingRequest = Completer<bool>();
+      native.found('A', 'Rescue-A', NearbyService.serviceId);
+      await Future<void>.delayed(Duration.zero);
+      expect(native.requested, ['A']);
+      native.found('C', 'Rescue-C', NearbyService.serviceId);
+      native.pendingRequest!.complete(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(native.requested, ['A', 'C']);
     },
   );
   test(

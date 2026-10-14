@@ -64,7 +64,7 @@ void main() {
     AppPreferences.instance.english = true;
     await tester.pumpWidget(app());
     await tester.pumpAndSettle();
-    expect(find.text('Dark mode'), findsOneWidget);
+    expect(find.text('Display theme'), findsOneWidget);
     expect(tester.takeException(), isNull);
     AppPreferences.instance.dark = false;
     AppPreferences.instance.english = false;

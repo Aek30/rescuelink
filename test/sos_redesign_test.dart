@@ -51,14 +51,9 @@ void main() {
         image.dispose();
       });
     }
-    await tester.tap(find.text('หน่วยกู้ภัย'));
-    await tester.pumpAndSettle();
-    expect(find.text('พร้อมเป็นคนช่วย'), findsOneWidget);
-    // Navigating roles must not broadcast a Rescue state change.
+    expect(find.text('หน่วยกู้ภัย'), findsNothing);
     expect(service.rescueMode, isFalse);
-    await tester.tap(find.text('ขอความช่วยเหลือ'));
-    await tester.pumpAndSettle();
-    final send = find.text('ตรวจข้อมูลและส่ง SOS');
+    final send = find.text('ส่งสัญญาณ SOS');
     await tester.ensureVisible(send);
     await tester.pumpAndSettle();
     if (const bool.fromEnvironment('UX_CAPTURE')) {
@@ -89,7 +84,7 @@ void main() {
     );
     tester.view.physicalSize = const Size(320, 700);
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('ตรวจข้อมูลและส่ง SOS'));
+    await tester.ensureVisible(find.text('ส่งสัญญาณ SOS'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });

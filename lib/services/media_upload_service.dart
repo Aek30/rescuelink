@@ -150,7 +150,7 @@ class MediaUploadService extends ChangeNotifier {
   final MediaCloud cloud;
   final MediaFile? Function(String) lookup;
   final Map<String, MediaUpload> jobs = {};
-  final Set<String> _selectedThisSession = {};
+  String? _scopeOwner;
   Timer? _timer;
   bool _disposed = false, busy = false;
   MediaUpload? forMedia(String id) {
@@ -163,6 +163,7 @@ class MediaUploadService extends ChangeNotifier {
   }
 
   Future<void> initialize() async {
+    _scopeOwner = cloud.owner;
     final saved = await database.getSetting('mediaUploadQueue');
     if (saved != null) {
       for (final raw in jsonDecode(saved) as List) {
@@ -176,6 +177,10 @@ class MediaUploadService extends ChangeNotifier {
       }
     }
     await _save();
+    _timer ??= Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => unawaited(retryPending()),
+    );
   }
 
   Future<void> _save() => database.setSetting(
@@ -185,6 +190,7 @@ class MediaUploadService extends ChangeNotifier {
   Future<void> enqueue(String id) async {
     final owner = cloud.owner;
     if (owner == null) throw StateError('กรุณาเข้าสู่ระบบก่อน Upload');
+    if (owner != _scopeOwner) throw StateError('บัญชีเปลี่ยนแล้ว');
     final media = lookup(id);
     if (media == null ||
         media.localPath.isEmpty ||
@@ -205,7 +211,6 @@ class MediaUploadService extends ChangeNotifier {
     jobs[id]!.state = UploadState.queued;
     jobs[id]!.attempts = 0;
     jobs[id]!.nextAttempt = null;
-    _selectedThisSession.add(id);
     await _save();
     _notify();
     _timer ??= Timer.periodic(
@@ -216,15 +221,34 @@ class MediaUploadService extends ChangeNotifier {
   }
 
   Future<void> retryPending() async {
-    if (busy || _disposed || cloud.owner == null) return;
+    if (busy ||
+        _disposed ||
+        cloud.owner == null ||
+        cloud.owner != _scopeOwner) {
+      return;
+    }
     busy = true;
     try {
+      // Discover durable files, including files created while offline. Relay
+      // intermediaries must never archive someone else's temporary payloads.
+      for (final media in await database.getAllMedia()) {
+        if (_disposed || cloud.owner != _scopeOwner) return;
+        if (media.localPath.isEmpty ||
+            media.status == MediaStatus.receiving ||
+            media.status == MediaStatus.relayQueued) {
+          continue;
+        }
+        jobs.putIfAbsent(
+          media.mediaId,
+          () => MediaUpload(mediaId: media.mediaId, owner: _scopeOwner!),
+        );
+      }
+      await _save();
+      _notify();
       for (final job in jobs.values.toList()) {
-        if (_disposed) return;
-        if (!_selectedThisSession.contains(job.mediaId) ||
-            job.owner != cloud.owner ||
+        if (_disposed || cloud.owner != _scopeOwner) return;
+        if (job.owner != cloud.owner ||
             job.state == UploadState.ready ||
-            job.attempts >= 5 ||
             (job.nextAttempt?.isAfter(DateTime.now()) ?? false)) {
           continue;
         }
@@ -257,11 +281,13 @@ class MediaUploadService extends ChangeNotifier {
           job.bytes = media.fileSize;
           job.nextAttempt = null;
         } catch (e) {
-          job.state = UploadState.failed;
+          job.state = e is SocketException || e is TimeoutException
+              ? UploadState.queued
+              : UploadState.failed;
           job.attempts++;
           job.error = '$e';
           job.nextAttempt = DateTime.now().add(
-            Duration(seconds: 15 * (1 << job.attempts)),
+            Duration(seconds: 15 * (1 << job.attempts.clamp(0, 4))),
           );
         }
         await _save();

@@ -216,6 +216,47 @@ void main() {
   );
 
   test(
+    'direct links agree on both ends and outrank newer relay advertisements',
+    () async {
+      final a = nodes[0].myId!;
+      final b = nodes[1].myId!;
+      final c = nodes[2].myId!;
+      await exchange();
+      expect(nodes[0].connectionLabel(c), contains('ผ่าน B'));
+      await connect(0, 2);
+      expect(nodes[0].connectionLabel(c), 'เชื่อมต่อโดยตรง');
+      expect(nodes[2].connectionLabel(a), 'เชื่อมต่อโดยตรง');
+      expect(nodes[0].relayPathForPeer(c), [a, c]);
+      expect(nodes[2].relayPathForPeer(a), [c, a]);
+
+      await receive(
+        2,
+        1,
+        directoryPacket(1, 2, [
+          {...advertisement(a, b), 'sequence': 50000},
+        ]),
+      );
+      expect(nodes[2].connectionLabel(a), 'เชื่อมต่อโดยตรง');
+      expect(nodes[2].relayPathForPeer(a), [c, a]);
+
+      wires[0].devices.removeWhere((d) => d.endpointId == '2');
+      wires[2].devices.removeWhere((d) => d.endpointId == '0');
+      wires[0].changed();
+      wires[2].changed();
+      await receive(
+        2,
+        1,
+        directoryPacket(1, 2, [
+          {...advertisement(a, b), 'sequence': 50001},
+        ], sequence: 10001),
+      );
+      expect(nodes[2].isOnline(a), isFalse);
+      expect(nodes[2].connectionLabel(a), contains('ผ่าน B'));
+      expect(nodes[2].relayPathForPeer(a), [c, b, a]);
+    },
+  );
+
+  test(
     'Rescue changes cross B and old cached entries cannot renew after restart',
     () async {
       final c = nodes[2].myId!;

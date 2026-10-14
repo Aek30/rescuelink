@@ -12,13 +12,16 @@ class NearbyService extends ChangeNotifier {
     Nearby? nearby,
     PermissionService? permissions,
     ConnectionSession? session,
+    DateTime Function()? clock,
   }) : _nearby = nearby ?? Nearby(),
+       _clock = clock ?? DateTime.now,
        connectionSession = session ?? ConnectionSession(),
        permissions = permissions ?? PermissionService();
 
   static const serviceId = 'com.rmutt.rescuelink';
   static const strategy = Strategy.P2P_CLUSTER;
   final Nearby _nearby;
+  final DateTime Function() _clock;
   final PermissionService permissions;
   final ConnectionSession connectionSession;
   bool backgroundActive = false;
@@ -31,6 +34,8 @@ class NearbyService extends ChangeNotifier {
   Future<void>? _connectingAvailable;
   final Set<String> _accepting = {};
   final Map<String, DateTime> _retryAfter = {};
+  final Map<String, DateTime> _firstFound = {};
+  bool _connectAgain = false;
   DateTime? _lastScan;
   Future<void>? _startingAutomatic, _startingAdvertising, _startingDiscovery;
   final Map<String, NearbyDevice> _devices = {};
@@ -85,7 +90,7 @@ class NearbyService extends ChangeNotifier {
     if (!value && !backgroundActive) unawaited(stopAll());
   }
 
-  /// Discover continuously while leaving outbound connections to the user.
+  /// Discover continuously and connect to everyone nearby automatically.
   Future<void> startNearby() => _startingNearby ??= (() async {
     await _stopping;
     if (!_foreground || _disposed) return;
@@ -94,9 +99,7 @@ class NearbyService extends ChangeNotifier {
     // Resume can return from Android settings while native flags are still up.
     if ((isAdvertising || isDiscovering) && !await checkPermissions()) return;
     if (!_current(session)) return;
-    await startAdvertising();
-    if (!_current(session) || !continuousDiscovery || !isAdvertising) return;
-    await startDiscovery();
+    await startAutomatic();
   })().whenComplete(() => _startingNearby = null);
 
   Future<void> startAutomatic() => _startingAutomatic ??= _startAutomatic()
@@ -114,15 +117,26 @@ class NearbyService extends ChangeNotifier {
     await startDiscovery();
     _autoTimer?.cancel();
     _autoTimer = Timer.periodic(
-      const Duration(seconds: 8),
+      const Duration(seconds: 2),
       (_) => unawaited(_connectAvailable()),
     );
     await _connectAvailable();
     _update();
   }
 
-  Future<void> _connectAvailable() => _connectingAvailable ??=
-      _connectAvailableNow().whenComplete(() => _connectingAvailable = null);
+  Future<void> _connectAvailable() {
+    if (_connectingAvailable != null) {
+      _connectAgain = true;
+      return _connectingAvailable!;
+    }
+    return _connectingAvailable = _connectAvailableNow().whenComplete(() {
+      _connectingAvailable = null;
+      if (_connectAgain && autoConnect && !_disposed) {
+        _connectAgain = false;
+        unawaited(_connectAvailable());
+      }
+    });
+  }
 
   Future<void> _connectAvailableNow() async {
     if (!autoConnect || _autoBusy || _disposed) return;
@@ -138,14 +152,26 @@ class NearbyService extends ChangeNotifier {
         await _rediscover();
       }
       for (final device in discoveredDevices) {
+        if (!device.isAvailable || device.isConnected || device.isConnecting) {
+          continue;
+        }
         // Both devices advertise and scan. For distinct names, elect one caller
         // so simultaneous outbound requests cannot cancel each other.
-        // Equal custom names retain randomized backoff; manual Connect is free.
-        if (deviceName.compareTo(device.name) > 0) continue;
-        // Random delay reduces simultaneous requests when both phones discover each other.
-        await Future<void>.delayed(
-          Duration(milliseconds: 200 + Random().nextInt(1000)),
-        );
+        // Give the elected caller a head start, then fall back for peers that
+        // only advertise and therefore cannot initiate a connection themselves.
+        if (deviceName.compareTo(device.name) > 0 &&
+            _clock().difference(
+                  _firstFound.putIfAbsent(device.endpointId, _clock),
+                ) <
+                const Duration(seconds: 2)) {
+          continue;
+        }
+        // Distinct names already elect a caller; only equal names need jitter.
+        if (deviceName == device.name) {
+          await Future<void>.delayed(
+            Duration(milliseconds: 200 + Random().nextInt(1000)),
+          );
+        }
         if (!_current(session) || !autoConnect) return;
         if (device.isAvailable &&
             !DateTime.now().isBefore(
@@ -306,6 +332,7 @@ class NearbyService extends ChangeNotifier {
           );
           device.name = name;
           device.isAvailable = true;
+          _firstFound.putIfAbsent(id, _clock);
           _log('Found $name ($id)');
           if (autoConnect) unawaited(_connectAvailable());
         },
@@ -314,7 +341,10 @@ class NearbyService extends ChangeNotifier {
           final device = _devices[id];
           if (device == null) return;
           device.isAvailable = false;
-          if (!device.isConnected && !device.isConnecting) _devices.remove(id);
+          if (!device.isConnected && !device.isConnecting) {
+            _devices.remove(id);
+            _firstFound.remove(id);
+          }
           _log('Endpoint lost: ${device.name}');
         },
       );
@@ -501,8 +531,8 @@ class NearbyService extends ChangeNotifier {
       lastError = null;
       connectionStatus = 'Connected to ${device.name}';
       _log(connectionStatus);
-      // Reduce radio contention after finding the intended peer.
-      if (!autoConnect && !continuousDiscovery) unawaited(stopDiscovery());
+      // Keep an explicitly started scan active so a relay can find more peers.
+      // The caller can stopDiscovery once all intended links are connected.
     } else {
       reportError(
         status == Status.REJECTED
@@ -518,6 +548,7 @@ class NearbyService extends ChangeNotifier {
     _timeouts.remove(id)?.cancel();
     _accepting.remove(id);
     final device = _devices.remove(id);
+    _firstFound.remove(id);
     connectionStatus =
         'ขาดการเชื่อมต่อกับ ${device?.name ?? id} • กำลังรอเชื่อมต่อใหม่';
     _log(connectionStatus);
@@ -632,6 +663,8 @@ class NearbyService extends ChangeNotifier {
     _timeouts.clear();
     _accepting.clear();
     _retryAfter.clear();
+    _firstFound.clear();
+    _connectAgain = false;
     _pendingFileUris.clear();
     _sentFilePayloads.clear();
     // Invalidate local routes immediately, even if native cleanup fails.

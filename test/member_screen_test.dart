@@ -41,7 +41,7 @@ void main() {
       MaterialApp(home: MemberScreen(repository: repository)),
     );
     await tester.pumpAndSettle();
-    expect(find.text('อีเมล: a@example.com'), findsOneWidget);
+    expect(find.text('a@example.com'), findsOneWidget);
     expect(find.text('User UID: owner-A'), findsOneWidget);
     await tester.enterText(find.byType(TextFormField), '   ');
     await tester.tap(find.text('บันทึกข้อมูลสมาชิก'));
@@ -52,7 +52,7 @@ void main() {
     await tester.tap(find.text('บันทึกข้อมูลสมาชิก'));
     await tester.pumpAndSettle();
     expect(repository.profile.name, 'ชื่อใหม่');
-    expect(find.text('บันทึกข้อมูลสมาชิกบน Supabase แล้ว'), findsOneWidget);
+    expect(find.text('บันทึกข้อมูลสมาชิกแล้ว'), findsOneWidget);
   });
 
   testWidgets('delete cancellation and incorrect password preserve account', (

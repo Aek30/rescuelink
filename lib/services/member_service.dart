@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'auth_service.dart';
+import 'local_database_service.dart';
+import 'app_preferences.dart';
 
 class MemberProfile {
   const MemberProfile({
@@ -17,8 +19,9 @@ abstract interface class MemberRepository {
 }
 
 class SupabaseMemberRepository implements MemberRepository {
-  SupabaseMemberRepository(this.auth);
+  SupabaseMemberRepository(this.auth, {this.localDatabase});
   final AuthService auth;
+  final LocalDatabaseService? localDatabase;
 
   String get _owner =>
       auth.session?.userId ?? (throw StateError('กรุณาเข้าสู่ระบบก่อน'));
@@ -26,6 +29,7 @@ class SupabaseMemberRepository implements MemberRepository {
   @override
   Future<MemberProfile> read() async {
     final owner = _owner;
+    final database = localDatabase ?? LocalDatabaseService.instance;
     final client = await auth.cloudClient(owner);
     final row = await client
         .from('profiles')
@@ -33,6 +37,11 @@ class SupabaseMemberRepository implements MemberRepository {
         .eq('id', owner)
         .single();
     if (_owner != owner) throw StateError('บัญชีเปลี่ยนแล้ว');
+    await database.setSetting(
+      'profileDisplayName',
+      row['display_name'] as String,
+    );
+    if (localDatabase == null) await AppPreferences.instance.load();
     return MemberProfile(
       id: owner,
       email: auth.session!.email,
@@ -43,10 +52,11 @@ class SupabaseMemberRepository implements MemberRepository {
   @override
   Future<MemberProfile> updateName(String name) async {
     name = name.trim();
-    if (name.isEmpty || name.length > 100) {
-      throw StateError('กรุณาระบุชื่อ 1–100 ตัวอักษร');
+    if (name.isEmpty || name.length > 80) {
+      throw StateError('กรุณาระบุชื่อ 1–80 ตัวอักษร');
     }
     final owner = _owner;
+    final database = localDatabase ?? LocalDatabaseService.instance;
     final client = await auth.cloudClient(owner);
     final row = await client
         .from('profiles')
@@ -55,6 +65,11 @@ class SupabaseMemberRepository implements MemberRepository {
         .select('id, display_name')
         .single();
     if (_owner != owner) throw StateError('บัญชีเปลี่ยนแล้ว');
+    await database.setSetting(
+      'profileDisplayName',
+      row['display_name'] as String,
+    );
+    if (localDatabase == null) await AppPreferences.instance.load();
     return MemberProfile(
       id: owner,
       email: auth.session!.email,

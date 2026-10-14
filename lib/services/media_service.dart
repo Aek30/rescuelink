@@ -113,6 +113,8 @@ class MediaService extends ChangeNotifier {
       nearby.onFileTransferSuccess = _onFileTransferSuccess;
       nearby.onFileTransferFailed = _onFileTransferFailed;
 
+      // Cloud work must not delay radio initialization while offline.
+      unawaited(uploads.retryPending());
       _notify();
     } catch (e) {
       _myId = null;
@@ -258,6 +260,7 @@ class MediaService extends ChangeNotifier {
     await onMessagesChanged?.call();
     _cache[mediaId] = media;
     _notify();
+    unawaited(uploads.retryPending());
 
     // 7. ส่งทันทีถ้า peer ออนไลน์
     final relayPath = requestedRoute;
@@ -707,6 +710,7 @@ class MediaService extends ChangeNotifier {
       );
       final inserted = await database.saveMediaMessage(received, message);
       _updateCache(received);
+      unawaited(uploads.retryPending());
       await onMessagesChanged?.call();
       if (inserted) onReceived?.call(received);
 

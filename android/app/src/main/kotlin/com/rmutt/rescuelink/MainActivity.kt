@@ -84,7 +84,7 @@ class MainActivity : FlutterActivity() {
                             }
                             val open = PendingIntent.getActivity(this, id, target, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
                             val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, channelId) else Notification.Builder(this)
-                            val body = call.argument<String>("body") ?: ""
+                            val body = call.argument<String>("preview") ?: call.argument<String>("body") ?: ""
                             manager.notify("rescuelink-notice", id, builder
                                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                                 .setContentTitle(call.argument<String>("title"))

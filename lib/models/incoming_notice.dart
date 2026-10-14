@@ -1,4 +1,5 @@
 import 'sos_alert.dart';
+import 'responder_update.dart';
 
 class IncomingNotice {
   const IncomingNotice({
@@ -10,12 +11,38 @@ class IncomingNotice {
   });
   final String id, peerId, name, body;
   final SosAlert? sos;
-  String get title => sos == null ? 'ข้อความจาก $name' : 'SOS จาก $name';
+  String? get _responderStage => ResponderUpdate.parse(body)?.stage;
+
+  String get title => sos != null
+      ? 'SOS จาก $name'
+      : _responderStage != null
+      ? 'อัปเดตการช่วยเหลือจาก $name'
+      : 'ข้อความจาก $name';
+
+  /// Compact display text; keep the complete chat message for opening/review.
+  String get preview {
+    if (sos != null) {
+      return '${sos!.category.label} • ${sos!.people} คน • '
+          '${sos!.location == null ? 'ไม่แนบพิกัด' : 'มีพิกัด'}';
+    }
+    final summary = switch (_responderStage) {
+      'pending' => 'ขอรับเคส • รอคุณยืนยันผ่านแชต',
+      'helping' => 'แจ้งว่ากำลังช่วยเหลือ • เปิดแชตเพื่อตรวจสอบ',
+      'completed' => 'แจ้งว่าเสร็จสิ้น • เปิดแชตเพื่อตรวจสอบ',
+      _ => body.replaceAll(RegExp(r'\s+'), ' ').trim(),
+    };
+    final characters = summary.runes.toList();
+    return characters.length <= 100
+        ? summary
+        : '${String.fromCharCodes(characters.take(100))}…';
+  }
+
   Map<String, String> toMap() => {
     'id': id,
     'peerId': peerId,
     'name': name,
     'body': body,
+    'preview': preview,
     'title': title,
     if (sos != null) 'sos': sos!.toJson(),
   };

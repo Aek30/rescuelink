@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'chat_history_screen.dart';
 import '../services/media_service.dart';
+import '../services/auth_service.dart';
 import '../services/message_service.dart';
 import '../services/connection_session.dart';
 import '../models/message_model.dart';
 import '../models/sos_alert.dart';
+import '../models/responder_update.dart';
 import '../widgets/location_button.dart';
 import '../widgets/media_bubble.dart';
 import '../services/media_upload_service.dart';
@@ -106,6 +107,68 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
+  Widget _buildStatusIndicator(MessageStatus status, bool isDark) {
+    switch (status) {
+      case MessageStatus.pending:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.schedule_rounded,
+              size: 12,
+              color: Colors.white.withValues(alpha: 0.9),
+            ),
+            const SizedBox(width: 2),
+            Text(
+              'รอส่ง',
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.white.withValues(alpha: 0.9),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        );
+      case MessageStatus.sent:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.check_rounded,
+              size: 13,
+              color: Colors.white.withValues(alpha: 0.9),
+            ),
+            const SizedBox(width: 2),
+            Text(
+              'กำลังส่ง',
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.white.withValues(alpha: 0.9),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        );
+      case MessageStatus.delivered:
+      case MessageStatus.synced:
+        return const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.done_all_rounded, size: 14, color: Color(0xFFBAE6FD)),
+            SizedBox(width: 2),
+            Text(
+              'ส่งสำเร็จ',
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.white,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        );
+    }
+  }
+
   Widget _mediaActions(MediaFile media) {
     final uploads = _media!.uploads;
     final job = uploads.forMedia(media.mediaId);
@@ -114,12 +177,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         job?.state == UploadState.verifying;
     final label = switch (job?.state) {
       UploadState.uploading =>
-        'Upload ${(job!.bytes * 100 / media.fileSize).toStringAsFixed(0)}%',
+        'กำลังซิงก์ ${(job!.bytes * 100 / media.fileSize).toStringAsFixed(0)}%',
       UploadState.verifying => 'กำลังตรวจไฟล์บน Cloud',
-      UploadState.ready => 'Cloud พร้อม • เฉพาะบัญชีคุณ',
-      UploadState.failed => 'Upload ไม่สำเร็จ • ลองใหม่',
-      UploadState.queued => 'คิว Upload • กดเพื่อเริ่ม',
-      null => 'Upload Cloud • เฉพาะบัญชีคุณ',
+      UploadState.ready => 'ซิงก์แล้ว • เปิดไฟล์ Cloud',
+      UploadState.failed => 'ซิงก์ไม่สำเร็จ • จะลองใหม่อัตโนมัติ',
+      UploadState.queued => 'อยู่ในคิว • ซิงก์อัตโนมัติเมื่อออนไลน์',
+      null =>
+        AuthService.instance.signedIn
+            ? 'รอซิงก์อัตโนมัติ'
+            : 'เก็บในเครื่อง • เข้าสู่ระบบเพื่อซิงก์',
     };
     return SizedBox(
       width: 240,
@@ -223,7 +289,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             final media = m.type == MessageType.media
                 ? _media?.getCached(m.text)
                 : null;
-            final label = media?.fileName ?? m.text;
+            final label =
+                media?.fileName ?? ResponderUpdate.readableText(m.text);
             if (!label.toLowerCase().contains(_query.toLowerCase())) {
               return false;
             }
@@ -242,18 +309,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           .toList()
           .reversed
           .toList();
+      final viaName = service.relayViaName(widget.peerId);
+      final connectionLabel = service.isOnline(widget.peerId)
+          ? '' // ส่งถึงกันโดยตรง: ไม่แสดงอะไร
+          : viaName != null
+          ? 'ส่งผ่านเครื่อง $viaName'
+          : (service.isReachable(widget.peerId)
+                ? 'ส่งผ่านเครื่องกลาง'
+                : 'รอการเชื่อมต่อ');
+
       return Scaffold(
         appBar: AppBar(
-          actions: [
-            IconButton(
-              tooltip: 'ประวัติข้อความ / Cloud',
-              icon: const Icon(Icons.cloud_outlined),
-              onPressed: () => Navigator.push<void>(
-                context,
-                MaterialPageRoute(builder: (_) => const ChatHistoryScreen()),
-              ),
-            ),
-          ],
           title: Row(
             children: [
               CircleAvatar(
@@ -280,7 +346,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       ),
                     ),
                     Text(
-                      '${service.peerRoleLabel(widget.peerId)} • ${service.connectionLabel(widget.peerId)}',
+                      connectionLabel.isEmpty
+                          ? service.peerRoleLabel(widget.peerId)
+                          : '${service.peerRoleLabel(widget.peerId)} • $connectionLabel',
                       style: TextStyle(
                         fontSize: 11,
                         color: isDark
@@ -394,12 +462,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       )
                     : ListView.builder(
                         reverse: true,
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
                         itemCount: messages.length,
                         itemBuilder: (context, index) {
                           final message = messages[index];
                           final mine = message.senderId == service.myId;
                           final time = message.displayTime.toLocal();
+                          final timeFormatted =
+                              '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+                          final sameAsPrevious =
+                              index < messages.length - 1 &&
+                              messages[index + 1].senderId == message.senderId;
+                          final topMargin = sameAsPrevious ? 2.5 : 8.0;
 
                           // ─── Media bubble ─────────────────────────────────────
                           if (message.type == MessageType.media) {
@@ -409,8 +483,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                   ? Alignment.centerRight
                                   : Alignment.centerLeft,
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 4,
+                                padding: EdgeInsets.only(
+                                  top: topMargin,
+                                  bottom: 2.0,
                                 ),
                                 child: Column(
                                   crossAxisAlignment: mine
@@ -424,12 +499,26 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 4,
                                       ),
-                                      child: Text(
-                                        '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}'
-                                        '${mine ? ' • ${message.statusLabel}' : ''}',
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.labelSmall,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            timeFormatted,
+                                            style: TextStyle(
+                                              fontSize: 10.5,
+                                              color: isDark
+                                                  ? Colors.grey[400]
+                                                  : const Color(0xFF64748B),
+                                            ),
+                                          ),
+                                          if (mine) ...[
+                                            const SizedBox(width: 4),
+                                            _buildStatusIndicator(
+                                              message.status,
+                                              isDark,
+                                            ),
+                                          ],
+                                        ],
                                       ),
                                     ),
                                   ],
@@ -444,43 +533,74 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                 ? Alignment.centerRight
                                 : Alignment.centerLeft,
                             child: Container(
-                              margin: const EdgeInsets.symmetric(vertical: 4),
-                              padding: const EdgeInsets.all(12),
+                              margin: EdgeInsets.only(
+                                top: topMargin,
+                                bottom: 2.0,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 7,
+                              ),
                               constraints: BoxConstraints(
                                 maxWidth:
-                                    MediaQuery.sizeOf(context).width * .82,
+                                    MediaQuery.sizeOf(context).width * 0.78,
                               ),
                               decoration: BoxDecoration(
                                 color: mine
                                     ? (isDark
-                                          ? const Color(0xFF55250D)
-                                          : RescueTheme.peach)
+                                          ? const Color(0xFF9A3412)
+                                          : const Color(0xFFEA580C))
                                     : (isDark
-                                          ? const Color(0xFF161C24)
+                                          ? const Color(0xFF1E293B)
                                           : Colors.white),
                                 border: Border.all(
-                                  color: isDark
-                                      ? const Color(0xFF283442)
-                                      : RescueTheme.border,
+                                  color: mine
+                                      ? (isDark
+                                            ? const Color(0xFFB45309)
+                                            : const Color(0xFFC2410C))
+                                      : (isDark
+                                            ? const Color(0xFF334155)
+                                            : const Color(0xFFE2E8F0)),
+                                  width: 0.8,
                                 ),
                                 borderRadius: BorderRadius.only(
-                                  topLeft: const Radius.circular(20),
-                                  topRight: const Radius.circular(20),
-                                  bottomLeft: Radius.circular(mine ? 20 : 5),
-                                  bottomRight: Radius.circular(mine ? 5 : 20),
+                                  topLeft: const Radius.circular(16),
+                                  topRight: const Radius.circular(16),
+                                  bottomLeft: Radius.circular(mine ? 16 : 4),
+                                  bottomRight: Radius.circular(mine ? 4 : 16),
                                 ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(
+                                      alpha: isDark ? 0.2 : 0.04,
+                                    ),
+                                    blurRadius: 3,
+                                    offset: const Offset(0, 1),
+                                  ),
+                                ],
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   SelectableText(
                                     message.type == MessageType.sos
                                         ? SosAlert.fromJson(
                                             message.text,
                                           ).summary
-                                        : message.text,
+                                        : ResponderUpdate.readableText(
+                                            message.text,
+                                          ),
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      height: 1.35,
+                                      color: mine
+                                          ? Colors.white
+                                          : (isDark
+                                                ? Colors.white
+                                                : const Color(0xFF0F172A)),
+                                    ),
                                   ),
-                                  const SizedBox(height: 4),
                                   if ((message.type == MessageType.message ||
                                           message.type == MessageType.sos) &&
                                       service.receivedRoutes[message.id] !=
@@ -498,18 +618,40 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                             message.text,
                                           ).location !=
                                           null)
-                                    LocationButton(
-                                      location: SosAlert.fromJson(
-                                        message.text,
-                                      ).location!,
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: LocationButton(
+                                        location: SosAlert.fromJson(
+                                          message.text,
+                                        ).location!,
+                                      ),
                                     ),
-                                  Text(
-                                    '${time.year}-${time.month.toString().padLeft(2, '0')}-${time.day.toString().padLeft(2, '0')} '
-                                    '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}'
-                                    '${mine ? ' • ${message.statusLabel}' : ''}',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.labelSmall,
+                                  const SizedBox(height: 2),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        timeFormatted,
+                                        style: TextStyle(
+                                          fontSize: 10.5,
+                                          color: mine
+                                              ? Colors.white.withValues(
+                                                  alpha: 0.85,
+                                                )
+                                              : (isDark
+                                                    ? Colors.grey[400]
+                                                    : const Color(0xFF64748B)),
+                                        ),
+                                      ),
+                                      if (mine) ...[
+                                        const SizedBox(width: 4),
+                                        _buildStatusIndicator(
+                                          message.status,
+                                          isDark,
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                 ],
                               ),

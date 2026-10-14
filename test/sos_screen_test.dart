@@ -5,6 +5,7 @@ import 'package:rescuelink/models/message_model.dart';
 import 'package:rescuelink/models/sos_alert.dart';
 import 'package:rescuelink/screens/chat_screen.dart';
 import 'package:rescuelink/screens/sos_screen.dart';
+import 'package:rescuelink/screens/responder_screen.dart';
 import 'package:rescuelink/services/message_service.dart';
 import 'package:rescuelink/services/nearby_service.dart';
 import 'package:rescuelink/services/local_database_service.dart';
@@ -52,7 +53,7 @@ void main() {
         service.nearbyService.dispose();
       });
       await tester.pumpWidget(MaterialApp(home: SosScreen(service: service)));
-      final send = find.text('ตรวจข้อมูลและส่ง SOS');
+      final send = find.text('ส่งสัญญาณ SOS');
       await tester.scrollUntilVisible(
         send,
         250,
@@ -98,14 +99,22 @@ void main() {
         ).toJson(),
       ),
     ];
-    await tester.pumpWidget(MaterialApp(home: SosScreen(service: service)));
-    expect(find.textContaining('3 คน'), findsOneWidget);
-    final chat = find.text('แชตกับผู้ขอความช่วยเหลือ');
-    await tester.scrollUntilVisible(
-      chat,
-      200,
-      scrollable: find.byType(Scrollable).first,
+    await tester.pumpWidget(
+      MaterialApp(home: ResponderScreen(service: service)),
     );
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('น้ำดื่ม'));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.textContaining('3 คน'),
+      ),
+      findsOneWidget,
+    );
+    final chat = find.text('ติดต่อผู้แจ้งเหตุ');
+    await tester.ensureVisible(chat);
+    await tester.pumpAndSettle();
     await tester.tap(chat);
     await tester.pumpAndSettle();
     expect(find.byType(ChatScreen), findsOneWidget);

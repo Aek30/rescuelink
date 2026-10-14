@@ -67,7 +67,7 @@ void main() {
         expect(repo.data['allergies'], 'Updated allergy');
         final delete = find.widgetWithText(
           OutlinedButton,
-          'ถอนความยินยอมและลบสุขภาพ',
+          'ถอนความยินยอมและลบข้อมูลสุขภาพ',
         );
         await tester.ensureVisible(delete);
         await tester.pumpAndSettle();

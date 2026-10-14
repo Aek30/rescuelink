@@ -134,7 +134,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(nearby.searches, 1);
-      expect(find.text('SOS กำลังทำงาน'), findsNothing);
+      expect(find.text('กำลังขอความช่วยเหลือ'), findsNothing);
       List<Widget> sections() =>
           tester.widget<ListView>(find.byType(ListView).first).childrenDelegate
               is SliverChildListDelegate
@@ -145,10 +145,10 @@ void main() {
                 .children
           : [];
       int indexOf<T>() => sections().indexWhere((w) => w is T);
-      expect(indexOf<NearbyMiniMap>(), lessThan(indexOf<PresenceList>()));
+      expect(indexOf<NearbyMiniMap>(), greaterThan(indexOf<PresenceList>()));
       messages.mode(sos: true);
       await tester.pumpAndSettle();
-      expect(find.text('SOS กำลังทำงาน'), findsOneWidget);
+      expect(find.text('กำลังขอความช่วยเหลือ'), findsOneWidget);
       expect(indexOf<PresenceList>(), lessThan(indexOf<NearbyMiniMap>()));
       expect(
         (sections().whereType<PresenceList>().single).filter,
@@ -156,10 +156,10 @@ void main() {
       );
       await tester.tap(find.text('ปิดโหมด SOS'));
       await tester.pumpAndSettle();
-      expect(indexOf<NearbyMiniMap>(), lessThan(indexOf<PresenceList>()));
+      expect(indexOf<NearbyMiniMap>(), greaterThan(indexOf<PresenceList>()));
       messages.mode(rescue: true);
       await tester.pumpAndSettle();
-      expect(find.text('โหมดหน่วยกู้ภัย'), findsOneWidget);
+      expect(find.text('พร้อมช่วยเหลือคนใกล้คุณ'), findsOneWidget);
       expect(indexOf<PresenceList>(), lessThan(indexOf<NearbyMiniMap>()));
       expect(
         (sections().whereType<PresenceList>().single).filter,
@@ -167,7 +167,7 @@ void main() {
       );
       await tester.tap(find.text('ปิดโหมดหน่วยกู้ภัย'));
       await tester.pumpAndSettle();
-      expect(indexOf<NearbyMiniMap>(), lessThan(indexOf<PresenceList>()));
+      expect(indexOf<NearbyMiniMap>(), greaterThan(indexOf<PresenceList>()));
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       await tester.pumpAndSettle();

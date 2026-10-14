@@ -1,3 +1,4 @@
+import 'cloud_sync_receipts.dart';
 import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
@@ -172,6 +173,13 @@ class ChatStore {
           whereArgs: [id],
         );
       } else if (result['outcome'] == 'applied') {
+        if (operation['deleted'] != 1) {
+          await CloudSyncReceipts.record(
+            txn,
+            'message',
+            operation['payload'] as String,
+          );
+        }
         await txn.delete(
           'chat_queue',
           where: 'operation_id = ?',
@@ -181,6 +189,7 @@ class ChatStore {
         throw const FormatException('Invalid sync response');
       }
     });
+    database.cloudReceiptsChanged.value++;
   }
 
   Future<void> mergeRemote(List<Map<String, dynamic>> records) async {
@@ -194,7 +203,15 @@ class ChatStore {
         );
         if (pending.isNotEmpty) continue;
         await _putRemote(txn, remote);
+        if (remote['deleted'] != true) {
+          await CloudSyncReceipts.record(
+            txn,
+            'message',
+            jsonEncode(remote['payload']),
+          );
+        }
       }
     });
+    database.cloudReceiptsChanged.value++;
   }
 }

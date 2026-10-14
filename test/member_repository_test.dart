@@ -50,7 +50,7 @@ void main() {
         'a@example.com',
         'local-session',
       );
-      final repository = SupabaseMemberRepository(auth);
+      final repository = SupabaseMemberRepository(auth, localDatabase: old);
       var name = 'Original';
       final methods = <String>[];
       final subscription = server.listen((request) async {

@@ -1,8 +1,10 @@
+import 'cloud_sync_receipts.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/message_model.dart';
+import '../models/responder_update.dart';
 import '../models/incoming_notice.dart';
 import '../models/relay_packet.dart';
 import '../models/sos_alert.dart';
@@ -28,12 +30,14 @@ class MessageService extends ChangeNotifier {
   final MediaService? mediaService;
   final _uuid = const Uuid();
   final Map<String, String> _endpointPeers = {};
+  final Set<String> _introducingEndpoints = {};
   bool _relayDraining = false;
   bool _resetRelayBackoff = true;
   DateTime? _lastRelayCleanup;
   Set<String> _connectedEndpoints = {};
   Map<String, String> peers = {};
   List<MessageModel> messages = [];
+  Set<String> cloudSyncedMessageIds = {};
   Map<String, List<String>> receivedRoutes = {};
   Map<String, int> unreadCounts = {};
   final Set<String> _markingRead = {};
@@ -64,7 +68,7 @@ class MessageService extends ChangeNotifier {
                 ? 'วิดีโอ'
                 : 'รูปภาพ / สื่อ',
           MessageType.sos => 'คำขอ SOS',
-          _ => latest.text,
+          _ => ResponderUpdate.readableText(latest.text),
         };
   }
 
@@ -112,8 +116,20 @@ class MessageService extends ChangeNotifier {
     return 'ยังติดต่อไม่ได้ • รอเชื่อมต่อ';
   }
 
+  /// คืนชื่อเครื่องที่ส่งผ่านหากเป็นการเชื่อมต่อผ่านเครื่องอื่น หรือ null หากเชื่อมต่อโดยตรงหรือไม่สามารถติดต่อได้
+  String? relayViaName(String peerId) {
+    if (isOnline(peerId)) return null;
+    final entry = _directory[peerId];
+    if (entry != null && isReachable(peerId) && entry.path.length > 2) {
+      final via = entry.path[entry.path.length - 2];
+      return peers[via] ?? 'เครื่องกลาง';
+    }
+    return null;
+  }
+
   /// Origin to destination route when the first radio link is currently up.
   List<String>? relayPathForPeer(String peerId) {
+    if (isOnline(peerId)) return [myId!, peerId];
     final entry = _directory[peerId];
     if (entry == null || !entry.state.isFresh(_now()) || !isReachable(peerId)) {
       return null;
@@ -364,6 +380,7 @@ class MessageService extends ChangeNotifier {
         );
       };
       nearbyService.addListener(_connectionChanged);
+      database.cloudReceiptsChanged.addListener(_cloudReceiptsChanged);
       _timer = Timer.periodic(
         const Duration(seconds: 5),
         (_) => unawaited(retry()),
@@ -376,10 +393,35 @@ class MessageService extends ChangeNotifier {
     }
   }
 
+  void _cloudReceiptsChanged() {
+    if (ready && !_disposed) unawaited(_refreshCloudReceipts());
+  }
+
+  Future<void> _refreshCloudReceipts() async {
+    try {
+      final ids = await CloudSyncReceipts.messageIds(
+        await database.database,
+        messages,
+      );
+      if (_disposed) return;
+      cloudSyncedMessageIds = ids;
+      _notify();
+    } catch (_) {
+      if (_disposed) return;
+      error = 'อ่านสถานะ Cloud ไม่สำเร็จ กรุณาลองใหม่';
+      _notify();
+    }
+  }
+
   Future<void> _refresh() async {
+    if (_disposed) return;
     await _reloadCurrentSos();
     receivedRoutes = await database.getReceivedRoutes();
     messages = await database.getMessages();
+    cloudSyncedMessageIds = await CloudSyncReceipts.messageIds(
+      await database.database,
+      messages,
+    );
     peers = await database.getPeers();
     unreadCounts = await database.getUnreadCounts(myId!);
     _notify();
@@ -447,6 +489,16 @@ class MessageService extends ChangeNotifier {
 
   Future<void> _acceptAdvertisement(PeerAdvertisement entry) async {
     if (entry.peerId == myId) return;
+    // A live, identified radio link always outranks a forwarded directory path.
+    // Keep origin-owned freshness and sequence numbers unchanged.
+    if (isOnline(entry.peerId) && entry.path.length > 2) {
+      entry = PeerAdvertisement(
+        peerId: entry.peerId,
+        name: entry.name,
+        state: entry.state,
+        path: [entry.peerId, myId!],
+      );
+    }
     final previous = _directory[entry.peerId];
     if (entry.state.sos != null) {
       await _learnSos(entry.peerId, entry.name, entry.state.sos!);
@@ -565,12 +617,32 @@ class MessageService extends ChangeNotifier {
         .map((d) => d.endpointId)
         .toSet();
     if (setEquals(connected, _connectedEndpoints)) return;
+    final added = connected.difference(_connectedEndpoints);
     _connectedEndpoints = connected;
     _resetRelayBackoff = true;
     _endpointPeers.removeWhere((id, _) => !connected.contains(id));
     if (mediaService != null) unawaited(mediaService!.pauseDisconnected());
     _notify();
+    for (final endpoint in added) {
+      unawaited(_introduce(endpoint));
+    }
     unawaited(retry());
+  }
+
+  Future<void> _introduce(String endpoint) async {
+    if (!ready || _disposed || !_introducingEndpoints.add(endpoint)) return;
+    try {
+      // Independent of media transfers and outbox retry so both ends can learn
+      // the direct link immediately. Periodic retry still recovers lost packets.
+      await nearbyService.sendMessage(
+        endpoint,
+        _packet(MessageType.deviceInfo).toJson(),
+      );
+    } catch (_) {
+      // Normal retry will resend the introduction if the link is not ready yet.
+    } finally {
+      _introducingEndpoints.remove(endpoint);
+    }
   }
 
   MessageModel _packet(
@@ -764,8 +836,19 @@ class MessageService extends ChangeNotifier {
         if (existing != null && existing != packet.senderId) {
           throw const FormatException('Peer identity changed');
         }
-        await database.savePeer(packet.senderId, packet.senderName);
         _endpointPeers[endpointId] = packet.senderId;
+        final advertised = _directory[packet.senderId];
+        if (advertised != null && advertised.path.length > 2) {
+          _directory[packet.senderId] = PeerAdvertisement(
+            peerId: advertised.peerId,
+            name: advertised.name,
+            state: advertised.state,
+            path: [packet.senderId, myId!],
+          );
+        }
+        _notify();
+        if (existing == null) unawaited(_introduce(endpointId));
+        await database.savePeer(packet.senderId, packet.senderName);
         await _refresh();
         if (existing == null) {
           _resetRelayBackoff = true;
@@ -1143,6 +1226,7 @@ class MessageService extends ChangeNotifier {
     _disposed = true;
     _timer?.cancel();
     nearbyService.removeListener(_connectionChanged);
+    database.cloudReceiptsChanged.removeListener(_cloudReceiptsChanged);
     nearbyService.onTextPayloadReceived = null;
     super.dispose();
   }

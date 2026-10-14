@@ -77,13 +77,7 @@ void main() {
         image.dispose();
       });
     }
-    await tester.tap(find.text('หน่วยกู้ภัย'));
-    await tester.pumpAndSettle();
-    final subtitle = tester.widget<Text>(
-      find.text('ติดตามคำขอและติดต่อผู้ที่ต้องการความช่วยเหลือ'),
-    );
-    expect(subtitle.style!.color, RescueTheme.darkTextMuted);
-    expect(tester.takeException(), isNull);
+    expect(find.text('หน่วยกู้ภัย'), findsNothing);
     await tester.pumpWidget(app(RescueTheme.light));
     await tester.pumpAndSettle();
     expect(

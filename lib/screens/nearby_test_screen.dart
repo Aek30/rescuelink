@@ -1,3 +1,5 @@
+import 'messages_screen.dart';
+import 'responder_screen.dart';
 import '../services/app_preferences.dart';
 import '../services/auth_service.dart';
 import '../models/message_model.dart';
@@ -13,15 +15,13 @@ import '../services/media_service.dart';
 import '../services/message_service.dart';
 import '../services/local_database_service.dart';
 import '../services/permission_service.dart';
-import '../widgets/device_tile.dart';
 import '../widgets/presence_list.dart';
 import '../widgets/nearby_mini_map.dart';
 import 'chat_screen.dart';
 import 'sos_screen.dart';
-import 'incident_detail_screen.dart';
 import '../widgets/outbox_queue.dart';
 import '../theme/rescue_theme.dart';
-import '../widgets/brand_header.dart';
+import '../services/member_service.dart';
 
 class NearbyTestScreen extends StatefulWidget {
   const NearbyTestScreen({super.key, this.nearbyService, this.messageService});
@@ -43,8 +43,6 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
   bool _busy = false;
   int _tab = 0;
 
-  /// 0 = อุปกรณ์ที่ค้นพบ, 1 = อุปกรณ์ที่เชื่อมต่อแล้ว
-  int _deviceSeg = 0;
   bool _foreground = true;
   bool _searchOnResume = true;
   bool _restartSearchAfterBusy = false;
@@ -103,7 +101,18 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
         .catchError((Object error) {
           debugPrint('Notification setup: $error');
         });
-    AppPreferences.instance.load().catchError((Object _) {});
+    AppPreferences.instance.addListener(_profileNameChanged);
+    AppPreferences.instance
+        .load()
+        .then((_) => _profileNameChanged())
+        .catchError((Object _) {});
+    if (AuthService.instance.signedIn) {
+      unawaited(() async {
+        try {
+          await SupabaseMemberRepository(AuthService.instance).read();
+        } catch (_) {}
+      }());
+    }
 
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -114,6 +123,14 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
   // =========================================================
   // Notice / Banner
   // =========================================================
+
+  void _profileNameChanged() {
+    final displayName = AppPreferences.instance.displayName;
+    if (!mounted || displayName == null || displayName.trim().isEmpty) return;
+    // Only the visible name changes. Persisted peer UUIDs and transport stay intact.
+    _service.deviceName = displayName;
+    _name.text = displayName;
+  }
 
   void _accountChanged() {
     if (_authenticatedOwner == null ||
@@ -155,13 +172,41 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
     _shownNotice = notice;
     ScaffoldMessenger.of(context).showMaterialBanner(
       MaterialBanner(
-        leading: Icon(
-          notice.sos == null ? Icons.chat_bubble_outline : Icons.sos,
+        padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: (notice.sos == null ? RescueTheme.navy : RescueTheme.danger)
+                .withValues(alpha: .10),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            notice.sos == null ? Icons.chat_bubble_outline : Icons.sos,
+            size: 22,
+            color: notice.sos == null
+                ? Theme.of(context).colorScheme.onSurface
+                : RescueTheme.danger,
+          ),
         ),
-        content: Text(
-          '${notice.title}\n${notice.body}',
-          maxLines: 5,
-          overflow: TextOverflow.ellipsis,
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              notice.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              notice.preview,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, height: 1.4, color: _p.muted),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -171,15 +216,11 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
             },
             child: Text(notice.sos == null ? 'เปิดแชต' : 'ดู SOS'),
           ),
-          if (notice.sos != null)
-            TextButton(
-              onPressed: () {
-                _dismissNotice();
-                _openChat(notice.peerId);
-              },
-              child: const Text('แชต'),
-            ),
-          TextButton(onPressed: _dismissNotice, child: const Text('ปิด')),
+          IconButton(
+            onPressed: _dismissNotice,
+            tooltip: 'ปิด',
+            icon: const Icon(Icons.close_rounded, size: 20),
+          ),
         ],
       ),
     );
@@ -248,19 +289,6 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
         ),
       ),
     );
-  }
-
-  void _openSos() {
-    if (_messages.ready) {
-      Navigator.push(
-        context,
-        MaterialPageRoute<void>(builder: (_) => SosScreen(service: _messages)),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('กำลังเตรียมข้อมูล SOS กรุณารอสักครู่')),
-      );
-    }
   }
 
   // =========================================================
@@ -445,6 +473,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
 
   @override
   void dispose() {
+    AppPreferences.instance.removeListener(_profileNameChanged);
     AuthService.instance.removeListener(_accountChanged);
     WidgetsBinding.instance.removeObserver(this);
     _noticeTimer?.cancel();
@@ -466,7 +495,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: _tab == 4
+      appBar: _tab == 4 || _tab == 2
           ? null
           : AppBar(
               backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -514,13 +543,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
             ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
-        onDestinationSelected: (value) {
-          if (value == 2) {
-            _openSos();
-          } else {
-            setState(() => _tab = value);
-          }
-        },
+        onDestinationSelected: (value) => setState(() => _tab = value),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.radar), label: 'ใกล้ฉัน'),
           NavigationDestination(
@@ -544,24 +567,15 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
       ),
       body: SafeArea(
         child: ListenableBuilder(
-          listenable: Listenable.merge([_service, _messages]),
+          listenable: Listenable.merge([_service, _messages, _media]),
           builder: (context, _) {
             if (_tab == 1) {
-              return ListView(
-                padding: const EdgeInsets.all(18),
-                children: [
-                  const BrandHeader(
-                    title: 'ทุกบทสนทนา เชื่อมถึงกัน',
-                    subtitle:
-                        'ส่งข้อความถึงผู้คนที่เชื่อมต่อกับคุณ แม้ไม่มีอินเทอร์เน็ต',
-                    icon: Icons.forum_outlined,
-                    eyebrow: 'ข้อความ • อยู่ใกล้กันเสมอ',
-                  ),
-                  const SizedBox(height: 16),
-                  _buildConversations(),
-                ],
+              return MessagesScreen(
+                service: _messages,
+                onNearby: () => setState(() => _tab = 0),
               );
             }
+            if (_tab == 2) return SosScreen(service: _messages, mainTab: true);
             if (_tab == 3) return _buildQueue();
             if (_tab == 4) return _buildSettingsTab();
             return _buildHomeTab();
@@ -573,6 +587,12 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
 
   Widget _buildSettingsTab() {
     return SettingsPanel(
+      onResponder: () => Navigator.push(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => ResponderScreen(service: _messages),
+        ),
+      ),
       beforeAccountExit: () async {
         await _service.stopAll();
       },
@@ -629,7 +649,6 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
       children: [
         _buildHeroCard(),
         const SizedBox(height: 14),
-        _buildStatRow(),
         if (_busy) ...[
           const SizedBox(height: 12),
           ClipRRect(
@@ -646,183 +665,16 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
           _buildPermissionCard(),
           const SizedBox(height: 16),
         ],
-        if (sosMode || rescueMode) ...[
-          PresenceList(
-            service: _messages,
-            filter: sosMode ? PresenceFilter.rescue : PresenceFilter.sos,
-          ),
-          const SizedBox(height: 22),
-        ],
+        PresenceList(
+          service: _messages,
+          filter: sosMode
+              ? PresenceFilter.rescue
+              : rescueMode
+              ? PresenceFilter.sos
+              : PresenceFilter.all,
+        ),
+        const SizedBox(height: 22),
         NearbyMiniMap(key: const ValueKey('home-map'), service: _messages),
-        const SizedBox(height: 14),
-        _buildDevicesSection(),
-        if (!sosMode && !rescueMode) PresenceList(service: _messages),
-      ],
-    );
-  }
-
-  Widget _buildStatRow() {
-    final connected = _service.connectedDevices.length;
-    final found = _service.discoveredDevices.length;
-    final sos = _messages.activeSosCount;
-
-    return Row(
-      children: [
-        Expanded(
-          child: _StatTile(
-            icon: Icons.link_rounded,
-            label: 'เชื่อมต่อแล้ว',
-            value: connected,
-            color: _success,
-            selected: _deviceSeg == 1,
-            onTap: () => setState(() => _deviceSeg = 1),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _StatTile(
-            icon: Icons.radar_rounded,
-            label: 'พบใกล้เคียง',
-            value: found,
-            color: _primary,
-            selected: _deviceSeg == 0,
-            onTap: () => setState(() => _deviceSeg = 0),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _StatTile(
-            icon: Icons.sos,
-            label: 'SOS ที่ยังไม่หมดอายุ',
-            value: sos,
-            color: RescueTheme.danger,
-            highlight: sos > 0,
-            onTap: _messages.ready ? _openSos : null,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDevicesSection() {
-    final p = _p;
-    final showFound = _deviceSeg == 0;
-    final devices = showFound
-        ? _service.discoveredDevices
-        : _service.connectedDevices;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'อุปกรณ์รอบตัว',
-          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: SegmentedButton<int>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(
-                value: 0,
-                icon: Icon(Icons.radar_rounded, size: 18),
-                label: Text('ที่ค้นพบ'),
-              ),
-              ButtonSegment(
-                value: 1,
-                icon: Icon(Icons.link_rounded, size: 18),
-                label: Text('ที่เชื่อมต่อ'),
-              ),
-            ],
-            selected: {_deviceSeg},
-            onSelectionChanged: (v) => setState(() => _deviceSeg = v.first),
-            style: ButtonStyle(
-              backgroundColor: WidgetStateProperty.resolveWith(
-                (s) => s.contains(WidgetState.selected)
-                    ? p.accentSoft
-                    : Colors.transparent,
-              ),
-              foregroundColor: WidgetStateProperty.resolveWith(
-                (s) => s.contains(WidgetState.selected) ? _primary : p.muted,
-              ),
-              side: WidgetStatePropertyAll(BorderSide(color: p.line)),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (devices.isEmpty)
-          showFound
-              ? _EmptyState(
-                  icon: Icons.radar_rounded,
-                  title: _service.isDiscovering
-                      ? 'กำลังค้นหาอุปกรณ์...'
-                      : 'ยังไม่พบอุปกรณ์',
-                  description: _service.isDiscovering
-                      ? 'เปิด RescueLink บนโทรศัพท์อีกเครื่องและวางให้อยู่ใกล้กัน'
-                      : 'เปิด RescueLink บนอีกเครื่อง แล้วเริ่มค้นหาเมื่อสิทธิ์และ Bluetooth / Wi-Fi พร้อม',
-                )
-              : const _EmptyState(
-                  icon: Icons.link_off_rounded,
-                  title: 'ยังไม่มีการเชื่อมต่อ',
-                  description:
-                      'เชื่อมต่อกับอุปกรณ์ RescueLink ที่อยู่ใกล้เคียงเพื่อเริ่มสนทนา',
-                ),
-        for (final device in devices)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Container(
-              decoration: BoxDecoration(
-                color: p.card,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: p.line),
-              ),
-              padding: const EdgeInsets.all(4),
-              child: DeviceTile(
-                device: device,
-                presence: _messages
-                    .presence[_messages.getPeerForEndpoint(device.endpointId)],
-                onDetails:
-                    _messages
-                            .presence[_messages.getPeerForEndpoint(
-                              device.endpointId,
-                            )]
-                            ?.sos !=
-                        null
-                    ? () => Navigator.push(
-                        context,
-                        MaterialPageRoute<void>(
-                          builder: (_) => IncidentDetailScreen(
-                            service: _messages,
-                            peerId: _messages.getPeerForEndpoint(
-                              device.endpointId,
-                            )!,
-                          ),
-                        ),
-                      )
-                    : null,
-                onChat:
-                    device.isConnected &&
-                        _messages.getPeerForEndpoint(device.endpointId) != null
-                    ? () => _openChat(
-                        _messages.getPeerForEndpoint(device.endpointId)!,
-                      )
-                    : null,
-                onPressed: showFound
-                    ? (_busy || !device.isAvailable
-                          ? null
-                          : () => _run(
-                              () =>
-                                  _service.requestConnection(device.endpointId),
-                            ))
-                    : (_busy
-                          ? null
-                          : () => _run(
-                              () => _service.disconnect(device.endpointId),
-                            )),
-              ),
-            ),
-          ),
       ],
     );
   }
@@ -845,14 +697,15 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
     Color statusColor;
 
     if (connectedCount > 0) {
-      title = 'เชื่อมต่อแล้ว';
-      description = 'ส่งข้อความและ SOS ถึงอุปกรณ์ใกล้เคียงได้ทันที';
+      title = 'เชื่อมต่อคนรอบตัว';
+      description =
+          'เชื่อมต่อคนที่ค้นพบอัตโนมัติ ส่งข้อความถึงคนใกล้คุณได้ทันที';
       status = 'เชื่อมต่อ';
       icon = Icons.link_rounded;
       statusColor = const Color(0xFF34D399);
     } else if (_service.isDiscovering) {
       title = 'กำลังค้นหาอุปกรณ์';
-      description = 'กำลังมองหาโทรศัพท์ RescueLink ที่อยู่ใกล้คุณ';
+      description = 'ค้นหาและเชื่อมต่อกับคนใกล้คุณอัตโนมัติ';
       status = 'กำลังค้นหา';
       icon = Icons.radar_rounded;
       statusColor = const Color(0xFFFBBF24);
@@ -871,7 +724,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
     }
 
     if (sosMode || rescueMode) {
-      title = sosMode ? 'SOS กำลังทำงาน' : 'โหมดหน่วยกู้ภัย';
+      title = sosMode ? 'กำลังขอความช่วยเหลือ' : 'พร้อมช่วยเหลือคนใกล้คุณ';
       status = sosMode ? 'SOS' : 'หน่วยกู้ภัย';
       description = _connectionStatusThai;
       icon = sosMode ? Icons.sos : Icons.health_and_safety;
@@ -888,8 +741,9 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
     );
 
     return Container(
+      key: const ValueKey('nearby-network-card'),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
           color: isDark ? const Color(0x3394A3B8) : const Color(0x22102130),
           width: 1.2,
@@ -899,13 +753,13 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
             color: isDark
                 ? Colors.black.withValues(alpha: 0.45)
                 : RescueTheme.navy.withValues(alpha: 0.16),
-            blurRadius: 22,
-            offset: const Offset(0, 8),
+            blurRadius: 16,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(24.8),
+        borderRadius: BorderRadius.circular(20.8),
         child: Stack(
           children: [
             Positioned.fill(
@@ -923,15 +777,15 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                     end: Alignment.bottomCenter,
                     colors: isDark
                         ? const [
-                            Color(0x38091624),
-                            Color(0x28091624),
-                            Color(0x8C06101B),
+                            Color(0x78091624),
+                            Color(0x90091624),
+                            Color(0xC406101B),
                             Color(0xEB040B13),
                           ]
                         : const [
-                            Color(0x30091624),
-                            Color(0x22091624),
-                            Color(0x82071321),
+                            Color(0x68091624),
+                            Color(0x82091624),
+                            Color(0xB8071321),
                             Color(0xE0050E18),
                           ],
                     stops: const [0.0, 0.32, 0.62, 1.0],
@@ -940,7 +794,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -949,8 +803,8 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
+                          horizontal: 10,
+                          vertical: 5,
                         ),
                         decoration: BoxDecoration(
                           color: glass,
@@ -995,7 +849,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 10,
-                              vertical: 6,
+                              vertical: 5,
                             ),
                             decoration: BoxDecoration(
                               color: glass,
@@ -1031,22 +885,22 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                     ],
                   ),
 
-                  const SizedBox(height: 46),
+                  const SizedBox(height: 18),
 
                   // หัวข้อ + ไอคอน
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(11),
+                        padding: const EdgeInsets.all(9),
                         decoration: BoxDecoration(
                           color: glass,
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(12),
                           border: glassBorder,
                         ),
-                        child: Icon(icon, color: Colors.white, size: 26),
+                        child: Icon(icon, color: Colors.white, size: 22),
                       ),
-                      const SizedBox(width: 14),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1055,7 +909,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                               title,
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 22,
+                                fontSize: 19,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: -0.2,
                                 shadows: [
@@ -1072,8 +926,8 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                               description,
                               style: TextStyle(
                                 color: Colors.white.withValues(alpha: 0.90),
-                                height: 1.38,
-                                fontSize: 13,
+                                height: 1.35,
+                                fontSize: 12.5,
                                 shadows: const [
                                   Shadow(
                                     color: Colors.black87,
@@ -1089,7 +943,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                     ],
                   ),
 
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
 
                   // ปุ่มหลักเดียว: เริ่ม / หยุด
                   if (sosMode || rescueMode) ...[
@@ -1142,9 +996,10 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                             ? const Color(0x33FFFFFF)
                             : const Color(0xFFFF641F),
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        minimumSize: const Size.fromHeight(48),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(12),
                           side: active
                               ? BorderSide(
                                   color: Colors.white.withValues(alpha: 0.3),
@@ -1156,7 +1011,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                   ),
 
                   if (_service.backgroundActive) ...[
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     Row(
                       children: [
                         Icon(
@@ -1221,6 +1076,13 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
   }
 
   Widget _buildQueue() => OutboxQueue(
+    mediaFiles: {for (final media in _media.allMedia) media.mediaId: media},
+    mediaUploads: {
+      for (final media in _media.allMedia)
+        if (_media.uploads.forMedia(media.mediaId) != null)
+          media.mediaId: _media.uploads.forMedia(media.mediaId)!,
+    },
+    cloudSyncedMessageIds: _messages.cloudSyncedMessageIds,
     messages: _messages.messages
         .where((m) => m.senderId == _messages.myId)
         .toList(),
@@ -1441,62 +1303,6 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
   // TAB: ข้อความ
   // =========================================================
 
-  Widget _buildConversations() {
-    final unread = _messages.totalUnread;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _ListHeading(title: 'การสนทนาล่าสุด', count: _messages.peers.length),
-        const SizedBox(height: 10),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: _StatusChip(
-            text: unread == 0
-                ? 'อ่านข้อความครบแล้ว'
-                : '$unread ข้อความใหม่ • ${_messages.unreadCounts.length} การสนทนา',
-            color: unread == 0 ? _success : _primary,
-          ),
-        ),
-        const SizedBox(height: 14),
-        if (!_messages.ready)
-          const _InfoState(
-            icon: Icons.storage_outlined,
-            text: 'กำลังโหลดข้อความที่บันทึกไว้...',
-          ),
-        if (_messages.error != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: _InfoState(
-              icon: Icons.error_outline,
-              text: 'ระบบข้อความ: ${_messages.error}',
-              error: true,
-            ),
-          ),
-        if (_messages.ready && _messages.peers.isEmpty)
-          const _EmptyState(
-            icon: Icons.chat_bubble_outline_rounded,
-            title: 'ยังไม่มีการสนทนา',
-            description:
-                'เมื่อเชื่อมต่อกับโทรศัพท์อีกเครื่องแล้ว รายการสนทนาจะแสดงที่นี่',
-          ),
-        for (final peer in _messages.peers.entries)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: _ConversationTile(
-              name: peer.value,
-              online: _messages.isReachable(peer.key),
-              connection: _messages.connectionLabel(peer.key),
-              role: _messages.peerRoleLabel(peer.key),
-              preview: _messages.conversationPreview(peer.key),
-              unread: _messages.unreadCounts[peer.key] ?? 0,
-              onTap: () => _openChat(peer.key),
-            ),
-          ),
-      ],
-    );
-  }
-
   // =========================================================
   // อธิบายระบบออฟไลน์ (แสดงเฉพาะหน้าการเชื่อมต่อ)
   // =========================================================
@@ -1620,94 +1426,6 @@ class _RescueLogo extends StatelessWidget {
         height: 44,
         fit: BoxFit.contain,
         semanticLabel: 'โลโก้ RescueLink',
-      ),
-    );
-  }
-}
-
-/// ตัวเลขสรุปแบบกดได้ (เชื่อมต่อ / พบใกล้เคียง / SOS)
-class _StatTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final int value;
-  final Color color;
-  final bool selected;
-  final bool highlight;
-  final VoidCallback? onTap;
-
-  const _StatTile({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-    this.selected = false,
-    this.highlight = false,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final p = _Palette.of(context);
-    final emphasized = selected || highlight;
-
-    return Material(
-      color: emphasized
-          ? color.withValues(alpha: p.dark ? 0.16 : 0.09)
-          : p.card,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 11),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: emphasized ? color.withValues(alpha: 0.55) : p.line,
-              width: emphasized ? 1.4 : 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(icon, size: 17, color: color),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '$value',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      height: 1,
-                      color: color,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                label,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  height: 1.25,
-                  fontWeight: FontWeight.w600,
-                  color: p.muted,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -1945,229 +1663,12 @@ class _ModeCard extends StatelessWidget {
   }
 }
 
-class _ListHeading extends StatelessWidget {
-  final String title;
-  final int count;
-
-  const _ListHeading({required this.title, required this.count});
-
-  @override
-  Widget build(BuildContext context) {
-    final p = _Palette.of(context);
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-          decoration: BoxDecoration(
-            color: p.dark ? const Color(0xFF283442) : const Color(0xFFF0EBE3),
-            borderRadius: BorderRadius.circular(30),
-          ),
-          child: Text(
-            '$count',
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String description;
-
-  const _EmptyState({
-    required this.icon,
-    required this.title,
-    required this.description,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final p = _Palette.of(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 26),
-      decoration: BoxDecoration(
-        color: p.card,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: p.line),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 58,
-            height: 58,
-            decoration: BoxDecoration(
-              color: p.accentSoft,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: const Color(0xFFB94612), size: 29),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            description,
-            textAlign: TextAlign.center,
-            style: TextStyle(color: p.muted, height: 1.4, fontSize: 13),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ConversationTile extends StatelessWidget {
-  final String name;
-  final String role, preview, connection;
-  final int unread;
-  final bool online;
-  final VoidCallback onTap;
-
-  const _ConversationTile({
-    required this.name,
-    required this.online,
-    required this.connection,
-    required this.onTap,
-    required this.role,
-    required this.preview,
-    required this.unread,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final p = _Palette.of(context);
-    final trimmed = name.trim();
-
-    final firstLetter = trimmed.isNotEmpty
-        ? trimmed.characters.first.toUpperCase()
-        : 'R';
-
-    return Material(
-      color: p.card,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: unread > 0 ? const Color(0x66B94612) : p.line,
-            ),
-          ),
-          child: Row(
-            children: [
-              Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 25,
-                    backgroundColor: const Color(0xFFB94612),
-                    child: Text(
-                      firstLetter,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      width: 13,
-                      height: 13,
-                      decoration: BoxDecoration(
-                        color: online ? const Color(0xFF32AF79) : Colors.grey,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: p.card, width: 2),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$role • $connection',
-                      style: TextStyle(
-                        color: online ? const Color(0xFF2E9B6F) : p.muted,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      preview,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: unread > 0
-                            ? FontWeight.w700
-                            : FontWeight.normal,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (unread > 0)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: Badge(
-                    label: Text('$unread'),
-                    child: const Icon(Icons.mark_chat_unread_outlined),
-                  ),
-                )
-              else
-                const Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  size: 16,
-                  color: Colors.grey,
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _InfoState extends StatelessWidget {
   final IconData icon;
   final String text;
-  final bool error;
+  final bool error = false;
 
-  const _InfoState({
-    required this.icon,
-    required this.text,
-    this.error = false,
-  });
+  const _InfoState({required this.icon, required this.text});
 
   @override
   Widget build(BuildContext context) {

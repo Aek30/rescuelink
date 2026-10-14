@@ -1,0 +1,1 @@
+{"tests": "พยายามรันชุดทดสอบสมาชิก / สมัคร / Login / ลบบัญชี / โปรไฟล์ฉุกเฉินในรอบนี้ แต่ Dart VM เริ่มทำงานไม่ได้ (resolved_executable_name ว่าง) จึงไม่มีผล PASS/FAIL ของโค้ดจากรอบนี้", "analyze": "Analyzer รอบนี้เริ่มไม่ได้จาก Dart runtime: resolvedExecutable เป็น null; ไม่ใช่ผลวิเคราะห์ว่าโค้ดไม่มีปัญหา ตรวจซอร์สและ schema ด้วยการอ่านไฟล์แทน"}

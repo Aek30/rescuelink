@@ -15,70 +15,122 @@ class ReachableMessages extends UiMessages {
 }
 
 void main() {
+  testWidgets('live directory hides stale people and opens reachable chat', (
+    tester,
+  ) async {
+    final service = ReachableMessages();
+    addTearDown(() {
+      service.dispose();
+      service.nearbyService.dispose();
+    });
+    final now = DateTime.now().toUtc();
+    Future<void> show() => tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: PresenceList(key: UniqueKey(), service: service),
+          ),
+        ),
+      ),
+    );
+    service.presence['peer'] = PeerPresence(
+      sequence: 1,
+      rescue: false,
+      receivedAt: now,
+      sos: SosAlert(
+        incidentId: 'sos',
+        revision: 1,
+        active: true,
+        name: 'B',
+        people: 1,
+        category: EmergencyType.other,
+        details: 'ช่วยด้วย',
+        updatedAt: now,
+      ),
+    );
+    await show();
+    expect(find.text('ต้องการความช่วยเหลือ'), findsOneWidget);
+    service.presence['peer'] = PeerPresence(
+      sequence: 2,
+      rescue: true,
+      receivedAt: now,
+    );
+    await show();
+    expect(find.text('พร้อมช่วยเหลือ'), findsOneWidget);
+    service.presence['peer'] = PeerPresence(
+      sequence: 3,
+      rescue: true,
+      receivedAt: now.subtract(const Duration(seconds: 31)),
+    );
+    await show();
+    expect(find.text('Phone B'), findsNothing);
+    service.reachable = true;
+    await show();
+    expect(find.text('รออัปเดตสถานะ'), findsOneWidget);
+    await tester.tap(find.text('ส่งข้อความ'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ChatScreen), findsOneWidget);
+  });
+
   testWidgets(
-    'presence uses red SOS, blue rescue, grey expired and opens chat',
+    'SOS requester sees helper names without their cancelled SOS history',
     (tester) async {
-      final service = ReachableMessages();
+      final service = ReachableMessages()..reachable = true;
       addTearDown(() {
         service.dispose();
         service.nearbyService.dispose();
       });
       final now = DateTime.now().toUtc();
       service.presence['peer'] = PeerPresence(
+        sequence: 2,
+        rescue: true,
+        receivedAt: now,
+        sos: SosAlert(
+          incidentId: 'old',
+          revision: 2,
+          active: false,
+          name: 'B',
+          people: 3,
+          category: EmergencyType.other,
+          details: 'ประวัติ SOS ของผู้ช่วย',
+          updatedAt: now,
+        ),
+      );
+      service.presence['other'] = PeerPresence(
         sequence: 1,
         rescue: false,
         receivedAt: now,
         sos: SosAlert(
-          incidentId: 'sos',
+          incidentId: 'active',
           revision: 1,
           active: true,
-          name: 'B',
+          name: 'C',
           people: 1,
           category: EmergencyType.other,
-          details: '',
+          details: 'SOS ของคนอื่น',
           updatedAt: now,
         ),
       );
-      Future<void> show() => tester.pumpWidget(
+      await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: SingleChildScrollView(
-              child: PresenceList(key: UniqueKey(), service: service),
+              child: PresenceList(
+                service: service,
+                filter: PresenceFilter.rescue,
+              ),
             ),
           ),
         ),
       );
-      await show();
-      expect(tester.widget<Icon>(find.byIcon(Icons.sos)).color, Colors.red);
-      service.presence['peer'] = PeerPresence(
-        sequence: 2,
-        rescue: true,
-        receivedAt: now,
-      );
-      await show();
-      expect(
-        tester.widget<Icon>(find.byIcon(Icons.health_and_safety)).color,
-        Colors.blue,
-      );
-      service.presence['peer'] = PeerPresence(
-        sequence: 3,
-        rescue: true,
-        receivedAt: now.subtract(const Duration(seconds: 31)),
-      );
-      await show();
-      expect(
-        tester.widget<Icon>(find.byIcon(Icons.health_and_safety)).color,
-        Colors.grey,
-      );
-      expect(find.textContaining('สถานะหมดอายุ'), findsOneWidget);
-      await tester.tap(find.text('Phone B'));
-      await tester.pumpAndSettle();
-      expect(find.byType(ChatScreen), findsNothing);
-      service.reachable = true;
-      await show();
-      await tester.tap(find.text('Phone B'));
+      expect(find.text('Phone B'), findsOneWidget);
+      expect(find.text('Phone C'), findsNothing);
+      expect(find.textContaining('ประวัติ SOS'), findsNothing);
+      expect(find.text('รายละเอียด SOS'), findsNothing);
+      await tester.tap(find.text('ส่งข้อความ'));
       await tester.pumpAndSettle();
       expect(find.byType(ChatScreen), findsOneWidget);
+      expect(tester.takeException(), isNull);
     },
   );
 

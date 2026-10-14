@@ -52,3 +52,7 @@ app.*.map.json
 
 # Temporary report rendering and optional Thai shaping dependencies.
 /tmp/
+
+# Installable builds stay local; reports and design artifacts can be versioned.
+/output/*.apk
+/android/.kotlin/

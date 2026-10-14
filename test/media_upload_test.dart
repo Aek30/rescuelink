@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:rescuelink/models/media_model.dart';
+import 'package:rescuelink/models/message_model.dart';
 import 'package:rescuelink/services/local_database_service.dart';
 import 'package:rescuelink/services/media_upload_service.dart';
 
@@ -99,11 +100,11 @@ void main() {
     },
   );
   test(
-    'failure is durable; restart does not upload until selected; retry uses same ID',
+    'offline queue survives restart and retries automatically using same ID',
     () async {
       cloud.fail = true;
       await uploads.enqueue(media.mediaId);
-      expect(uploads.forMedia(media.mediaId)!.state, UploadState.failed);
+      expect(uploads.forMedia(media.mediaId)!.state, UploadState.queued);
       uploads.dispose();
       await db.close();
       uploads = MediaUploadService(
@@ -114,12 +115,74 @@ void main() {
       await uploads.initialize();
       await uploads.retryPending();
       expect(cloud.uploads, 1);
-      expect(uploads.forMedia(media.mediaId)!.state, UploadState.failed);
+      expect(uploads.forMedia(media.mediaId)!.state, UploadState.queued);
       cloud.fail = false;
-      await uploads.enqueue(media.mediaId);
+      uploads.forMedia(media.mediaId)!.nextAttempt = DateTime(2000);
+      await uploads.retryPending();
       expect(cloud.uploads, 2);
       expect(uploads.jobs.length, 1);
       expect(uploads.forMedia(media.mediaId)!.state, UploadState.ready);
+    },
+  );
+  test(
+    'discovers saved media automatically and continues after five failures',
+    () async {
+      await db.saveMediaMessage(
+        media,
+        MessageModel(
+          id: media.messageId,
+          senderId: media.senderId,
+          senderName: media.senderName,
+          receiverId: media.receiverId,
+          text: media.mediaId,
+          timestamp: media.createdAt,
+          type: MessageType.media,
+        ),
+      );
+      cloud.fail = true;
+      for (var i = 0; i < 6; i++) {
+        uploads.forMedia(media.mediaId)?.nextAttempt = DateTime(2000);
+        await uploads.retryPending();
+      }
+      expect(cloud.uploads, 6);
+      expect(uploads.forMedia(media.mediaId)!.state, UploadState.queued);
+      cloud.fail = false;
+      uploads.forMedia(media.mediaId)!.nextAttempt = DateTime(2000);
+      uploads.dispose();
+      // Save the due retry through the same serialized format used on disk.
+      await db.setSetting(
+        'mediaUploadQueue',
+        '[{"mediaId":"media","owner":"owner","state":"queued","bytes":0,"attempts":6}]',
+      );
+      uploads = MediaUploadService(
+        database: db,
+        cloud: cloud,
+        lookup: (_) => media,
+      );
+      await uploads.initialize();
+      await uploads.retryPending();
+      expect(cloud.uploads, 7);
+      expect(uploads.forMedia(media.mediaId)!.state, UploadState.ready);
+    },
+  );
+  test(
+    'relay intermediary files are excluded from automatic uploads',
+    () async {
+      await db.saveMediaMessage(
+        media.copyWith(status: MediaStatus.relayQueued),
+        MessageModel(
+          id: media.messageId,
+          senderId: media.senderId,
+          senderName: media.senderName,
+          receiverId: media.receiverId,
+          text: media.mediaId,
+          timestamp: media.createdAt,
+          type: MessageType.media,
+        ),
+      );
+      await uploads.retryPending();
+      expect(cloud.uploads, 0);
+      expect(uploads.jobs, isEmpty);
     },
   );
   test(

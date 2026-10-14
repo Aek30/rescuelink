@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
@@ -17,6 +18,7 @@ class LocalDatabaseService {
   // Services capture this immutable database handle when they are created.
   // Never mutate a handle while callbacks from a previous account can finish.
   static LocalDatabaseService instance = LocalDatabaseService();
+  final cloudReceiptsChanged = ValueNotifier<int>(0);
   final DatabaseFactory _factory;
   final String? path;
   final bool blocked;

@@ -28,9 +28,7 @@ class RescueLinkApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: RescueTheme.light,
         darkTheme: RescueTheme.dark,
-        themeMode: AppPreferences.instance.dark
-            ? ThemeMode.dark
-            : ThemeMode.light,
+        themeMode: AppPreferences.instance.themeMode,
 
         home: const _StartupScreen(),
       ),
