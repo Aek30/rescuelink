@@ -74,6 +74,7 @@ flutter:
     - assets/branding/rescuelink-logo.png
     - assets/branding/rescuelink-logo-dark.png
     - assets/onboarding/
+    - assets/maps/rmutt.json
   fonts:
     - family: NotoSansThai
       fonts:

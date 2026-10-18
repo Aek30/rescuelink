@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rescuelink/widgets/nearby_mini_map.dart';
 import 'package:rescuelink/models/sos_alert.dart';
+import 'package:rescuelink/models/offline_map_data.dart';
 import 'sos_screen_test.dart' show UiMessages;
 
 void main() {
   testWidgets(
     'map shows no invented location and reads local GPS only on request',
     (tester) async {
+      await tester.runAsync(OfflineMapData.load);
       final service = UiMessages();
       addTearDown(() {
         service.dispose();

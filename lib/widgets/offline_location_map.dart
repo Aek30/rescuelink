@@ -1,139 +1,43 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/sos_alert.dart';
+import 'bundled_offline_map.dart';
 
-/// A local coordinate diagram. No tiles, invented roads, or network requests.
 class OfflineLocationMap extends StatelessWidget {
   const OfflineLocationMap({super.key, required this.location});
   final SosLocation location;
   @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 10),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF161C24) : const Color(0xFFEDF4F0),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isDark ? const Color(0xFF283442) : const Color(0xFFDCE6E0),
+  Widget build(BuildContext context) => Card(
+    clipBehavior: Clip.antiAlias,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        BundledOfflineMap(
+          focus: location,
+          markers: [
+            OfflineMapMarker(
+              id: 'received',
+              label: 'ตำแหน่งที่ได้รับ',
+              location: location,
+              color: const Color(0xFFC94B2B),
+            ),
+          ],
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Semantics(
-            label:
-                'แผนภาพพิกัดออฟไลน์ จุดกึ่งกลางคือพิกัดที่ได้รับ ไม่มีข้อมูลถนน',
-            child: SizedBox(
-              height: 160,
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: CustomPaint(
-                      painter: _CoordinatePainter(isDark: isDark),
-                    ),
-                  ),
-                  const Positioned(
-                    top: 12,
-                    right: 12,
-                    child: Text(
-                      '↑ N',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.location_on,
-                          color: Color(0xFFC94B2B),
-                          size: 40,
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0xFF283442)
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Text(
-                            'ตำแหน่งที่ได้รับ',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('ตำแหน่งที่ได้รับ • ไม่ใช่ตำแหน่งปัจจุบันของคุณ'),
+              Text(
+                '${location.latitude.toStringAsFixed(6)}, ${location.longitude.toStringAsFixed(6)}',
               ),
-            ),
+              Text(
+                'ความแม่นยำที่บันทึก ±${location.accuracy.toStringAsFixed(0)} ม.',
+              ),
+            ],
           ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'แผนภาพพิกัด • ใช้ได้ออฟไลน์',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                Text(
-                  '${location.latitude.toStringAsFixed(6)}, ${location.longitude.toStringAsFixed(6)}',
-                ),
-                Text(
-                  'ความแม่นยำที่บันทึก ±${location.accuracy.toStringAsFixed(0)} ม.',
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'ไม่มีข้อมูลถนนหรือเส้นทาง • กริดไม่มีมาตราส่วน\nไม่ใช่ตำแหน่งปัจจุบันของคุณ',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isDark
-                        ? const Color(0xFF94A3B8)
-                        : const Color(0xFF52635A),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CoordinatePainter extends CustomPainter {
-  const _CoordinatePainter({this.isDark = false});
-  final bool isDark;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final grid = Paint()
-      ..color = isDark ? const Color(0xFF1F2B24) : const Color(0xFFDCE6E0)
-      ..strokeWidth = 1;
-    for (double x = 0; x <= size.width; x += 24) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), grid);
-    }
-    for (double y = 0; y <= size.height; y += 24) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
-    }
-    canvas.drawCircle(
-      size.center(Offset.zero),
-      math.min(size.width, size.height) * .35,
-      Paint()
-        ..color = isDark
-            ? const Color(0xFF1B3D2B).withValues(alpha: .35)
-            : const Color(0xFFC8DED1).withValues(alpha: .45),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _CoordinatePainter oldDelegate) =>
-      oldDelegate.isDark != isDark;
+        ),
+      ],
+    ),
+  );
 }

@@ -57,7 +57,7 @@ void main() {
       ),
     );
     expect(find.text('13.756300, 100.501800'), findsOneWidget);
-    expect(find.textContaining('ไม่มีข้อมูลถนน'), findsOneWidget);
+    expect(find.textContaining('ไม่ใช่ตำแหน่งปัจจุบันของคุณ'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
