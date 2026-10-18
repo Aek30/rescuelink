@@ -1,15 +1,48 @@
 import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
+
 import '../models/sos_alert.dart';
+import 'local_database_service.dart';
 
 class SosLocationService {
   SosLocationService({
     Future<bool> Function()? requestPermission,
     this.timeout = const Duration(seconds: 65),
+    this.database,
   }) : _requestPermission = requestPermission ?? _permission;
   final Future<bool> Function() _requestPermission;
   final Duration timeout;
+  final LocalDatabaseService? database;
+  static const _cacheKey = 'sos.lastKnownLocation.v1';
+
+  Future<SosLocation?> lastKnown() async {
+    final store = database;
+    if (store == null) return null;
+    try {
+      final raw = await store.getSetting(_cacheKey);
+      if (raw == null) return null;
+      final fix = SosLocation.fromMap(jsonDecode(raw) as Map<String, dynamic>);
+      if (fix.capturedAt.isAfter(DateTime.now().toUtc())) return null;
+      return fix;
+    } catch (_) {
+      // A missing/corrupt cache must never invent coordinates or block SOS.
+      return null;
+    }
+  }
+
+  Future<({SosLocation location, bool cached})> captureWithFallback() async {
+    try {
+      return (location: await capture(), cached: false);
+    } on StateError {
+      final saved = await lastKnown();
+      if (saved == null) rethrow;
+      return (location: saved, cached: true);
+    }
+  }
+
   static const channel = MethodChannel('com.rmutt.rescuelink/location');
   static Future<bool> _permission() async =>
       (await Permission.locationWhenInUse.request()).isGranted;
@@ -32,6 +65,14 @@ class SosLocationService {
       if (age.isNegative || age > const Duration(minutes: 2)) {
         throw const FormatException('Stale location');
       }
+      final store = database;
+      if (store != null) {
+        try {
+          await store.setSetting(_cacheKey, jsonEncode(fix.toMap()));
+        } catch (_) {
+          // Keep a valid fresh fix usable even if local storage is unavailable.
+        }
+      }
       return fix;
     } on TimeoutException {
       try {
@@ -48,8 +89,7 @@ class SosLocationService {
         'canceled' =>
           'หยุดอ่านตำแหน่งแล้ว กรุณาเปิดหน้านี้ค้างไว้ระหว่างอ่าน GPS',
         'busy' => 'กำลังอ่านตำแหน่ง กรุณารอสักครู่',
-        _ =>
-          'อ่านตำแหน่งไม่ได้ กรุณาตรวจการตั้งค่าตำแหน่งแล้วลองใหม่ หรือส่งโดยไม่แนบพิกัด',
+        _ => 'อ่านตำแหน่งไม่ได้ กรุณาตรวจการตั้งค่าตำแหน่งแล้วลองใหม่ หรือส่งโดยไม่แนบพิกัด',
       });
     } on FormatException {
       throw StateError(

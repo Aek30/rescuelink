@@ -1,8 +1,12 @@
 import '../services/app_preferences.dart';
 import '../theme/rescue_theme.dart';
+
 import 'package:flutter/material.dart';
+
 import '../models/message_model.dart';
+
 import 'dart:convert';
+
 import '../models/sos_alert.dart';
 import '../services/message_service.dart';
 import '../services/sos_location_service.dart';
@@ -27,6 +31,9 @@ class _SosScreenState extends State<SosScreen> {
   EmergencyType _category = EmergencyType.medical;
   String? _specificCategory;
   SosLocation? _location;
+  bool _locationRemoved = false;
+  bool _usingCachedLocation = false;
+  late final SosLocationService _locationService;
   final _recipients = <String>{};
   bool _busy = false;
   bool _editing = false;
@@ -48,6 +55,7 @@ class _SosScreenState extends State<SosScreen> {
   @override
   void initState() {
     super.initState();
+    _locationService = SosLocationService(database: widget.service.database);
 
     final alert = widget.service.mySos;
     if (alert != null) {
@@ -89,6 +97,16 @@ class _SosScreenState extends State<SosScreen> {
 
   Future<void> _send() async {
     if (!_form.currentState!.validate()) return;
+    if (_location == null && !_locationRemoved) {
+      final saved = await _locationService.lastKnown();
+      if (!mounted) return;
+      if (saved != null) {
+        setState(() {
+          _location = saved;
+          _usingCachedLocation = true;
+        });
+      }
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => SosConfirmationDialog(
@@ -96,7 +114,9 @@ class _SosScreenState extends State<SosScreen> {
         people: _people.text.trim(),
         category: t(_specificCategory ?? _category.label),
         details: _details.text,
-        location: _location?.summary ?? t('ส่งโดยไม่แนบพิกัด'),
+        location: _location == null
+            ? t('ส่งโดยไม่แนบพิกัด')
+            : '${_usingCachedLocation ? 'พิกัดล่าสุดที่บันทึกไว้ (ไม่ใช่การอ่าน GPS ใหม่)\n' : ''}${_location!.summary}',
         recipients: _recipients
             .map((id) => widget.service.peers[id] ?? id)
             .toList(),
@@ -379,8 +399,14 @@ class _SosScreenState extends State<SosScreen> {
   Future<void> _readLocation() => _run(() async {
     setState(() => _readingLocation = true);
     try {
-      final fix = await SosLocationService().capture();
-      if (mounted) setState(() => _location = fix);
+      final result = await _locationService.captureWithFallback();
+      if (mounted) {
+        setState(() {
+          _location = result.location;
+          _usingCachedLocation = result.cached;
+          _locationRemoved = false;
+        });
+      }
     } finally {
       if (mounted) setState(() => _readingLocation = false);
     }
@@ -654,7 +680,9 @@ class _SosScreenState extends State<SosScreen> {
                                   ),
                                   const SizedBox(height: 10),
                                   SelectableText(
-                                    _location?.summary ?? 'ยังไม่ได้แนบพิกัด',
+                                    _location == null
+                                        ? 'ยังไม่ได้แนบพิกัด'
+                                        : '${_usingCachedLocation ? 'อ่าน GPS ใหม่ไม่ได้หรือใช้ข้อมูลที่บันทึกไว้\nพิกัดล่าสุด (ตรวจวันเวลาก่อนส่ง)\n' : ''}${_location!.summary}',
                                   ),
                                   if (_location == null)
                                     Text(
@@ -690,7 +718,11 @@ class _SosScreenState extends State<SosScreen> {
                               TextButton(
                                 onPressed: _busy
                                     ? null
-                                    : () => setState(() => _location = null),
+                                    : () => setState(() {
+                                        _location = null;
+                                        _locationRemoved = true;
+                                        _usingCachedLocation = false;
+                                      }),
                                 child: Text(t("ไม่แนบพิกัด")),
                               ),
                             ],
@@ -795,9 +827,9 @@ class _SosScreenState extends State<SosScreen> {
                       if (active)
                         TextButton(
                           style: TextButton.styleFrom(
-                            foregroundColor: Theme.of(
-                              context,
-                            ).colorScheme.error,
+                            foregroundColor: Theme.of(context)
+                                .colorScheme
+                                .error,
                           ),
                           onPressed: _busy ? null : _cancel,
                           child: Text(t("ยกเลิก SOS และแจ้งผู้รับเดิม")),

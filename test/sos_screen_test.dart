@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nearby_connections/nearby_connections.dart';
@@ -11,6 +12,16 @@ import 'package:rescuelink/services/nearby_service.dart';
 import 'package:rescuelink/services/local_database_service.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+class UiSettings extends LocalDatabaseService {
+  UiSettings(this.cachedLocation) : super(factory: databaseFactoryFfi);
+  final SosLocation? cachedLocation;
+  @override
+  Future<String?> getSetting(String key) async =>
+      key == 'sos.lastKnownLocation.v1' && cachedLocation != null
+      ? jsonEncode(cachedLocation!.toMap())
+      : null;
+}
+
 class NativeFake extends Fake implements Nearby {}
 
 class UiTransport extends NearbyService {
@@ -20,15 +31,16 @@ class UiTransport extends NearbyService {
 }
 
 class UiMessages extends MessageService {
-  UiMessages()
+  UiMessages({SosLocation? cachedLocation})
     : super(
         nearbyService: UiTransport(),
-        database: LocalDatabaseService(factory: databaseFactoryFfi),
+        database: UiSettings(cachedLocation),
       ) {
     myId = 'me';
     peers = {'peer': 'Phone B', 'other': 'Phone C'};
   }
   Set<String>? sentTo;
+  SosLocation? sentLocation;
   @override
   Future<void> publishSos({
     required String name,
@@ -40,10 +52,44 @@ class UiMessages extends MessageService {
     bool active = true,
   }) async {
     sentTo = recipients;
+    sentLocation = location;
   }
 }
 
 void main() {
+  testWidgets(
+    'cached coordinates are disclosed before confirmation and preserved on send',
+    (tester) async {
+      final cached = SosLocation(
+        latitude: 14,
+        longitude: 100,
+        accuracy: 20,
+        capturedAt: DateTime.utc(2026, 1, 1),
+      );
+      final service = UiMessages(cachedLocation: cached);
+      addTearDown(() {
+        service.dispose();
+        service.nearbyService.dispose();
+      });
+      await tester.pumpWidget(MaterialApp(home: SosScreen(service: service)));
+      final send = find.text('ส่งสัญญาณ SOS');
+      await tester.scrollUntilVisible(
+        send,
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(send);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('พิกัดล่าสุดที่บันทึกไว้'), findsOneWidget);
+      expect(service.sentTo, isNull);
+      await tester.tap(find.text('ยืนยันส่ง SOS'));
+      await tester.pumpAndSettle();
+      expect(service.sentLocation?.capturedAt, cached.capturedAt);
+      expect(service.sentLocation?.latitude, cached.latitude);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'SOS can broadcast without recipients but requires confirmation',
     (tester) async {
