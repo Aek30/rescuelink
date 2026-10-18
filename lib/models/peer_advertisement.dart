@@ -24,6 +24,7 @@ class PeerAdvertisement {
     'sequence': state.sequence,
     'rescue': state.rescue,
     'sos': state.sos?.toJson(),
+    'rescueLocation': state.rescueLocation?.toMap(),
     'ageMs': now.isBefore(state.receivedAt)
         ? retention.inMilliseconds
         : now.difference(state.receivedAt).inMilliseconds,
@@ -69,6 +70,11 @@ class PeerAdvertisement {
       state: PeerPresence(
         sequence: sequence,
         rescue: rescue,
+        rescueLocation: data['rescueLocation'] == null
+            ? null
+            : SosLocation.fromMap(
+                data['rescueLocation'] as Map<String, dynamic>,
+              ),
         receivedAt: now.subtract(Duration(milliseconds: age)),
         sos: data['sos'] == null
             ? null

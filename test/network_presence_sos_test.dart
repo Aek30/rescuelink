@@ -150,6 +150,35 @@ void main() {
     'path': [id, via],
   };
 
+  test(
+    'rescue GPS reaches C through B and can be withdrawn without an SOS',
+    () async {
+      await connect(0, 1);
+      await connect(1, 2);
+      await nodes[0].setRescueMode(true);
+      final location = SosLocation(
+        latitude: 14.036,
+        longitude: 100.728,
+        accuracy: 8,
+        capturedAt: now,
+      );
+      await nodes[0].shareRescueLocation(location);
+      await exchange();
+      final received = nodes[2].presence[nodes[0].myId]!;
+      expect(received.rescue, isTrue);
+      expect(received.sos, isNull);
+      expect(received.mapLocation!.latitude, location.latitude);
+      expect(received.mapLocation!.capturedAt, now);
+      await nodes[0].clearRescueLocation();
+      await exchange();
+      expect(nodes[2].presence[nodes[0].myId]!.mapLocation, isNull);
+      await nodes[0].shareRescueLocation(location);
+      await nodes[0].setRescueMode(false);
+      await exchange();
+      expect(nodes[2].presence[nodes[0].myId]!.rescueLocation, isNull);
+    },
+  );
+
   setUp(() async {
     now = DateTime.now().toUtc();
     temp = await Directory.systemTemp.createTemp('network-presence-');

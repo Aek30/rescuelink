@@ -88,6 +88,24 @@ class MessageService extends ChangeNotifier {
   SosAlert? mySos;
   bool _publishingSos = false;
   bool rescueMode = false;
+  // Explicitly shared for this session only; never infer a rescue location from SOS.
+  SosLocation? rescueLocation;
+
+  Future<void> shareRescueLocation(SosLocation location) async {
+    if (!ready || _disposed || !rescueMode) {
+      throw StateError('เปิดโหมดกู้ภัยก่อนแชร์พิกัด');
+    }
+    rescueLocation = location;
+    _notify();
+    await retry();
+  }
+
+  Future<void> clearRescueLocation() async {
+    rescueLocation = null;
+    _notify();
+    await retry();
+  }
+
   bool _changingRescue = false;
 
   /// คืน peerId (deviceId) ที่ตรงกับ endpointId — ใช้โดย MediaService
@@ -194,6 +212,7 @@ class MessageService extends ChangeNotifier {
       if (value && mySos?.isActiveAt(_now()) == true) await cancelSos();
       await database.setSetting('rescueMode', '$value');
       rescueMode = value;
+      if (!value) rescueLocation = null;
       _notify();
       await retry();
     } finally {
@@ -246,6 +265,7 @@ class MessageService extends ChangeNotifier {
       if (active && rescueMode) {
         await database.setSetting('rescueMode', 'false');
         rescueMode = false;
+        rescueLocation = null;
         _notify();
       }
       await database.saveSos(
@@ -585,6 +605,7 @@ class MessageService extends ChangeNotifier {
     presence[owner] = PeerPresence(
       sequence: previous?.sequence ?? 1,
       rescue: previous?.rescue ?? false,
+      rescueLocation: previous?.rescueLocation,
       // A targeted SOS does not prove that a cached Rescue role is current.
       receivedAt:
           previous?.receivedAt ??
@@ -726,6 +747,7 @@ class MessageService extends ChangeNotifier {
         state: PeerPresence(
           sequence: state.sequence,
           rescue: state.rescue,
+          rescueLocation: state.rescueLocation,
           receivedAt: state.receivedAt,
           sos: _latestSos(entry.peerId) ?? state.sos,
         ),
@@ -830,6 +852,7 @@ class MessageService extends ChangeNotifier {
       final localState = PeerPresence(
         sequence: _presenceSequence,
         rescue: rescueMode,
+        rescueLocation: rescueMode ? rescueLocation : null,
         sos: mySos,
         receivedAt: _now(),
       );

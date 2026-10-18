@@ -34,10 +34,14 @@ class IncidentDetailScreen extends StatelessWidget {
                   ? 'SOS • กำลังขอความช่วยเหลือ${fresh ? '' : ' • สถานะการเชื่อมต่อเก่า'}'
                   : alert?.isExpired(DateTime.now().toUtc()) == true
                   ? 'SOS หมดอายุ'
+                  : presence?.rescue == true
+                  ? 'หน่วยกู้ภัย${fresh ? '' : ' • สถานะเก่า'}'
                   : 'ไม่มี SOS ที่เปิดอยู่',
             ),
             const SizedBox(height: 16),
             Text(service.connectionLabel(peerId)),
+            if (presence?.rescue == true && presence?.rescueLocation != null)
+              LocationButton(location: presence!.rescueLocation!),
             if (alert != null) ...[
               Card(
                 child: Padding(
