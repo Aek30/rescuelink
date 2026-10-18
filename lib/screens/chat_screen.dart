@@ -29,6 +29,7 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final _text = TextEditingController();
+  final _focusNode = FocusNode();
   bool _sending = false;
   String _query = '';
   String _filter = 'all';
@@ -48,27 +49,38 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _focusNode.dispose();
     _text.dispose();
     super.dispose();
   }
 
   Future<void> _send() async {
     if (_sending) return;
+    final content = _text.text.trim();
+    if (content.isEmpty) return;
+
+    final hadFocus = _focusNode.hasFocus;
+    _text.clear();
     setState(() => _sending = true);
     try {
       await widget.service.sendTextMessage(
         receiverId: widget.peerId,
-        text: _text.text,
+        text: content,
       );
-      if (mounted) _text.clear();
     } catch (e) {
       if (mounted) {
+        _text.text = content;
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('$e')));
       }
     } finally {
-      if (mounted) setState(() => _sending = false);
+      if (mounted) {
+        setState(() => _sending = false);
+        if (hadFocus && !_focusNode.hasFocus) {
+          _focusNode.requestFocus();
+        }
+      }
     }
   }
 
@@ -290,7 +302,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 ? _media?.getCached(m.text)
                 : null;
             final label =
-                media?.fileName ?? ResponderUpdate.readableText(m.text);
+                media?.fileName ?? ResponderUpdate.cleanDisplay(m.text);
             if (!label.toLowerCase().contains(_query.toLowerCase())) {
               return false;
             }
@@ -462,6 +474,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       )
                     : ListView.builder(
                         reverse: true,
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
                         padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
                         itemCount: messages.length,
                         itemBuilder: (context, index) {
@@ -588,7 +602,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                         ? SosAlert.fromJson(
                                             message.text,
                                           ).summary
-                                        : ResponderUpdate.readableText(
+                                        : ResponderUpdate.cleanDisplay(
                                             message.text,
                                           ),
                                     style: TextStyle(
@@ -677,9 +691,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     Expanded(
                       child: TextField(
                         controller: _text,
+                        focusNode: _focusNode,
                         minLines: 1,
                         maxLines: 4,
-                        enabled: !_sending,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => _send(),
                         decoration: const InputDecoration(
                           labelText: 'พิมพ์ข้อความ',
                           hintText: 'ส่งต่อความห่วงใย…',

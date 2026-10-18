@@ -399,13 +399,7 @@ class MessageService extends ChangeNotifier {
 
   Future<void> _refreshCloudReceipts() async {
     try {
-      final ids = await CloudSyncReceipts.messageIds(
-        await database.database,
-        messages,
-      );
-      if (_disposed) return;
-      cloudSyncedMessageIds = ids;
-      _notify();
+      await _refresh();
     } catch (_) {
       if (_disposed) return;
       error = 'อ่านสถานะ Cloud ไม่สำเร็จ กรุณาลองใหม่';
@@ -413,16 +407,155 @@ class MessageService extends ChangeNotifier {
     }
   }
 
+  Future<
+    ({
+      List<MessageModel> messages,
+      Map<String, String> peers,
+      Set<String> restoredIds,
+    })
+  >
+  _mergeCloudHistory(
+    List<MessageModel> localMessages,
+    Map<String, String> localPeers,
+  ) async {
+    final db = await database.database;
+    final rows = await db.query(
+      'chat_records',
+      where: 'deleted = 0',
+      orderBy: 'rowid ASC',
+    );
+    if (rows.isEmpty) {
+      return (
+        messages: localMessages,
+        peers: localPeers,
+        restoredIds: const <String>{},
+      );
+    }
+    final cloudMessages = <MessageModel>[];
+    for (final row in rows) {
+      try {
+        cloudMessages.add(MessageModel.fromJson(row['payload'] as String));
+      } catch (_) {}
+    }
+    if (cloudMessages.isEmpty) {
+      return (
+        messages: localMessages,
+        peers: localPeers,
+        restoredIds: const <String>{},
+      );
+    }
+    final myIds = <String>{?myId};
+    final savedRadioIds = await database.getSetting('myRadioIds');
+    if (savedRadioIds != null) {
+      try {
+        for (final id in (jsonDecode(savedRadioIds) as List)) {
+          if (id is String && id.isNotEmpty) myIds.add(id);
+        }
+      } catch (_) {}
+    }
+    final myName =
+        (await database.getSetting('profileNameDraft') ??
+                await database.getSetting('profileDisplayName') ??
+                AppPreferences.instance.displayName ??
+                '')
+            .trim();
+    if (myName.isNotEmpty) {
+      for (final m in cloudMessages) {
+        if (m.senderName.trim() == myName) {
+          myIds.add(m.senderId);
+        }
+      }
+      for (final m in cloudMessages) {
+        if (!myIds.contains(m.senderId) &&
+            !myIds.contains(m.receiverId) &&
+            m.senderName.trim().isNotEmpty &&
+            m.senderName.trim() != myName) {
+          myIds.add(m.receiverId);
+        }
+      }
+    }
+    final unmatched = cloudMessages
+        .where(
+          (m) => !myIds.contains(m.senderId) && !myIds.contains(m.receiverId),
+        )
+        .toList();
+    if (unmatched.isNotEmpty) {
+      final counts = <String, int>{};
+      for (final m in unmatched) {
+        counts[m.senderId] = (counts[m.senderId] ?? 0) + 1;
+        counts[m.receiverId] = (counts[m.receiverId] ?? 0) + 1;
+      }
+      String? bestId;
+      var bestCount = -1;
+      for (final entry in counts.entries) {
+        if (entry.value > bestCount) {
+          bestCount = entry.value;
+          bestId = entry.key;
+        }
+      }
+      if (bestId != null) myIds.add(bestId);
+    }
+
+    final localIds = {for (final m in localMessages) m.id};
+    final combined = [...localMessages];
+    final peersMap = {...localPeers};
+    final restoredIds = <String>{};
+
+    for (final m in cloudMessages) {
+      var senderId = m.senderId;
+      var receiverId = m.receiverId;
+      if (myId != null && senderId != myId && receiverId != myId) {
+        if (myIds.contains(senderId)) {
+          senderId = myId!;
+        } else if (myIds.contains(receiverId)) {
+          receiverId = myId!;
+        }
+      }
+      if (senderId != myId && m.senderName.trim().isNotEmpty) {
+        peersMap.putIfAbsent(senderId, () => m.senderName.trim());
+      }
+      if (localIds.contains(m.id)) continue;
+      combined.add(
+        MessageModel(
+          id: m.id,
+          senderId: senderId,
+          senderName: m.senderName,
+          receiverId: receiverId,
+          text: m.text,
+          timestamp: m.timestamp,
+          type: m.type,
+          status: MessageStatus.synced,
+          ackFor: m.ackFor,
+          recordedAt: m.recordedAt,
+        ),
+      );
+      restoredIds.add(m.id);
+    }
+    if (restoredIds.isNotEmpty) {
+      combined.sort((a, b) {
+        final cmp = a.displayTime.compareTo(b.displayTime);
+        return cmp != 0 ? cmp : a.timestamp.compareTo(b.timestamp);
+      });
+    }
+    return (messages: combined, peers: peersMap, restoredIds: restoredIds);
+  }
+
   Future<void> _refresh() async {
     if (_disposed) return;
     await _reloadCurrentSos();
     receivedRoutes = await database.getReceivedRoutes();
-    messages = await database.getMessages();
-    cloudSyncedMessageIds = await CloudSyncReceipts.messageIds(
-      await database.database,
-      messages,
-    );
-    peers = await database.getPeers();
+    final localMessages = await database.getMessages();
+    final localPeers = await database.getPeers();
+    final merged = await _mergeCloudHistory(localMessages, localPeers);
+    messages = merged.messages;
+    cloudSyncedMessageIds = {
+      ...await CloudSyncReceipts.messageIds(
+        await database.database,
+        localMessages,
+      ),
+      ...merged.restoredIds,
+    };
+    peers = merged.peers;
     unreadCounts = await database.getUnreadCounts(myId!);
     _notify();
   }

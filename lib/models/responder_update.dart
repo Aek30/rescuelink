@@ -39,4 +39,26 @@ class ResponderUpdate {
   }
 
   static String readableText(String raw) => parse(raw)?.displayText ?? raw;
+
+  /// Strips machine protocol markers like `[SOS <uuid> / <stage>]` so only
+  /// human-readable message content is presented to users in chat and previews.
+  static String cleanDisplay(String raw) {
+    final parsed = parse(raw);
+    if (parsed != null) return parsed.displayText;
+    final markerRegex = RegExp(r'^\[SOS\s+[^\]\r\n]+\]\s*', multiLine: false);
+    if (markerRegex.hasMatch(raw)) {
+      final stripped = raw.replaceFirst(markerRegex, '').trim();
+      if (stripped.isNotEmpty) return stripped;
+      final stageMatch = RegExp(
+        r'/ (pending|helping|completed)',
+      ).firstMatch(raw);
+      return switch (stageMatch?.group(1)) {
+        'pending' => 'พร้อมเข้าไปช่วยเหลือ • รอการยืนยัน',
+        'helping' => 'กำลังให้ความช่วยเหลือ',
+        'completed' => 'แจ้งว่าการช่วยเหลือเสร็จสิ้นแล้ว',
+        _ => 'อัปเดตสถานะ SOS',
+      };
+    }
+    return raw;
+  }
 }

@@ -35,6 +35,24 @@ class SupabaseChatCloud implements ChatCloud {
   @override
   Future<List<Map<String, dynamic>>> pull() async {
     final client = await auth.cloudClient(owner);
+    try {
+      final devices = await client
+          .from('account_devices')
+          .select('radio_identity')
+          .eq('user_id', owner);
+      final radioIds = <String>{
+        for (final row in devices)
+          if (row['radio_identity'] is String &&
+              (row['radio_identity'] as String).isNotEmpty)
+            row['radio_identity'] as String,
+      };
+      if (radioIds.isNotEmpty) {
+        await LocalDatabaseService.instance.setSetting(
+          'myRadioIds',
+          jsonEncode(radioIds.toList()),
+        );
+      }
+    } catch (_) {}
     final records = <Map<String, dynamic>>[];
     for (var offset = 0; ; offset += 200) {
       if (auth.session?.userId != owner) throw StateError('บัญชีเปลี่ยนแล้ว');

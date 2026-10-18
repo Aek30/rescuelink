@@ -203,6 +203,23 @@ class SupabaseAuthBackend implements AuthBackend {
         'radio_identity': radioIdentity,
         'last_seen_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'user_id,installation_id');
+      try {
+        final devices = await client
+            .from('account_devices')
+            .select('radio_identity')
+            .eq('user_id', session.userId);
+        final radioIds = <String>{
+          radioIdentity,
+          for (final row in devices)
+            if (row['radio_identity'] is String &&
+                (row['radio_identity'] as String).isNotEmpty)
+              row['radio_identity'] as String,
+        };
+        await LocalDatabaseService.instance.setSetting(
+          'myRadioIds',
+          jsonEncode(radioIds.toList()),
+        );
+      } catch (_) {}
     } finally {
       await client.dispose();
     }

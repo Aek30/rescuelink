@@ -96,6 +96,7 @@ class ChatStore {
       if (!delete) payload['text'] = text!.trim();
       await _save(txn, id, jsonEncode(payload), row['version'] as int, delete);
     });
+    database.cloudReceiptsChanged.value++;
   }
 
   static Future<void> _putRemote(
@@ -144,6 +145,7 @@ class ChatStore {
         await txn.delete('chat_records', where: 'id = ?', whereArgs: [id]);
       }
     });
+    database.cloudReceiptsChanged.value++;
   }
 
   Future<void> acknowledge(
