@@ -146,13 +146,35 @@ void main() {
           : [];
       int indexOf<T>() => sections().indexWhere((w) => w is T);
       expect(indexOf<NearbyMiniMap>(), greaterThan(indexOf<PresenceList>()));
+      expect(
+        sections().whereType<PresenceList>().single.filter,
+        PresenceFilter.all,
+      );
       messages.mode(sos: true);
       await tester.pumpAndSettle();
       expect(find.text('กำลังขอความช่วยเหลือ'), findsOneWidget);
       expect(indexOf<PresenceList>(), lessThan(indexOf<NearbyMiniMap>()));
       expect(
-        (sections().whereType<PresenceList>().single).filter,
+        (sections().whereType<PresenceList>().first).filter,
         PresenceFilter.rescue,
+      );
+      expect(sections().whereType<PresenceList>().length, 2);
+      expect(
+        sections().whereType<PresenceList>().last.excludeFilter,
+        PresenceFilter.rescue,
+      );
+      expect(sections().whereType<PresenceList>().last.reachableOnly, isTrue);
+      expect(find.text('ผู้พร้อมช่วยเหลือ'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('คนรอบตัวคุณ'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('คนรอบตัวคุณ'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('ปิดโหมด SOS'),
+        -200,
+        scrollable: find.byType(Scrollable).first,
       );
       await tester.tap(find.text('ปิดโหมด SOS'));
       await tester.pumpAndSettle();
@@ -162,11 +184,37 @@ void main() {
       expect(find.text('พร้อมช่วยเหลือคนใกล้คุณ'), findsOneWidget);
       expect(indexOf<PresenceList>(), lessThan(indexOf<NearbyMiniMap>()));
       expect(
-        (sections().whereType<PresenceList>().single).filter,
+        (sections().whereType<PresenceList>().first).filter,
         PresenceFilter.sos,
+      );
+      expect(sections().whereType<PresenceList>().length, 2);
+      expect(
+        sections().whereType<PresenceList>().last.excludeFilter,
+        PresenceFilter.sos,
+      );
+      expect(sections().whereType<PresenceList>().last.reachableOnly, isTrue);
+      expect(find.text('คนที่ต้องการความช่วยเหลือ'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('คนรอบตัวคุณ'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('คนรอบตัวคุณ'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('ปิดโหมดหน่วยกู้ภัย'),
+        -200,
+        scrollable: find.byType(Scrollable).first,
       );
       await tester.tap(find.text('ปิดโหมดหน่วยกู้ภัย'));
       await tester.pumpAndSettle();
+      expect(
+        sections().whereType<PresenceList>().single.filter,
+        PresenceFilter.all,
+      );
+      expect(
+        sections().whereType<PresenceList>().single.reachableOnly,
+        isFalse,
+      );
       expect(indexOf<NearbyMiniMap>(), greaterThan(indexOf<PresenceList>()));
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());

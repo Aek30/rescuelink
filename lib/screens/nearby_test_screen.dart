@@ -673,6 +673,14 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
               ? PresenceFilter.sos
               : PresenceFilter.all,
         ),
+        if (sosMode || rescueMode) ...[
+          const SizedBox(height: 22),
+          PresenceList(
+            service: _messages,
+            excludeFilter: sosMode ? PresenceFilter.rescue : PresenceFilter.sos,
+            reachableOnly: true,
+          ),
+        ],
         const SizedBox(height: 22),
         NearbyMiniMap(key: const ValueKey('home-map'), service: _messages),
       ],
