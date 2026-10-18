@@ -182,4 +182,34 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pumpAndSettle();
   });
+
+  testWidgets(
+    'MessagesScreen preview shows clean human-readable text instead of [SOS + UUID] marker',
+    (tester) async {
+      service.messages = [
+        MessageModel(
+          id: '1',
+          senderId: 'a',
+          senderName: 'Alice',
+          receiverId: 'me',
+          text:
+              '[SOS 302d7f97-1c66-4b20-8832-5d593f7e31f5 / pending]\n'
+              'พร้อมเข้าไปช่วยเหลือ • รอการยืนยันจากคุณ\n'
+              'กรุณาตอบกลับเพื่อนัดหมายและยืนยันรายละเอียด',
+          timestamp: DateTime.utc(2026, 10, 5),
+        ),
+      ];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MessagesScreen(service: service, onNearby: () {}),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('พร้อมเข้าไปช่วยเหลือ'), findsOneWidget);
+      expect(find.textContaining('[SOS'), findsNothing);
+      expect(find.textContaining('302d7f97'), findsNothing);
+    },
+  );
 }
