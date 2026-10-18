@@ -56,3 +56,6 @@ app.*.map.json
 # Installable builds stay local; reports and design artifacts can be versioned.
 /output/*.apk
 /android/.kotlin/
+/.build-tools/
+# Widget Preview related
+.widget_preview/
