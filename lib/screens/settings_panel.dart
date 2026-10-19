@@ -1,44 +1,88 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../services/app_preferences.dart';
 import '../services/auth_service.dart';
+import '../services/member_profile_sync.dart';
 import 'member_screen.dart';
 import '../theme/rescue_theme.dart';
 
 class SettingsPanel extends StatelessWidget {
   const SettingsPanel({
     super.key,
-    required this.pending,
     required this.rescue,
     required this.ready,
     required this.onRescue,
-    required this.onQueue,
     required this.onDevice,
     required this.onConnection,
     required this.onExit,
     this.beforeAccountExit,
     this.onResponder,
   });
-  final int pending;
   final bool rescue, ready;
   final ValueChanged<bool> onRescue;
-  final VoidCallback onQueue, onDevice, onConnection, onExit;
+  final VoidCallback onDevice, onConnection, onExit;
   final Future<void> Function()? beforeAccountExit;
   final VoidCallback? onResponder;
+
+  static String? _sessionMetadataName(AccountSession? session) {
+    final raw = session?.serialized;
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        final user = decoded['user'];
+        if (user is Map<String, dynamic>) {
+          final meta = user['user_metadata'];
+          if (meta is Map<String, dynamic>) {
+            final name = (meta['display_name'] ?? meta['full_name'])
+                ?.toString()
+                .trim();
+            if (name != null && name.isNotEmpty) return name;
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
     final prefs = AppPreferences.instance;
+    final auth = AuthService.instance;
+    final profileSync = MemberProfileSync.instance;
     return ListenableBuilder(
-      listenable: prefs,
+      listenable: Listenable.merge([prefs, auth, profileSync]),
       builder: (context, _) {
         final t = prefs.text;
         final dark = Theme.of(context).brightness == Brightness.dark;
-        final bg = dark ? RescueTheme.darkBackground : RescueTheme.cream;
+        final bg = Theme.of(context).scaffoldBackgroundColor;
         final surface = dark ? RescueTheme.darkSurface : Colors.white;
         final ink = dark ? RescueTheme.darkText : RescueTheme.navy;
         final muted = dark ? RescueTheme.darkTextMuted : RescueTheme.muted;
         final line = dark ? RescueTheme.darkBorder : RescueTheme.border;
-        final signedIn = AuthService.instance.signedIn;
+        final session = auth.session;
+        final signedIn = auth.signedIn;
+        final syncedProfile =
+            session != null && profileSync.profile?.id == session.userId
+            ? profileSync.profile
+            : null;
+        final memberName =
+            [
+                  prefs.displayName,
+                  syncedProfile?.name,
+                  _sessionMetadataName(session),
+                ]
+                .map((s) => s?.trim())
+                .firstWhere(
+                  (s) => s != null && s.isNotEmpty,
+                  orElse: () => null,
+                ) ??
+            t("โปรไฟล์ของฉัน");
+        final memberEmail =
+            (session?.email.trim().isNotEmpty == true
+                ? session!.email.trim()
+                : syncedProfile?.email.trim()) ??
+            '';
 
         Future<void> save(String key, bool value) async {
           try {
@@ -188,250 +232,92 @@ class SettingsPanel extends StatelessWidget {
         );
 
         // ---------- header ----------
-       final header = Container(
-  width: double.infinity,
-  padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-  decoration: BoxDecoration(
-    gradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: dark
-          ? [const Color(0xFF1E293B), RescueTheme.darkSurface]
-          : [RescueTheme.navy, const Color(0xFF24365C)],
-    ),
-    borderRadius: const BorderRadius.vertical(
-      bottom: Radius.circular(30),
-    ),
-  ),
-  child: Row(
-    children: [
-      // ไอคอนอยู่ซ้าย
-      GestureDetector(
-        onTap: signedIn ? openMember : onDevice,
-        child: Semantics(
-          button: true,
-          label: t("แก้ไขโปรไฟล์"),
-          child: SizedBox(
-            width: 84,
-            height: 84,
-            child: Stack(
-              children: [
-                Container(
-                  width: 84,
-                  height: 84,
-                  padding: const EdgeInsets.all(3.5),
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [Color(0xFFFFB17B), RescueTheme.orange],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  child: CircleAvatar(
-                    backgroundColor: RescueTheme.peach,
-                    child: const Icon(
-                      Icons.person_rounded,
-                      size: 46,
-                      color: RescueTheme.navy,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: RescueTheme.orange,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: dark
-                            ? const Color(0xFF1E293B)
-                            : RescueTheme.navy,
-                        width: 2.5,
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.edit_rounded,
-                      size: 13,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      const SizedBox(width: 16),
-      // ชื่ออยู่ขวา
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              prefs.displayName ?? t("โปรไฟล์ของฉัน"),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 21,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 4,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.18),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    rescue
-                        ? Icons.volunteer_activism_rounded
-                        : Icons.person_outline_rounded,
-                    size: 13,
-                    color: RescueTheme.orange,
-                  ),
-                  const SizedBox(width: 5),
-                  Flexible(
-                    child: Text(
-                      rescue
-                          ? t("ผู้ช่วยเหลือทั่วไป • ไม่ยืนยันหน่วยงาน")
-                          : t("ผู้ใช้ทั่วไป"),
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (signedIn) ...[
-              const SizedBox(height: 10),
-              FilledButton.icon(
-                onPressed: openMember,
-                style: FilledButton.styleFrom(
-                  backgroundColor: RescueTheme.orange,
-                  foregroundColor: Colors.white,
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                icon: const Icon(Icons.manage_accounts_rounded, size: 17),
-                label: Text(
-                  t("ดู / แก้ไขข้อมูลสมาชิก"),
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    ],
-  ),
-);
-
-        // ---------- offline queue hero ----------
-        final queueCard = Material(
+        final header = Material(
           color: Colors.transparent,
-          child: Ink(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(22),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: dark
-                    ? [const Color(0xFF3A2416), const Color(0xFF2A1B12)]
-                    : [const Color(0xFFFFE6D1), const Color(0xFFFFF4EA)],
-              ),
-              border: Border.all(
-                color: dark
-                    ? RescueTheme.orange.withValues(alpha: 0.45)
-                    : const Color(0xFFFFB17B),
-              ),
+          child: InkWell(
+            key: const ValueKey('profile-header'),
+            onTap: openMember,
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(28),
             ),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(22),
-              onTap: onQueue,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
+            child: Ink(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: dark
+                      ? [const Color(0xFF1E293B), RescueTheme.darkSurface]
+                      : [RescueTheme.navy, const Color(0xFF24365C)],
+                ),
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(28),
+                ),
+              ),
+              child: Semantics(
+                button: true,
+                label: t("ข้อมูลสมาชิก"),
                 child: Row(
                   children: [
                     Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: RescueTheme.orange,
-                        borderRadius: BorderRadius.circular(16),
+                      width: 62,
+                      height: 62,
+                      padding: const EdgeInsets.all(2.5),
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [Color(0xFFFFB17B), RescueTheme.orange],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
                       ),
-                      child: const Icon(
-                        Icons.wifi_off_rounded,
-                        color: Colors.white,
-                        size: 26,
+                      child: const CircleAvatar(
+                        backgroundColor: RescueTheme.peach,
+                        child: Icon(
+                          Icons.person_rounded,
+                          size: 34,
+                          color: RescueTheme.navy,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            t("คิวข้อความออฟไลน์"),
-                            style: TextStyle(
-                              fontSize: 15,
+                            memberName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 19,
                               fontWeight: FontWeight.w800,
-                              color: ink,
+                              color: Colors.white,
                             ),
                           ),
-                          const SizedBox(height: 3),
-                          Text(
-                            t("ส่งต่อเมื่อเชื่อมต่อกับอุปกรณ์ปลายทางได้"),
-                            style: TextStyle(fontSize: 11.5, color: muted),
-                          ),
+                          if (memberEmail.isNotEmpty) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              memberEmail,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.white.withValues(alpha: 0.78),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Column(
-                      children: [
-                        Text(
-                          '$pending',
-                          style: const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w900,
-                            color: RescueTheme.orange,
-                            height: 1,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          t('รายการ'),
-                          style: TextStyle(fontSize: 11, color: muted),
-                        ),
-                      ],
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: Colors.white.withValues(alpha: 0.75),
+                      size: 24,
                     ),
                   ],
                 ),
@@ -448,23 +334,30 @@ class SettingsPanel extends StatelessWidget {
             children: [
               header,
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    queueCard,
-
                     sectionLabel(t("การช่วยเหลือ")),
                     group([
                       tile(
                         Icons.health_and_safety_outlined,
                         t("หน่วยกู้ภัย"),
                         tap: onResponder,
-                        accent: const Color(0xFFE04C4C),
+                        accent: RescueTheme.rescue,
+                        trailing: Semantics(
+                          label: t("หน่วยกู้ภัย"),
+                          child: Switch.adaptive(
+                            key: const ValueKey('rescue-mode-switch'),
+                            value: rescue,
+                            onChanged: ready ? onRescue : null,
+                            activeTrackColor: RescueTheme.rescue,
+                          ),
+                        ),
                       ),
                     ]),
 
-                    sectionLabel(t("การใช้งานแอป")),
+                    sectionLabel(t("การตั้งค่าแอป")),
                     group([
                       tile(
                         Icons.translate_rounded,
@@ -642,9 +535,7 @@ class SettingsPanel extends StatelessWidget {
                           ),
                         ),
                         label: Text(
-                          signedIn
-                              ? t("ออกจากระบบ")
-                              : t("กลับหน้าเข้าสู่ระบบ"),
+                          signedIn ? t("ออกจากระบบ") : t("กลับหน้าเข้าสู่ระบบ"),
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ),

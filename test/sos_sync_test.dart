@@ -127,6 +127,40 @@ void main() {
     expect(sync.error, isNull);
     expect(await store.queue(), isEmpty);
   });
+
+  test(
+    'multiple SOS categories persist offline and sync as structured JSON',
+    () async {
+      final categories = [EmergencyType.flood, EmergencyType.accident];
+      await publish(
+        db,
+        SosAlert(
+          incidentId: 'typed',
+          revision: 1,
+          active: true,
+          name: 'สมใจ',
+          people: 3,
+          category: categories.first,
+          categories: categories,
+          details: 'ต้องการเรือ',
+          updatedAt: DateTime.now().toUtc(),
+        ),
+      );
+      cloud.offline = true;
+      await sync.sync();
+      await db.close();
+      expect((await store.list()).single.alert.categories, categories);
+      cloud.offline = false;
+      await sync.sync();
+      expect(sync.error, isNull);
+      expect(cloud.records['typed']!['payload']['categories'], [
+        'flood',
+        'accident',
+      ]);
+      expect(cloud.records['typed']!['payload']['category'], 'other');
+      expect((await store.list()).single.alert.details, 'ต้องการเรือ');
+    },
+  );
   test(
     'server commit with lost reply replays same operation after restart',
     () async {

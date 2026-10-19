@@ -174,7 +174,7 @@ class MessageService extends ChangeNotifier {
         peerId: peer,
         name: alert.name,
         body:
-            '${alert.category.label} • ${alert.people} คน\n${alert.details}\n'
+            '${alert.categoriesLabel} • ${alert.people} คน\n${alert.details}\n'
             '${alert.location == null ? 'ไม่ได้แนบพิกัด' : 'มีพิกัด • แตะดูรายละเอียด'}',
         sos: alert,
       ),
@@ -224,6 +224,7 @@ class MessageService extends ChangeNotifier {
     required String name,
     required int people,
     required EmergencyType category,
+    List<EmergencyType>? categories,
     required String details,
     required Set<String> recipients,
     SosLocation? location,
@@ -258,6 +259,7 @@ class MessageService extends ChangeNotifier {
         name: name.trim(),
         people: people,
         category: category,
+        categories: categories,
         details: details.trim(),
         location: location,
         updatedAt: updatedAt,
@@ -302,6 +304,7 @@ class MessageService extends ChangeNotifier {
       name: alert.name,
       people: alert.people,
       category: alert.category,
+      categories: alert.categories,
       details: alert.details,
       recipients: _sosRecipients,
       location: alert.location,
@@ -318,7 +321,12 @@ class MessageService extends ChangeNotifier {
         e.value == peerId &&
         nearbyService.connectedDevices.any((d) => d.endpointId == e.key),
   );
+  String? _lastLoggedError;
   void _notify() {
+    if (error != null && error != _lastLoggedError) {
+      debugPrint('Message service: $error');
+    }
+    _lastLoggedError = error;
     if (!_disposed) notifyListeners();
   }
 
@@ -840,6 +848,11 @@ class MessageService extends ChangeNotifier {
     await retry();
   }
 
+  String? _announcedSos;
+  bool get currentSosAnnounced =>
+      mySos != null &&
+      _announcedSos == '${mySos!.incidentId}:${mySos!.revision}';
+
   Future<void> retry() async {
     if (!ready || _disposed || _ticking) return;
     _ticking = true;
@@ -868,6 +881,10 @@ class MessageService extends ChangeNotifier {
           if (peer == null) continue;
           for (final payload in _presencePackets(peer, localState)) {
             await nearbyService.sendMessage(device.endpointId, payload);
+          }
+          if (localState.sos != null) {
+            _announcedSos =
+                '${localState.sos!.incidentId}:${localState.sos!.revision}';
           }
           // ─── ส่งสื่อที่ค้างไว้ (MediaService) ─────────────────────────────
           if (mediaService != null) {

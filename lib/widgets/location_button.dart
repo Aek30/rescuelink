@@ -15,7 +15,7 @@ class LocationButton extends StatelessWidget {
         'พิกัดบันทึกเมื่อ ${location.capturedAt.toLocal()} • อายุ ${DateTime.now().difference(location.capturedAt).inMinutes.clamp(0, 999999)} นาที',
       ),
       const Text(
-        'แผนที่ถนนออฟไลน์ครอบคลุม มทร.ธัญบุรี คลองหกและบริเวณรอบมหาวิทยาลัย\n'
+        'แผนที่ถนนออฟไลน์ครอบคลุมจังหวัดปทุมธานี\n'
         'นอกพื้นที่นี้ยังอ่านและคัดลอกพิกัดได้ การเปิดแอปแผนที่ภายนอกต้องมีเน็ตหรือข้อมูลพื้นที่ที่ดาวน์โหลดไว้',
       ),
       SelectableText('${location.latitude}, ${location.longitude}'),
@@ -62,3 +62,4 @@ class LocationButton extends StatelessWidget {
     ],
   );
 }
+

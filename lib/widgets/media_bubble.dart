@@ -2,416 +2,182 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import '../models/media_model.dart';
+import '../services/video_preview_cache.dart';
 import '../theme/rescue_theme.dart';
 
-/// แสดงสื่อในฟอง chat — รองรับรูปภาพ, วิดีโอ, และสถานะต่าง ๆ ของ transfer
+/// Media content only; the shared message shell owns delivery indicators.
 class MediaBubble extends StatelessWidget {
   const MediaBubble({super.key, required this.media, required this.isMine});
-
   final MediaFile? media;
   final bool isMine;
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    if (media == null) {
-      return _placeholder(
-        context,
-        'กำลังโหลด...',
-        Icons.hourglass_empty_rounded,
-      );
-    }
-
-    return switch (media!.status) {
-      MediaStatus.sending ||
-      MediaStatus.receiving => _progress(context, isDark),
-      MediaStatus.failed => _error(context, isDark),
-      MediaStatus.localReady || MediaStatus.paused => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (isMine && media!.localPath.isNotEmpty) _mediaContent(context),
-          _pending(context, isDark),
-        ],
-      ),
-      MediaStatus.received ||
-      MediaStatus.delivered ||
-      MediaStatus.cloudReady => _mediaContent(context),
-      _ => _pending(context, isDark),
-    };
-  }
-
-  // ─── States ──────────────────────────────────────────────────────────────
-
-  Widget _progress(BuildContext context, bool isDark) {
-    final isSending = media!.status == MediaStatus.sending;
-    final pct = (media!.progress * 100).toStringAsFixed(0);
-    return _card(
-      isDark: isDark,
-      borderColor: RescueTheme.orange.withValues(alpha: .4),
+    final item = media;
+    final label = item?.isVideo == true
+        ? 'ส่งวิดีโอ'
+        : item?.isImage == true
+        ? 'ส่งรูป'
+        : 'ส่งไฟล์';
+    final ink = isMine ? Colors.white : RescueTheme.mutedFor(context);
+    final width = MediaQuery.sizeOf(context).width * .65;
+    final available =
+        item != null &&
+        item.localPath.isNotEmpty &&
+        item.status != MediaStatus.receiving;
+    return SizedBox(
+      width: width,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _fileHeader(context),
-          const SizedBox(height: 10),
           ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: media!.progress > 0 ? media!.progress : null,
-              minHeight: 5,
-              backgroundColor: isDark
-                  ? const Color(0xFF283442)
-                  : RescueTheme.border,
-              valueColor: const AlwaysStoppedAnimation(RescueTheme.orange),
+            borderRadius: BorderRadius.circular(16),
+            child: AspectRatio(
+              aspectRatio: 4 / 3,
+              child: !available
+                  ? _placeholder(context)
+                  : item.isVideo
+                  ? _video(context, item)
+                  : item.isImage
+                  ? Semantics(
+                      button: true,
+                      label: 'เปิดรูปเต็มจอ',
+                      child: InkWell(
+                        onTap: () => _open(context, item),
+                        child: Image.file(
+                          File(item.localPath),
+                          width: width,
+                          fit: BoxFit.cover,
+                          cacheWidth: 640,
+                          errorBuilder: (context, error, stack) {
+                            debugPrint('Chat image: $error');
+                            return _placeholder(context);
+                          },
+                        ),
+                      ),
+                    )
+                  : _placeholder(context),
             ),
           ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Icon(
-                isSending ? Icons.upload_rounded : Icons.download_rounded,
-                size: 13,
-                color: RescueTheme.orange,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                isSending ? 'กำลังส่ง $pct%' : 'กำลังรับ $pct%',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: RescueTheme.mutedFor(context),
+          const SizedBox(height: 4),
+          Text(label, style: TextStyle(fontSize: 12, color: ink)),
+          if (item?.status == MediaStatus.sending ||
+              item?.status == MediaStatus.receiving)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Semantics(
+                label: item?.status == MediaStatus.receiving
+                    ? 'กำลังรับสื่อ'
+                    : 'กำลังส่งสื่อ',
+                child: LinearProgressIndicator(
+                  value: item!.progress > 0 ? item.progress : null,
                 ),
               ),
-              const Spacer(),
-              Text(
-                _formatSize(media!.bytesTransferred),
-                style: TextStyle(
-                  fontSize: 10,
-                  color: RescueTheme.mutedFor(context),
-                ),
-              ),
-            ],
-          ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _pending(BuildContext context, bool isDark) => _card(
-    isDark: isDark,
-    child: Row(
-      children: [
-        Icon(
-          media!.isVideo ? Icons.videocam_outlined : Icons.image_outlined,
-          size: 22,
-          color: RescueTheme.mutedFor(context),
+  Widget _placeholder(BuildContext context) => ColoredBox(
+    color: Theme.of(context).brightness == Brightness.dark
+        ? RescueTheme.darkSurfaceElevated
+        : RescueTheme.border,
+    child: Align(
+      alignment: media?.isVideo == true ? Alignment.topLeft : Alignment.center,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Icon(
+          media?.isVideo == true
+              ? Icons.videocam_outlined
+              : Icons.image_outlined,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          size: 32,
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      ),
+    ),
+  );
+
+  Widget _video(
+    BuildContext context,
+    MediaFile item,
+  ) => FutureBuilder<VideoPreview>(
+    future: VideoPreviewCache.instance.prepare(item),
+    builder: (context, snapshot) {
+      final preview = snapshot.data;
+      final duration = preview?.duration;
+      final durationLabel = duration == null
+          ? null
+          : '${duration.inMinutes}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}';
+      return Semantics(
+        button: true,
+        label: 'เล่นวิดีโอเต็มจอ',
+        child: InkWell(
+          onTap: () => _open(context, item),
+          child: Stack(
+            fit: StackFit.expand,
             children: [
-              Text(
-                media!.fileName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
+              if (preview?.path != null)
+                Image.file(
+                  File(preview!.path!),
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stack) {
+                    debugPrint('Video thumbnail: $error');
+                    return _placeholder(context);
+                  },
+                )
+              else
+                _placeholder(context),
+              Center(
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: const BoxDecoration(
+                    color: Colors.black54,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.play_arrow_rounded,
+                    color: Colors.white,
+                    size: 30,
+                  ),
                 ),
               ),
-              const SizedBox(height: 2),
-              Text(
-                media!.status == MediaStatus.paused
-                    ? 'หยุดชั่วคราว — จะส่งใหม่เมื่อเชื่อมต่อ'
-                    : 'รอส่ง • ${_formatSize(media!.fileSize)}',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: RescueTheme.mutedFor(context),
+              if (durationLabel != null)
+                Positioned(
+                  bottom: 8,
+                  right: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black87,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      durationLabel,
+                      style: const TextStyle(fontSize: 12, color: Colors.white),
+                    ),
+                  ),
                 ),
-              ),
             ],
           ),
         ),
-        Icon(
-          Icons.schedule_rounded,
-          size: 16,
-          color: RescueTheme.mutedFor(context),
-        ),
-      ],
-    ),
-  );
-
-  Widget _error(BuildContext context, bool isDark) => _card(
-    isDark: isDark,
-    bgColor: isDark ? const Color(0xFF231718) : const Color(0xFFFFF0F0),
-    borderColor: RescueTheme.danger.withValues(alpha: .3),
-    child: Row(
-      children: [
-        const Icon(
-          Icons.error_outline_rounded,
-          size: 22,
-          color: RescueTheme.danger,
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                media!.fileName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Text(
-                'ส่งไม่สำเร็จ (ลอง ${media!.retryCount} ครั้ง)',
-                style: const TextStyle(fontSize: 11, color: RescueTheme.danger),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-
-  // ─── Media content (file available) ────────────────────────────────────
-
-  Widget _mediaContent(BuildContext context) {
-    final file = File(media!.localPath);
-    if (!file.existsSync()) {
-      return _placeholder(
-        context,
-        'ไม่พบไฟล์ในเครื่อง',
-        Icons.broken_image_outlined,
       );
-    }
-    if (media!.isImage) return _imageView(context, file);
-    if (media!.isVideo) return _videoThumb(context, file);
-    return _fileCard(context, file);
-  }
-
-  Widget _imageView(BuildContext context, File file) => GestureDetector(
-    onTap: () => _openImage(context, file),
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: Stack(
-        children: [
-          Image.file(
-            file,
-            fit: BoxFit.cover,
-            width: 220,
-            height: 220,
-            cacheWidth: 440,
-            errorBuilder: (context, error, stack) => _placeholder(
-              context,
-              'แสดงรูปไม่ได้',
-              Icons.broken_image_outlined,
-            ),
-          ),
-          // ไอคอนขยาย
-          Positioned(
-            bottom: 8,
-            right: 8,
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: Colors.black45,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Icon(
-                Icons.open_in_full_rounded,
-                color: Colors.white,
-                size: 14,
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
+    },
   );
 
-  Widget _videoThumb(BuildContext context, File file) => GestureDetector(
-    onTap: () => _openVideo(context, file),
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: SizedBox(
-        width: 220,
-        height: 160,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Container(color: Colors.black87),
-            const Center(
-              child: Icon(
-                Icons.videocam_rounded,
-                color: Colors.white30,
-                size: 48,
-              ),
-            ),
-            Center(
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white38, width: 2),
-                ),
-                child: const Icon(
-                  Icons.play_arrow_rounded,
-                  color: Colors.white,
-                  size: 30,
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 8,
-              left: 10,
-              right: 10,
-              child: Text(
-                media!.fileName,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 11,
-                  shadows: [Shadow(blurRadius: 4)],
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-
-  Widget _fileCard(BuildContext context, File file) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return _card(
-      isDark: isDark,
-      child: Row(
-        children: [
-          const Icon(Icons.insert_drive_file_outlined, size: 26),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  media!.fileName,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13),
-                ),
-                Text(
-                  _formatSize(media!.fileSize),
-                  style: const TextStyle(fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─── Navigation ─────────────────────────────────────────────────────────
-
-  void _openImage(BuildContext context, File file) => Navigator.push<void>(
+  void _open(BuildContext context, MediaFile item) => Navigator.push<void>(
     context,
     MaterialPageRoute(
-      builder: (_) =>
-          _FullScreenImage(file: file, fileName: media?.fileName ?? ''),
+      builder: (_) => item.isVideo
+          ? _FullScreenVideo(file: File(item.localPath), fileName: 'วิดีโอ')
+          : _FullScreenImage(file: File(item.localPath), fileName: 'รูปภาพ'),
     ),
   );
-
-  void _openVideo(BuildContext context, File file) => Navigator.push<void>(
-    context,
-    MaterialPageRoute(
-      builder: (_) =>
-          _FullScreenVideo(file: file, fileName: media?.fileName ?? ''),
-    ),
-  );
-
-  // ─── Helpers ─────────────────────────────────────────────────────────────
-
-  Widget _fileHeader(BuildContext context) => Row(
-    children: [
-      Icon(
-        media!.isVideo ? Icons.videocam_outlined : Icons.image_outlined,
-        size: 18,
-        color: RescueTheme.orange,
-      ),
-      const SizedBox(width: 8),
-      Expanded(
-        child: Text(
-          media!.fileName,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-        ),
-      ),
-      Text(
-        _formatSize(media!.fileSize),
-        style: TextStyle(fontSize: 10, color: RescueTheme.mutedFor(context)),
-      ),
-    ],
-  );
-
-  Widget _card({
-    required bool isDark,
-    required Widget child,
-    Color? bgColor,
-    Color? borderColor,
-  }) => Container(
-    width: 240,
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: bgColor ?? (isDark ? const Color(0xFF161C24) : Colors.white),
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(
-        color:
-            borderColor ??
-            (isDark ? const Color(0xFF283442) : RescueTheme.border),
-      ),
-    ),
-    child: child,
-  );
-
-  Widget _placeholder(BuildContext context, String text, IconData icon) =>
-      Container(
-        width: 240,
-        height: 72,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: Colors.grey.withValues(alpha: .08),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: Colors.grey, size: 22),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                text,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: RescueTheme.mutedFor(context),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-
-  static String _formatSize(int bytes) {
-    if (bytes < 1024) return '${bytes}B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)}KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)}MB';
-  }
 }
 
 // ─── Full-screen image viewer ──────────────────────────────────────────────
@@ -437,7 +203,16 @@ class _FullScreenImage extends StatelessWidget {
       child: InteractiveViewer(
         minScale: 0.5,
         maxScale: 5.0,
-        child: Image.file(file),
+        child: Image.file(
+          file,
+          errorBuilder: (context, error, stack) {
+            debugPrint('Full-screen image: $error');
+            return const Text(
+              'เปิดรูปไม่สำเร็จ กรุณาลองใหม่',
+              style: TextStyle(color: Colors.white),
+            );
+          },
+        ),
       ),
     ),
   );
@@ -477,7 +252,10 @@ class _CloudMediaViewerState extends State<CloudMediaViewer> {
             if (mounted) setState(() {});
           })
           .catchError((Object e) {
-            if (mounted) setState(() => _error = '$e');
+            debugPrint('Media player: $e');
+            if (mounted) {
+              setState(() => _error = 'เปิดวิดีโอไม่สำเร็จ กรุณาลองใหม่');
+            }
           });
     }
   }
@@ -490,7 +268,7 @@ class _CloudMediaViewerState extends State<CloudMediaViewer> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(widget.media.fileName)),
+    appBar: AppBar(title: Text(widget.media.isVideo ? 'วิดีโอ' : 'รูปภาพ')),
     body: Center(
       child: _error != null
           ? Text(_error!)
@@ -543,7 +321,10 @@ class _FullScreenVideoState extends State<_FullScreenVideo> {
             }
           })
           .catchError((Object e) {
-            if (mounted) setState(() => _error = '$e');
+            debugPrint('Media player: $e');
+            if (mounted) {
+              setState(() => _error = 'เปิดวิดีโอไม่สำเร็จ กรุณาลองใหม่');
+            }
           });
   }
 

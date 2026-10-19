@@ -45,6 +45,7 @@ dependencies:
   crypto: ^3.0.6
   file_picker: ^13.1.0
   video_player: ^2.9.2
+  video_thumbnail: ^0.5.6
   path_provider: ^2.1.5
   sqflite_common_ffi_web: 1.2.0
 
@@ -74,7 +75,7 @@ flutter:
     - assets/branding/rescuelink-logo.png
     - assets/branding/rescuelink-logo-dark.png
     - assets/onboarding/
-    - assets/maps/rmutt.json
+    - assets/maps/pathum/
   fonts:
     - family: NotoSansThai
       fonts:
@@ -110,3 +111,8 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Gradle 9 compatible build of the existing thumbnail plugin.
+dependency_overrides:
+  video_thumbnail:
+    path: third_party/video_thumbnail

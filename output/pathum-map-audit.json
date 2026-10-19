@@ -1,0 +1,23 @@
+{
+  "tiles": 2662,
+  "tileBytes": 32046474,
+  "maxVerticesPerTile": 18879,
+  "maxFeaturesPerTile": 4771,
+  "levels": [
+    "0",
+    "1",
+    "2",
+    "3"
+  ],
+  "sourceCounts": {
+    "place": 352,
+    "road": 81703,
+    "water": 1439,
+    "land": 2169,
+    "building": 54881,
+    "campus": 25
+  },
+  "osmTimestamp": "2026-10-17T20:20:51Z",
+  "indexSha256": "5378c4b08550820555ad0648f3ff0973daab4f88f7058fac8be566f0615f4630",
+  "allCoordinatesWithinTile": true
+}

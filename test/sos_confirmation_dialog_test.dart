@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rescuelink/theme/rescue_theme.dart';
+import 'package:rescuelink/models/sos_alert.dart';
 import 'package:rescuelink/widgets/sos_confirmation_dialog.dart';
 
 void main() {
@@ -41,12 +42,15 @@ void main() {
                   body: Center(
                     child: TextButton(
                       onPressed: () async {
-                        result = await showDialog<bool>(
+                        result = await showModalBottomSheet<bool>(
                           context: context,
+                          isScrollControlled: true,
+                          useSafeArea: true,
                           builder: (_) => SosConfirmationDialog(
                             name: 'สมชาย ใจดี',
                             people: '3',
                             category: 'น้ำท่วม',
+                            categories: const [EmergencyType.flood],
                             details: List.filled(
                               20,
                               'ติดอยู่บนชั้นสอง ต้องการความช่วยเหลือ',
@@ -100,12 +104,15 @@ void main() {
                 home: Scaffold(
                   body: Builder(
                     builder: (context) => TextButton(
-                      onPressed: () => showDialog<bool>(
+                      onPressed: () => showModalBottomSheet<bool>(
                         context: context,
+                        isScrollControlled: true,
+                        useSafeArea: true,
                         builder: (_) => SosConfirmationDialog(
                           name: 'สมชาย ใจดี',
                           people: '3',
                           category: 'น้ำท่วม',
+                          categories: const [EmergencyType.flood],
                           details:
                               'ติดอยู่ชั้นสอง มีผู้สูงอายุ 1 คน ต้องการเรือรับส่ง',
                           location: 'ส่งโดยไม่แนบพิกัด',

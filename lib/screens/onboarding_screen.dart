@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/rescue_theme.dart';
 
 import 'login_screen.dart';
 
@@ -11,7 +12,6 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  static const _cream = Color(0xFFFCF8F1);
   static const _navy = Color(0xFF102D43);
   static const _orange = Color(0xFFFF6826);
   final _controller = PageController();
@@ -265,7 +265,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final isDark = Theme.of(context).brightness == Brightness.dark;
       final navyColor = isDark ? const Color(0xFFF1F5F9) : _navy;
       final subtextColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF365069);
-      final bg = isDark ? const Color(0xFF0C1017) : _cream;
+      final bg = Theme.of(context).scaffoldBackgroundColor;
       final height = constraints.maxHeight < 740
           ? 740.0
           : constraints.maxHeight;
@@ -427,7 +427,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         decoration: BoxDecoration(
                           color: isDark
                               ? const Color(0xFF161C24)
-                              : _cream.withValues(alpha: .97),
+                              : RescueTheme.cream.withValues(alpha: .97),
                           borderRadius: BorderRadius.circular(22),
                           border: Border.all(
                             color: isDark
@@ -514,9 +514,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0C1017) : _cream,
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(

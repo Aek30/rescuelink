@@ -123,7 +123,7 @@ class _OutboxQueueState extends State<OutboxQueue> {
   String _title(MessageModel m, SosAlert? alert) => m.type == MessageType.sos
       ? alert == null
             ? 'ข้อความ SOS'
-            : '${alert.active ? 'ขอความช่วยเหลือ' : 'ยกเลิก SOS'} • ${alert.category.label}'
+            : '${alert.active ? 'ขอความช่วยเหลือ' : 'ยกเลิก SOS'} • ${alert.categoriesLabel}'
       : m.type == MessageType.media
       ? '${widget.mediaFiles[m.text]?.isVideo == true ? 'วิดีโอ' : 'รูปภาพ'}: ${widget.mediaFiles[m.text]?.fileName ?? 'ไฟล์สื่อ'}'
       : m.text;

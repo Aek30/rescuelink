@@ -281,6 +281,7 @@ class MediaUploadService extends ChangeNotifier {
           job.bytes = media.fileSize;
           job.nextAttempt = null;
         } catch (e) {
+          debugPrint('Media upload (${job.mediaId}): $e');
           job.state = e is SocketException || e is TimeoutException
               ? UploadState.queued
               : UploadState.failed;

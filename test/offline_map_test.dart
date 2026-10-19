@@ -8,6 +8,7 @@ import 'package:rescuelink/models/offline_map_data.dart';
 import 'package:rescuelink/models/peer_presence.dart';
 import 'package:rescuelink/models/sos_alert.dart';
 import 'package:rescuelink/widgets/bundled_offline_map.dart';
+import 'package:rescuelink/services/offline_tile_store.dart';
 
 SosLocation fix(double lat, double lon) => SosLocation(
   latitude: lat,
@@ -22,19 +23,51 @@ void main() {
     tester,
   ) async {
     final map = (await tester.runAsync(OfflineMapData.load))!;
-    expect(
-      map.features.where((f) => f['kind'] == 'road').length,
-      greaterThan(50),
-    );
-    expect(
-      map.features.where((f) => f['kind'] == 'building').length,
-      greaterThan(50),
-    );
+    expect(map.sourceCounts['road'], greaterThan(50));
+    expect(map.sourceCounts['building'], greaterThan(50));
     expect(map.contains(fix(14.036, 100.728)), isTrue);
     expect(map.contains(fix(13.75, 100.5)), isFalse);
-    expect(map.project(100.719, 14.045, const Size(100, 100)), Offset.zero);
+    for (final point in [
+      fix(14.0208, 100.525),
+      fix(14.065, 100.647),
+      fix(14.02, 100.735),
+      fix(14.133, 100.826),
+      fix(14.039, 100.407),
+      fix(13.932, 100.78),
+      fix(14.069, 100.523),
+    ]) {
+      expect(
+        map.contains(point),
+        isTrue,
+        reason: 'All seven districts must be covered',
+      );
+    }
+    expect(map.levels, [1, 4, 16, 64]);
+    expect(map.visibleTiles(3, const Rect.fromLTWH(-2, -2, .1, .1)), isEmpty);
+    final campus = map.project(100.728, 14.036, const Size(1, 1));
     expect(
-      map.project(100.738, 14.026, const Size(100, 100)),
+      map
+          .visibleTiles(
+            3,
+            Rect.fromCenter(center: campus, width: .01, height: .01),
+          )
+          .length,
+      lessThanOrEqualTo(4),
+    );
+    expect(
+      map.project(
+        map.bounds[0].toDouble(),
+        map.bounds[3].toDouble(),
+        const Size(100, 100),
+      ),
+      Offset.zero,
+    );
+    expect(
+      map.project(
+        map.bounds[2].toDouble(),
+        map.bounds[1].toDouble(),
+        const Size(100, 100),
+      ),
       const Offset(100, 100),
     );
   });
@@ -60,7 +93,24 @@ void main() {
   testWidgets('offline roads, outside-area warning, zoom and marker actions', (
     tester,
   ) async {
-    await tester.runAsync(OfflineMapData.load);
+    final data = (await tester.runAsync(OfflineMapData.load))!;
+    final warmOwner = Object();
+    await tester.runAsync(() async {
+      final p = data.project(100.728, 14.036, const Size(1, 1));
+      final keys = <String>{
+        '0_0_0',
+        ...data.visibleTiles(
+          3,
+          Rect.fromCenter(center: p, width: .034, height: .07),
+        ),
+      }.toList();
+      OfflineTileStore.shared.request(warmOwner, keys);
+      for (var i = 0; i < 200 && OfflineTileStore.shared.activeLoads > 0; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 25));
+      }
+      expect(OfflineTileStore.shared.failures, isEmpty);
+    });
+    addTearDown(() => OfflineTileStore.shared.release(warmOwner));
     await tester.runAsync(() async {
       final font = FontLoader('NotoSansThai')
         ..addFont(rootBundle.load('assets/fonts/NotoSansThai.ttf'));
@@ -75,6 +125,22 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     var tapped = false;
     final key = GlobalKey();
+    Future<void> preview(String name) async {
+      if (!const bool.fromEnvironment('MAP_PREVIEW')) return;
+      await tester.runAsync(() async {
+        final image =
+            await (key.currentContext!.findRenderObject()
+                    as RenderRepaintBoundary)
+                .toImage(pixelRatio: 2);
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        await Directory('output').create(recursive: true);
+        await File(
+          'output/$name.png',
+        ).writeAsBytes(bytes!.buffer.asUint8List());
+        image.dispose();
+      });
+    }
+
     await tester.pumpWidget(
       MaterialApp(
         theme: ThemeData(fontFamily: 'NotoSansThai'),
@@ -87,7 +153,7 @@ void main() {
                 children: [
                   const SizedBox(height: 30),
                   const Text(
-                    'แผนที่ออฟไลน์ • มทร.ธัญบุรี',
+                    'แผนที่ออฟไลน์ • ปทุมธานี',
                     style: TextStyle(fontSize: 20),
                   ),
                   BundledOfflineMap(
@@ -134,6 +200,7 @@ void main() {
     expect(find.byKey(const ValueKey('map-marker-outside')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('map-marker-sos')));
     expect(tapped, isTrue);
+    await preview('pathum-map-detail');
     final viewer = tester.widget<InteractiveViewer>(
       find.byType(InteractiveViewer),
     );
@@ -143,7 +210,7 @@ void main() {
       viewer.transformationController!.value.getMaxScaleOnAxis(),
       greaterThan(1),
     );
-    await tester.tap(find.byTooltip('ดูทั้งพื้นที่'));
+    await tester.longPress(find.byTooltip('ซูมออก'));
     await tester.pump();
     expect(viewer.transformationController!.value.getMaxScaleOnAxis(), 1);
     expect(tester.takeException(), isNull);
@@ -156,7 +223,7 @@ void main() {
         final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
         await Directory('output').create(recursive: true);
         await File(
-          'output/offline-map-preview.png',
+          'output/pathum-map-overview.png',
         ).writeAsBytes(bytes!.buffer.asUint8List());
         image.dispose();
       });

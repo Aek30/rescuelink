@@ -18,8 +18,8 @@ void main() {
         ),
       ),
     );
-    expect(find.text('ส่งผ่าน Rescue B → เครื่องที่ไม่ทราบชื่อ'), findsOneWidget);
-    await tester.tap(find.byType(ActionChip));
+    expect(find.text('ผ่าน Rescue B'), findsOneWidget);
+    await tester.tap(find.byType(TextButton));
     await tester.pumpAndSettle();
     expect(find.text('Rescue B'), findsOneWidget);
     expect(find.textContaining('เส้นทางแรกที่ได้รับ'), findsOneWidget);
@@ -31,7 +31,7 @@ void main() {
         home: Scaffold(body: RelayBadge(route: null, peers: {})),
       ),
     );
-    expect(find.text('ยังไม่ทราบเส้นทาง'), findsOneWidget);
+    expect(find.byType(TextButton), findsNothing);
   });
   testWidgets('offline coordinate diagram is readable on narrow screens', (
     tester,

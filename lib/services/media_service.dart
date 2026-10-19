@@ -15,6 +15,7 @@ import 'local_database_service.dart';
 import 'nearby_service.dart';
 import 'auth_service.dart';
 import 'media_upload_service.dart';
+import 'video_preview_cache.dart';
 
 /// จัดการวงจรชีวิตของสื่อทั้งหมด:
 /// เลือกไฟล์ → คัดลอกถาวร → คำนวณ checksum → ส่ง/รับผ่าน NearbyService → ตรวจสอบ → ACK
@@ -100,6 +101,7 @@ class MediaService extends ChangeNotifier {
       final all = await database.getAllMedia();
       for (final m in all) {
         _cache[m.mediaId] = m;
+        unawaited(VideoPreviewCache.instance.prepare(m));
       }
 
       // Reset stuck states จาก app crash
@@ -163,12 +165,18 @@ class MediaService extends ChangeNotifier {
     super.dispose();
   }
 
+  String? _lastLoggedError;
   void _notify() {
+    if (error != null && error != _lastLoggedError) {
+      debugPrint('Media service: $error');
+    }
+    _lastLoggedError = error;
     if (!_disposed) notifyListeners();
   }
 
   void _updateCache(MediaFile m) {
     _cache[m.mediaId] = m;
+    unawaited(VideoPreviewCache.instance.prepare(m));
     _notify();
   }
 
@@ -259,6 +267,7 @@ class MediaService extends ChangeNotifier {
     await database.saveMediaMessage(media, message);
     await onMessagesChanged?.call();
     _cache[mediaId] = media;
+    unawaited(VideoPreviewCache.instance.prepare(media));
     _notify();
     unawaited(uploads.retryPending());
 

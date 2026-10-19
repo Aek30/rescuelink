@@ -22,7 +22,7 @@ class IncomingNotice {
   /// Compact display text; keep the complete chat message for opening/review.
   String get preview {
     if (sos != null) {
-      return '${sos!.category.label} • ${sos!.people} คน • '
+      return '${sos!.categoriesLabel} • ${sos!.people} คน • '
           '${sos!.location == null ? 'ไม่แนบพิกัด' : 'มีพิกัด'}';
     }
     final summary = switch (_responderStage) {

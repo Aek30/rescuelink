@@ -460,6 +460,35 @@ void main() {
   );
 
   test(
+    'typed SOS categories survive relay, restart and cancellation',
+    () async {
+      await exchange();
+      final categories = [EmergencyType.flood, EmergencyType.fire];
+      await nodes[0].publishSos(
+        name: 'A',
+        people: 3,
+        category: categories.first,
+        categories: categories,
+        details: 'ชั้นสอง',
+        recipients: {nodes[2].myId!},
+      );
+      expect(nodes[0].currentSosAnnounced, isTrue);
+      await pump();
+      final received = SosAlert.fromJson(nodes[2].receivedSos.single.text);
+      expect(received.categories, categories);
+      expect(received.details, 'ชั้นสอง');
+      await restart(0);
+      expect(nodes[0].mySos!.categories, categories);
+      await connect(0, 1);
+      await nodes[0].cancelSos();
+      await exchange();
+      final canceled = nodes[2].presence[nodes[0].myId]!.sos!;
+      expect(canceled.active, isFalse);
+      expect(canceled.categories, categories);
+    },
+  );
+
+  test(
     'offline relay keeps latest cancellation across restart and rejects old open',
     () async {
       await exchange();

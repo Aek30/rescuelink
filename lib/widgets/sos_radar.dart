@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'emergency_type_chip.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/sos_alert.dart';
@@ -223,9 +224,8 @@ class _SosRadarState extends State<SosRadar> {
                         entry.value.sos!.name,
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
-                      Text(
-                        '${entry.value.sos!.category.label} • ${entry.value.sos!.people} คน',
-                      ),
+                      EmergencyTypeChips(types: entry.value.sos!.categories),
+                      Text('${entry.value.sos!.people} คน'),
                       Text(
                         distance(entry.value.sos!) == null
                             ? 'ไม่ทราบระยะ'

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'screens/onboarding_screen.dart';
 import 'theme/rescue_theme.dart';
@@ -7,6 +8,7 @@ import 'services/platform_database.dart';
 import 'services/auth_service.dart';
 import 'services/sos_sync_service.dart';
 import 'services/chat_sync_service.dart';
+import 'services/member_profile_sync.dart';
 import 'screens/nearby_test_screen.dart';
 import 'screens/login_screen.dart';
 
@@ -29,7 +31,12 @@ class RescueLinkApp extends StatelessWidget {
         theme: RescueTheme.light,
         darkTheme: RescueTheme.dark,
         themeMode: AppPreferences.instance.themeMode,
-
+        builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+          value: Theme.of(context).brightness == Brightness.dark
+              ? RescueTheme.darkSystemUi
+              : RescueTheme.lightSystemUi,
+          child: child!,
+        ),
         home: const _StartupScreen(),
       ),
     );
@@ -52,6 +59,7 @@ class _StartupScreenState extends State<_StartupScreen> {
       await AppPreferences.instance.load().catchError((Object _) {});
       SosSyncCoordinator.instance.start();
       ChatSyncCoordinator.instance.start();
+      MemberProfileSync.instance.start();
     });
   }
 
@@ -116,6 +124,7 @@ class _StartupScreenState extends State<_StartupScreen> {
                               .catchError((Object _) {});
                           SosSyncCoordinator.instance.start();
                           ChatSyncCoordinator.instance.start();
+                          MemberProfileSync.instance.start();
                         });
                       });
                     },

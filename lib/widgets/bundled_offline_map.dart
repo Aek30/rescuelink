@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/offline_map_data.dart';
 import '../models/sos_alert.dart';
+import '../services/offline_tile_store.dart';
+import 'offline_map_tile_layer.dart';
 
 class OfflineMapMarker {
   const OfflineMapMarker({
@@ -26,10 +28,19 @@ class BundledOfflineMap extends StatefulWidget {
     this.markers = const [],
     this.focus,
     this.height = 330,
+    this.fullScreen = false,
+    this.onLocateMe,
+    this.onPickLocation,
+    this.compact = false,
   });
   final List<OfflineMapMarker> markers;
   final SosLocation? focus;
   final double height;
+  final bool fullScreen;
+  final bool compact;
+  final VoidCallback? onLocateMe;
+  final ValueChanged<SosLocation>? onPickLocation;
+
   @override
   State<BundledOfflineMap> createState() => _BundledOfflineMapState();
 }
@@ -37,6 +48,14 @@ class BundledOfflineMap extends StatefulWidget {
 class _BundledOfflineMapState extends State<BundledOfflineMap> {
   final _controller = TransformationController();
   final _data = OfflineMapData.load();
+  bool _compactPositioned = false;
+
+  @override
+  void didUpdateWidget(covariant BundledOfflineMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.focus != widget.focus) _compactPositioned = false;
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -48,7 +67,7 @@ class _BundledOfflineMapState extends State<BundledOfflineMap> {
     final point = target ?? _controller.toScene(center);
     final scale = (_controller.value.getMaxScaleOnAxis() * factor).clamp(
       1.0,
-      10.0,
+      256.0,
     );
     _controller.value = Matrix4.identity()
       ..setEntry(0, 0, scale)
@@ -70,133 +89,370 @@ class _BundledOfflineMapState extends State<BundledOfflineMap> {
         );
       }
       if (!snapshot.hasData) {
-        return SizedBox(
-          height: widget.height,
-          child: const Center(child: Text('กำลังเปิดแผนที่ออฟไลน์…')),
-        );
+        return widget.fullScreen
+            ? const Center(child: Text('กำลังเปิดแผนที่ออฟไลน์…'))
+            : SizedBox(
+                height: widget.height,
+                child: const Center(child: Text('กำลังเปิดแผนที่ออฟไลน์…')),
+              );
       }
       final data = snapshot.requireData;
       final outside = widget.markers
           .where((m) => !data.contains(m.location))
           .length;
       final dark = Theme.of(context).brightness == Brightness.dark;
+
+      Widget buildMapStack(BoxConstraints constraints) {
+        final size = Size(
+          constraints.maxWidth,
+          widget.fullScreen ? constraints.maxHeight : widget.height,
+        );
+        final mapSize = _fit(data, size);
+        final origin = Offset(
+          (size.width - mapSize.width) / 2,
+          (size.height - mapSize.height) / 2,
+        );
+        Offset project(SosLocation p) =>
+            origin + data.project(p.longitude, p.latitude, mapSize);
+
+        if (!_compactPositioned) {
+          _compactPositioned = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            final focus = widget.focus;
+            _zoom(
+              (focus != null && data.contains(focus) ? 32.0 : 1.0) /
+                  _controller.value.getMaxScaleOnAxis(),
+              size,
+              target: focus != null && data.contains(focus)
+                  ? project(focus)
+                  : size.center(Offset.zero),
+            );
+          });
+        }
+
+        return GestureDetector(
+          onTapUp: widget.onPickLocation == null
+              ? null
+              : (details) {
+                  final point =
+                      _controller.toScene(details.localPosition) - origin;
+                  if (point.dx < 0 ||
+                      point.dy < 0 ||
+                      point.dx > mapSize.width ||
+                      point.dy > mapSize.height) {
+                    return;
+                  }
+                  final picked = SosLocation(
+                    longitude:
+                        data.bounds[0] +
+                        point.dx /
+                            mapSize.width *
+                            (data.bounds[2] - data.bounds[0]),
+                    latitude:
+                        data.bounds[3] -
+                        point.dy /
+                            mapSize.height *
+                            (data.bounds[3] - data.bounds[1]),
+                    accuracy: 0,
+                    capturedAt: DateTime.now().toUtc(),
+                    manuallySelected: true,
+                  );
+                  if (data.contains(picked)) widget.onPickLocation!(picked);
+                },
+          child: ClipRect(
+            child: Stack(
+              children: [
+                InteractiveViewer(
+                  transformationController: _controller,
+                  minScale: 1,
+                  maxScale: 256,
+                  boundaryMargin: const EdgeInsets.all(200),
+                  child: RepaintBoundary(
+                    child: OfflineMapTileLayer(
+                      data: data,
+                      controller: _controller,
+                      size: size,
+                      mapSize: mapSize,
+                      origin: origin,
+                      dark: dark,
+                      compact: widget.compact,
+                      markerPoints: [
+                        for (final m in widget.markers.where(
+                          (m) => data.contains(m.location),
+                        ))
+                          project(m.location),
+                      ],
+                    ),
+                  ),
+                ),
+                AnimatedBuilder(
+                  animation: _controller,
+                  builder: (context, _) => Stack(
+                    children: [
+                      for (final marker in widget.markers.where(
+                        (m) => data.contains(m.location),
+                      ))
+                        _marker(
+                          marker,
+                          MatrixUtils.transformPoint(
+                            _controller.value,
+                            project(marker.location),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                // 2. ย้าย "↑ N • ออฟไลน์" ให้เป็น chip เล็กๆ ไม่บังแผนที่
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: (dark ? const Color(0xFF102D43) : Colors.white)
+                          .withValues(alpha: 0.90),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: dark ? Colors.white24 : const Color(0xFFEAE2D8),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.navigation_rounded,
+                          size: 13,
+                          color: Color(0xFFB94612),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'N • ออฟไลน์',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: dark
+                                ? Colors.white
+                                : const Color(0xFF102D43),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // 2. เหลือแค่ ซูมเข้า/ออก (กลุ่มเดียว) และปุ่ม "ไปที่ตำแหน่งของฉัน" 1 ปุ่ม
+                if (!widget.compact)
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // ซูมเข้า/ออก กลุ่มเดียว
+                        Container(
+                          decoration: BoxDecoration(
+                            color:
+                                (dark ? const Color(0xFF102D43) : Colors.white)
+                                    .withValues(alpha: 0.92),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: dark
+                                  ? Colors.white24
+                                  : const Color(0xFFEAE2D8),
+                              width: 1,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.12),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(13),
+                                  ),
+                                  onTap: () => _zoom(1.7, size),
+                                  child: SizedBox(
+                                    width: 48,
+                                    height: 48,
+                                    child: Tooltip(
+                                      message: 'ซูมเข้า',
+                                      child: Icon(
+                                        Icons.add,
+                                        size: 22,
+                                        color: dark
+                                            ? Colors.white
+                                            : const Color(0xFF102D43),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Divider(
+                                height: 1,
+                                color: dark
+                                    ? Colors.white12
+                                    : const Color(0xFFEAE2D8),
+                              ),
+                              Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: const BorderRadius.vertical(
+                                    bottom: Radius.circular(13),
+                                  ),
+                                  onTap: () => _zoom(1 / 1.7, size),
+                                  onLongPress: () =>
+                                      _controller.value = Matrix4.identity(),
+                                  child: SizedBox(
+                                    width: 48,
+                                    height: 48,
+                                    child: Tooltip(
+                                      message: 'ซูมออก',
+                                      triggerMode: TooltipTriggerMode.manual,
+                                      child: Icon(
+                                        Icons.remove,
+                                        size: 22,
+                                        color: dark
+                                            ? Colors.white
+                                            : const Color(0xFF102D43),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        // ปุ่ม "ไปที่ตำแหน่งของฉัน" 1 ปุ่มสะอาด
+                        Material(
+                          color: (dark ? const Color(0xFF102D43) : Colors.white)
+                              .withValues(alpha: 0.92),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            side: BorderSide(
+                              color: dark
+                                  ? Colors.white24
+                                  : const Color(0xFFEAE2D8),
+                              width: 1,
+                            ),
+                          ),
+                          elevation: 2,
+                          shadowColor: Colors.black.withValues(alpha: 0.15),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () {
+                              if (widget.focus != null &&
+                                  data.contains(widget.focus!)) {
+                                _zoom(
+                                  1.6,
+                                  size,
+                                  target: project(widget.focus!),
+                                );
+                              } else {
+                                widget.onLocateMe?.call();
+                              }
+                            },
+                            child: const SizedBox(
+                              width: 48,
+                              height: 48,
+                              child: Tooltip(
+                                message: 'ไปที่ตำแหน่งของฉัน',
+                                child: Icon(
+                                  Icons.my_location,
+                                  size: 22,
+                                  color: Color(0xFFB94612),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                Positioned(
+                  bottom: 4,
+                  left: 8,
+                  right: 8,
+                  child: IgnorePointer(
+                    child: Container(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.surface.withValues(alpha: .93),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
+                      child: const Text(
+                        '© OpenStreetMap contributors • ODbL 1.0',
+                        style: TextStyle(fontSize: 10),
+                      ),
+                    ),
+                  ),
+                ),
+                if (outside > 0 && widget.fullScreen)
+                  Positioned(
+                    bottom: 34,
+                    left: 12,
+                    child: Container(
+                      color: Theme.of(context).colorScheme.surface,
+                      padding: const EdgeInsets.all(6),
+                      child: Text('$outside ตำแหน่งอยู่นอกจังหวัดปทุมธานี'),
+                    ),
+                  ),
+                Positioned(
+                  bottom: 34,
+                  right: 8,
+                  child: ListenableBuilder(
+                    listenable: OfflineTileStore.shared,
+                    builder: (context, _) =>
+                        OfflineTileStore.shared.failures.isEmpty
+                        ? const SizedBox.shrink()
+                        : TextButton(
+                            onPressed: OfflineTileStore.shared.retryFailures,
+                            child: const Text(
+                              'เปิดแผนที่บางส่วนไม่ได้ • ลองใหม่',
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+
+      if (widget.fullScreen) {
+        return LayoutBuilder(
+          builder: (context, constraints) => buildMapStack(constraints),
+        );
+      }
+
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SizedBox(
             height: widget.height,
             child: LayoutBuilder(
-              builder: (context, constraints) {
-                final size = Size(constraints.maxWidth, widget.height);
-                final mapSize = _fit(data, size);
-                final origin = Offset(
-                  (size.width - mapSize.width) / 2,
-                  (size.height - mapSize.height) / 2,
-                );
-                Offset project(SosLocation p) =>
-                    origin + data.project(p.longitude, p.latitude, mapSize);
-                return ClipRect(
-                  child: Stack(
-                    children: [
-                      InteractiveViewer(
-                        transformationController: _controller,
-                        minScale: 1,
-                        maxScale: 10,
-                        boundaryMargin: const EdgeInsets.all(200),
-                        child: CustomPaint(
-                          size: size,
-                          painter: _RoadPainter(data, dark),
-                        ),
-                      ),
-                      AnimatedBuilder(
-                        animation: _controller,
-                        builder: (context, _) => Stack(
-                          children: [
-                            for (final marker in widget.markers.where(
-                              (m) => data.contains(m.location),
-                            ))
-                              _marker(
-                                marker,
-                                MatrixUtils.transformPoint(
-                                  _controller.value,
-                                  project(marker.location),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const Positioned(
-                        top: 10,
-                        left: 12,
-                        child: Card(
-                          child: Padding(
-                            padding: EdgeInsets.all(6),
-                            child: Text('↑ N • ออฟไลน์'),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        top: 6,
-                        right: 8,
-                        child: Card(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                tooltip: 'ซูมเข้า',
-                                onPressed: () => _zoom(1.7, size),
-                                icon: const Icon(Icons.add),
-                              ),
-                              IconButton(
-                                tooltip: 'ซูมออก',
-                                onPressed: () => _zoom(1 / 1.7, size),
-                                icon: const Icon(Icons.remove),
-                              ),
-                              IconButton(
-                                tooltip: 'ดูทั้งพื้นที่',
-                                onPressed: () =>
-                                    _controller.value = Matrix4.identity(),
-                                icon: const Icon(Icons.fit_screen),
-                              ),
-                              if (widget.focus != null &&
-                                  data.contains(widget.focus!))
-                                IconButton(
-                                  tooltip: 'ไปยังพิกัดที่เลือก',
-                                  onPressed: () => _zoom(
-                                    1,
-                                    size,
-                                    target: project(widget.focus!),
-                                  ),
-                                  icon: const Icon(Icons.my_location),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 4,
-                        left: 8,
-                        right: 8,
-                        child: IgnorePointer(
-                          child: Container(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.surface.withValues(alpha: .93),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 3,
-                            ),
-                            child: const Text(
-                              '© OpenStreetMap contributors • ODbL 1.0',
-                              style: TextStyle(fontSize: 10),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+              builder: (context, constraints) => buildMapStack(constraints),
             ),
           ),
           Padding(
@@ -231,35 +487,51 @@ class _BundledOfflineMapState extends State<BundledOfflineMap> {
     },
   );
 
+  // 2. แก้ปุ่มสีเขียวที่มีวงเงาเทาซ้อนอยู่ให้เป็นปุ่มเดียวที่สะอาด
   Widget _marker(OfflineMapMarker marker, Offset position) => Positioned(
     left: position.dx - 22,
     top: position.dy - 22,
-    child: IconButton.filled(
-      key: ValueKey('map-marker-${marker.id}'),
-      tooltip: marker.label,
-      style: IconButton.styleFrom(
-        backgroundColor: marker.color,
-        foregroundColor: Colors.white,
-        minimumSize: const Size(44, 44),
-        maximumSize: const Size(44, 44),
-      ),
-      onPressed:
-          marker.onTap ??
-          () => showDialog<void>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: Text(marker.label),
-              content: Text(marker.location.summary),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('ปิด'),
-                ),
-              ],
+    child: Semantics(
+      label: marker.label,
+      button: true,
+      child: GestureDetector(
+        key: ValueKey('map-marker-${marker.id}'),
+        onTap:
+            marker.onTap ??
+            () => showDialog<void>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: Text(marker.label),
+                content: Text(marker.location.summary),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('ปิด'),
+                  ),
+                ],
+              ),
             ),
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: marker.color,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2.5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.22),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-      icon: Icon(
-        marker.isMe ? Icons.my_location : Icons.person_pin_circle_outlined,
+          child: Icon(
+            marker.isMe ? Icons.my_location : Icons.person_pin_circle_rounded,
+            color: Colors.white,
+            size: 20,
+          ),
+        ),
       ),
     ),
   );
@@ -271,134 +543,4 @@ Size _fit(OfflineMapData data, Size size) {
     (size.height - 24) / data.heightMeters,
   );
   return Size(data.widthMeters * scale, data.heightMeters * scale);
-}
-
-class _RoadPainter extends CustomPainter {
-  _RoadPainter(this.data, this.dark);
-  final OfflineMapData data;
-  final bool dark;
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()..color = dark ? const Color(0xFF172624) : const Color(0xFFEAF0E6),
-    );
-    final mapSize = _fit(data, size);
-    final origin = Offset(
-      (size.width - mapSize.width) / 2,
-      (size.height - mapSize.height) / 2,
-    );
-    canvas.save();
-    canvas.clipRect(origin & mapSize);
-    final labels = <({String name, Offset point, bool road})>[];
-    for (final kind in ['campus', 'land', 'water', 'building', 'road']) {
-      for (final f in data.features.where((f) => f['kind'] == kind)) {
-        final coordinates = f['points'] as List;
-        final points = coordinates
-            .map(
-              (p) =>
-                  origin +
-                  data.project(
-                    (p[0] as num).toDouble(),
-                    (p[1] as num).toDouble(),
-                    mapSize,
-                  ),
-            )
-            .toList();
-        if (points.length < 2) continue;
-        final path = Path()..moveTo(points.first.dx, points.first.dy);
-        for (final p in points.skip(1)) {
-          path.lineTo(p.dx, p.dy);
-        }
-        final closed = f['closed'] == true;
-        if (closed) path.close();
-        final road = kind == 'road';
-        final major = [
-          'primary',
-          'secondary',
-          'tertiary',
-          'trunk',
-        ].contains(f['roadClass']);
-        final color = switch (kind) {
-          'campus' => dark ? const Color(0xFF263931) : const Color(0xFFDFEAD5),
-          'land' => dark ? const Color(0xFF254338) : const Color(0xFFD0E3C8),
-          'water' => dark ? const Color(0xFF214C62) : const Color(0xFFA9D8EC),
-          'building' =>
-            dark ? const Color(0xFF54625E) : const Color(0xFFD5CEBF),
-          _ =>
-            major
-                ? const Color(0xFFE8C078)
-                : (dark ? const Color(0xFFA7B3AD) : Colors.white),
-        };
-        if (road) {
-          canvas.drawPath(
-            path,
-            Paint()
-              ..color = dark ? const Color(0xFF263530) : const Color(0xFFC6CDBF)
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = major ? 4 : 2.6
-              ..strokeJoin = StrokeJoin.round,
-          );
-        }
-        canvas.drawPath(
-          path,
-          Paint()
-            ..color = color
-            ..style = closed && !road
-                ? PaintingStyle.fill
-                : PaintingStyle.stroke
-            ..strokeWidth = road ? (major ? 2.7 : 1.5) : 2
-            ..strokeJoin = StrokeJoin.round,
-        );
-        final name = f['name'] as String?;
-        if (name != null &&
-            name.isNotEmpty &&
-            (road || kind == 'campus' || kind == 'building')) {
-          final anchor = road
-              ? points[points.length ~/ 2]
-              : path.getBounds().center;
-          if ((origin & mapSize).contains(anchor)) {
-            labels.add((name: name, point: anchor, road: road));
-          }
-        }
-      }
-    }
-    final occupied = <Rect>[];
-    for (final label in labels) {
-      final text = TextPainter(
-        text: TextSpan(
-          text: label.name,
-          style: TextStyle(
-            fontFamily: 'NotoSansThai',
-            fontSize: label.road ? 5.5 : 6,
-            color: dark ? Colors.white : const Color(0xFF3E5147),
-            backgroundColor: (dark ? const Color(0xFF172624) : Colors.white)
-                .withValues(alpha: .8),
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-        maxLines: 2,
-      )..layout(maxWidth: 90);
-      final box = Rect.fromCenter(
-        center: label.point,
-        width: text.width + 3,
-        height: text.height + 3,
-      );
-      if (occupied.any((r) => r.overlaps(box))) continue;
-      occupied.add(box);
-      text.paint(canvas, label.point - Offset(text.width / 2, text.height / 2));
-    }
-    canvas.restore();
-    canvas.drawRect(
-      origin & mapSize,
-      Paint()
-        ..color = Colors.grey
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = .5,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _RoadPainter oldDelegate) =>
-      oldDelegate.data != data || oldDelegate.dark != dark;
 }

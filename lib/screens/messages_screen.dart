@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/rescue_theme.dart';
 import '../models/message_model.dart';
 import '../models/sos_alert.dart';
 import '../models/responder_update.dart';
@@ -49,8 +50,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
         final alert = SosAlert.fromJson(message.text);
         final details = alert.details.trim();
         return details.isNotEmpty
-            ? 'SOS: ${alert.category.label} - $details'
-            : 'SOS: ${alert.category.label} (${alert.people} คน)';
+            ? 'SOS: ${alert.categoriesLabel} - $details'
+            : 'SOS: ${alert.categoriesLabel} (${alert.people} คน)';
       } catch (_) {
         final clean = ResponderUpdate.cleanDisplay(message.text);
         if (clean != message.text && clean.isNotEmpty) {
@@ -122,11 +123,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
       final screenBg = isDark
           ? const Color(0xFF0B0F17)
-          : const Color(0xFFF4F6F9);
+          : Theme.of(context).scaffoldBackgroundColor;
       final cardBg = isDark ? const Color(0xFF161E2E) : Colors.white;
       final cardBorderColor = isDark
           ? const Color(0xFF263248)
-          : const Color(0xFFE2E8F0);
+          : RescueTheme.border;
 
       return ColoredBox(
         color: screenBg,

@@ -7,7 +7,6 @@ import '../widgets/privacy_notice.dart';
 // โทนสีเดิมของ RescueLink: ส้ม / กรมท่า / ครีม
 const _orange = Color(0xFFF28C28);
 const _navy = Color(0xFF1B2A49);
-const _cream = Color(0xFFFFF8EE);
 const _line = Color(0xFFEADFCB);
 
 class EmergencyProfileScreen extends StatefulWidget {
@@ -51,29 +50,16 @@ class _EmergencyProfileScreenState extends State<EmergencyProfileScreen> {
   };
 
   static const _hints = {
-    'full_name': 'กรอกชื่อและนามสกุลของคุณ',
-    'display_name': 'เช่น ชื่อเล่น หรือชื่อที่ต้องการให้ผู้อื่นเห็น',
+    'full_name': 'ชื่อและนามสกุล',
+    'display_name': 'เช่น ชื่อเล่น',
     'phone': 'เช่น 0812345678',
-    'medical_conditions': 'เช่น เบาหวาน ความดันโลหิตสูง',
-    'allergies': 'ระบุสิ่งที่แพ้และอาการที่เคยเกิดขึ้น',
-    'medications': 'ระบุชื่อยา ขนาดยา และความถี่ที่ใช้ หากทราบ',
-    'medical_notes':
-        'เช่น ข้อจำกัดในการเคลื่อนไหว หรืออุปกรณ์ทางการแพทย์ที่ใช้',
-    'emergency_contact_name': 'กรอกชื่อและนามสกุลของผู้ติดต่อ',
+    'medical_conditions': 'เช่น เบาหวาน หรือไม่มี',
+    'allergies': 'สิ่งที่แพ้และอาการ หรือไม่ทราบ',
+    'medications': 'ชื่อยา ขนาด และความถี่',
+    'medical_notes': 'ข้อควรระวังเพิ่มเติม',
+    'emergency_contact_name': 'ชื่อและนามสกุล',
     'emergency_contact_phone': 'เช่น 0812345678',
-    'emergency_contact_relation': 'เช่น บิดา มารดา คู่สมรส หรือเพื่อน',
-  };
-
-  static const _helpers = {
-    'display_name': 'ชื่อสำหรับแสดงตัวตนใน RescueLink',
-    'phone': 'ไม่จำเป็นต้องกรอก หากกรอกให้ระบุหมายเลขที่ติดต่อได้',
-    'medical_conditions':
-        'หากไม่มี ให้ระบุ “ไม่มี” หากไม่แน่ใจ ให้ระบุ “ไม่ทราบ”',
-    'allergies':
-        'หากไม่มีประวัติการแพ้ ให้ระบุ “ไม่มี” หากไม่แน่ใจ ให้ระบุ “ไม่ทราบ”',
-    'medications': 'หากไม่ได้ใช้ยาเป็นประจำ ให้ระบุ “ไม่มี”',
-    'medical_notes': 'ระบุข้อมูลหรือข้อควรระวังเพิ่มเติม หากมี',
-    'emergency_contact_phone': 'ระบุหมายเลขที่สามารถติดต่อบุคคลนี้ได้',
+    'emergency_contact_relation': 'เช่น มารดา หรือเพื่อน',
   };
 
   static const _icons = {
@@ -138,20 +124,13 @@ class _EmergencyProfileScreenState extends State<EmergencyProfileScreen> {
       terms = result.data['terms_version'] == privacyVersion;
       if (result.pending) {
         _setMessage(
-          'บันทึกในพื้นที่ปลอดภัยของบัญชีนี้แล้ว รอซิงก์เมื่อเชื่อมต่อ Cloud ได้',
+          'บันทึกในเครื่องแล้ว · รอซิงก์',
           icon: Icons.schedule_rounded,
         );
       } else if (result.offline) {
-        _setMessage(
-          'แสดงสำเนาออฟไลน์ของบัญชีนี้',
-          icon: Icons.cloud_off_rounded,
-        );
+        _setMessage('กำลังใช้ข้อมูลออฟไลน์', icon: Icons.cloud_off_rounded);
       } else {
-        _setMessage(
-          'ข้อมูลซิงก์กับ Cloud แล้ว',
-          success: true,
-          icon: Icons.cloud_done_rounded,
-        );
+        _setMessage('ซิงก์แล้ว', success: true, icon: Icons.cloud_done_rounded);
       }
     });
   }
@@ -240,13 +219,10 @@ class _EmergencyProfileScreenState extends State<EmergencyProfileScreen> {
     IconData? icon,
     String? counter,
     String? hint,
-    String? helper,
   }) => InputDecoration(
     labelText: label,
     hintText: hint,
-    hintMaxLines: 3,
-    helperText: helper,
-    helperMaxLines: 3,
+    hintMaxLines: 2,
     errorMaxLines: 3,
     counterText: counter,
     prefixIcon: icon == null ? null : Icon(icon, size: 20),
@@ -293,9 +269,7 @@ class _EmergencyProfileScreenState extends State<EmergencyProfileScreen> {
             '${labels[key]}${required ? ' *' : ''}',
             icon: _icons[key],
             hint: _hints[key],
-            helper: _helpers[key],
-            // ซ่อนตัวนับตัวอักษรในช่องสั้น ๆ ให้ดูสะอาดขึ้น
-            counter: healthFields[key] == 2000 ? null : '',
+            counter: '',
           ),
           validator: required
               ? (v) => v == null || v.trim().isEmpty
@@ -311,7 +285,7 @@ class _EmergencyProfileScreenState extends State<EmergencyProfileScreen> {
     String? subtitle,
     required List<Widget> children,
   }) => Container(
-    margin: const EdgeInsets.only(bottom: 16),
+    margin: const EdgeInsets.only(bottom: 12),
     child: Material(
       color: Colors.white.withValues(alpha: .65),
       shape: RoundedRectangleBorder(
@@ -319,7 +293,7 @@ class _EmergencyProfileScreenState extends State<EmergencyProfileScreen> {
         side: const BorderSide(color: _line),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -376,8 +350,8 @@ class _EmergencyProfileScreenState extends State<EmergencyProfileScreen> {
       child: message == null
           ? const SizedBox(width: double.infinity)
           : Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: color.withValues(alpha: .08),
                 borderRadius: BorderRadius.circular(14),
@@ -477,8 +451,8 @@ class _EmergencyProfileScreenState extends State<EmergencyProfileScreen> {
   );
 
   Widget _header() => Container(
-    padding: const EdgeInsets.all(18),
-    margin: const EdgeInsets.only(bottom: 16),
+    padding: const EdgeInsets.all(16),
+    margin: const EdgeInsets.only(bottom: 12),
     decoration: BoxDecoration(
       gradient: const LinearGradient(
         colors: [_navy, Color(0xFF2E4372)],
@@ -516,7 +490,7 @@ class _EmergencyProfileScreenState extends State<EmergencyProfileScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'ข้อมูลสุขภาพเป็นทางเลือก และไม่ส่งให้อุปกรณ์ Nearby โดยอัตโนมัติ',
+                'ข้อมูลสุขภาพไม่ส่งผ่าน Nearby อัตโนมัติ',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: .75),
                   fontSize: 12.5,
@@ -542,9 +516,7 @@ class _EmergencyProfileScreenState extends State<EmergencyProfileScreen> {
     );
 
     return Scaffold(
-      backgroundColor: _cream,
       appBar: AppBar(
-        backgroundColor: _cream,
         surfaceTintColor: Colors.transparent,
         foregroundColor: _navy,
         elevation: 0,
@@ -578,7 +550,7 @@ class _EmergencyProfileScreenState extends State<EmergencyProfileScreen> {
           child: Form(
             key: form,
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -589,8 +561,7 @@ class _EmergencyProfileScreenState extends State<EmergencyProfileScreen> {
                   _section(
                     icon: Icons.person_rounded,
                     title: 'ข้อมูลส่วนตัว',
-                    subtitle:
-                        'ช่องที่มี * จำเป็นต้องกรอก ส่วนข้อมูลอื่นกรอกได้ตามความสะดวก',
+                    subtitle: '* จำเป็นต้องกรอก',
                     children: [
                       _field('full_name', required: true),
                       _field('display_name', required: true),
@@ -604,12 +575,11 @@ class _EmergencyProfileScreenState extends State<EmergencyProfileScreen> {
                     icon: Icons.health_and_safety_rounded,
                     title: 'ข้อมูลสุขภาพ',
                     subtitle:
-                        'กรอกได้ตามความสมัครใจ โดยระบุข้อมูลเท่าที่ทราบ '
-                        'ข้อมูลนี้ยังไม่แชร์ให้ผู้ช่วยเหลือ '
-                        'เมื่อยกเลิกความยินยอมและบันทึก ข้อมูลสุขภาพจะถูกลบ',
+                        'กรอกได้ตามสมัครใจ ยังไม่แชร์ให้ผู้ช่วยเหลือ '
+                        'ปิดความยินยอมแล้วบันทึกเพื่อลบข้อมูลสุขภาพ',
                     children: [
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.only(bottom: 12),
                         child: Material(
                           color: consent
                               ? _orange.withValues(alpha: .12)
@@ -651,7 +621,7 @@ class _EmergencyProfileScreenState extends State<EmergencyProfileScreen> {
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
-                                  'หากต้องการกรอกข้อมูลสุขภาพ กรุณาเปิดความยินยอมด้านบน',
+                                  'เปิดความยินยอมเพื่อกรอกข้อมูลสุขภาพ',
                                   style: TextStyle(
                                     fontSize: 12.5,
                                     color: _navy.withValues(alpha: .55),
@@ -688,7 +658,7 @@ class _EmergencyProfileScreenState extends State<EmergencyProfileScreen> {
                         ],
                       ),
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(2, 8, 2, 16),
+                        padding: const EdgeInsets.fromLTRB(2, 8, 2, 12),
                         child: Text(
                           'กรุ๊ปเลือดที่กรอกเองใช้ให้เลือดไม่ได้โดยไม่มีการตรวจยืนยันทางการแพทย์',
                           style: TextStyle(
@@ -705,8 +675,7 @@ class _EmergencyProfileScreenState extends State<EmergencyProfileScreen> {
                   _section(
                     icon: Icons.contact_phone_rounded,
                     title: 'ผู้ติดต่อฉุกเฉิน',
-                    subtitle:
-                        'บุคคลที่คุณต้องการให้ติดต่อเมื่อเกิดเหตุฉุกเฉิน (ไม่จำเป็นต้องกรอก)',
+                    subtitle: 'ไม่จำเป็นต้องกรอก',
                     children: [
                       for (final key in emergencyKeys)
                         _field(key, health: true),
@@ -740,7 +709,7 @@ class _EmergencyProfileScreenState extends State<EmergencyProfileScreen> {
                           style: TextButton.styleFrom(foregroundColor: _orange),
                         ),
                       ),
-                      const Divider(height: 24, color: _line),
+                      const Divider(height: 16, color: _line),
                       FilledButton.icon(
                         onPressed: busy ? null : _save,
                         icon: const Icon(Icons.save_rounded),

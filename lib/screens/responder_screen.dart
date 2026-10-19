@@ -1,19 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../models/sos_alert.dart';
+import '../theme/rescue_theme.dart';
 import '../services/app_preferences.dart';
 import '../services/message_service.dart';
-import '../services/responder_store.dart';
 import '../widgets/location_button.dart';
 import 'chat_screen.dart';
 
-/// Redesigned RescueLink responder screen.
-///
-/// Design: Rescue blue #3B82F6, SOS red #FF4D4D, soft peach #FFB37B,
-/// warm off-white surfaces, and rounded cards.
-///
-/// The existing MessageService / ResponderStore workflow is preserved.
-/// Case assignment and progress are still LOCAL TO THIS DEVICE.
+/// Displays received SOS reports and the local responder mode switch.
 class ResponderScreen extends StatefulWidget {
   const ResponderScreen({super.key, required this.service});
 
@@ -25,14 +19,12 @@ class ResponderScreen extends StatefulWidget {
 
 class _RescuePalette {
   static const blue = Color(0xFF3B82F6);
-  static const sos = Color(0xFFFF4D4D);
-  static const canvas = Color(0xFFFFFAF6);
+  static const sos = kSosRed;
   static const white = Colors.white;
   static const ink = Color(0xFF202C40);
   static const muted = Color(0xFF788397);
   static const line = Color(0xFFE8EAF0);
-  static const green = Color(0xFF22C55E);
-  static const amber = Color(0xFFF59E0B);
+
   static const grey = Color(0xFF98A2B3);
 }
 
@@ -45,7 +37,6 @@ class _StageAppearance {
 }
 
 class _ResponderScreenState extends State<ResponderScreen> {
-  final Map<String, Map<String, dynamic>> records = {};
   Map<String, Map<String, SosAlert>> storedIncidents = {};
 
   int _refreshRevision = 0;
@@ -110,19 +101,7 @@ class _ResponderScreenState extends State<ResponderScreen> {
       if (!mounted || revision != _refreshRevision) return;
       storedIncidents = stored;
 
-      final next = <String, Map<String, dynamic>>{};
-      for (final entry in incidents.entries) {
-        final record = await ResponderStore(
-          s,
-        ).read(entry.value.$1, entry.value.$2.incidentId);
-        if (!mounted || revision != _refreshRevision) return;
-        if (record != null) next[entry.key] = record;
-      }
-      if (!mounted || revision != _refreshRevision) return;
       setState(() {
-        records
-          ..clear()
-          ..addAll(next);
         loading = false;
         error = null;
       });
@@ -166,53 +145,25 @@ class _ResponderScreenState extends State<ResponderScreen> {
     await _run(() => s.setRescueMode(value));
   }
 
-  /// Visible status: closed incidents must not look actionable.
-  /// Completed local records remain completed even after SOS expiration.
-  String _stageFor(String key, SosAlert alert) {
-    final saved = records[key]?['stage'] as String?;
-    if (saved == 'completed') return 'completed';
-    if (!alert.active || alert.isExpired(DateTime.now().toUtc())) {
-      return 'closed';
-    }
-    if (saved == 'pending' || saved == 'helping') return saved!;
-    return 'open';
-  }
+  String _stageFor(SosAlert alert) =>
+      alert.isActiveAt(DateTime.now().toUtc()) ? 'open' : 'closed';
 
-  _StageAppearance _stageAppearance(String stage) => switch (stage) {
-    'pending' => _StageAppearance(
-      tr('รอยืนยัน', 'Awaiting confirmation'),
-      _RescuePalette.amber,
-      Icons.hourglass_bottom_rounded,
-    ),
-    'helping' => _StageAppearance(
-      tr('กำลังช่วยเหลือ', 'Helping'),
-      _RescuePalette.blue,
-      Icons.volunteer_activism_outlined,
-    ),
-    'completed' => _StageAppearance(
-      tr('เสร็จสิ้น', 'Completed'),
-      _RescuePalette.green,
-      Icons.check_circle_outline_rounded,
-    ),
-    'closed' => _StageAppearance(
-      tr('ยกเลิก / หมดอายุ', 'Cancelled / expired'),
-      _RescuePalette.grey,
-      Icons.block_outlined,
-    ),
-    _ => _StageAppearance(
-      tr('รอรับเคส', 'New incident'),
-      _RescuePalette.sos,
-      Icons.notification_important_outlined,
-    ),
-  };
+  _StageAppearance _stageAppearance(String stage) => stage == 'open'
+      ? _StageAppearance(
+          tr('กำลังขอความช่วยเหลือ', 'Active SOS'),
+          _RescuePalette.sos,
+          Icons.notification_important_outlined,
+        )
+      : _StageAppearance(
+          tr('ยกเลิก / หมดอายุ', 'Cancelled / expired'),
+          _RescuePalette.grey,
+          Icons.block_outlined,
+        );
 
   String _filterLabel(String value) => switch (value) {
     'all' => tr('ทั้งหมด', 'All'),
-    'open' => tr('รอรับเคส', 'New'),
-    'pending' => tr('รอยืนยัน', 'Pending'),
-    'helping' => tr('กำลังช่วยเหลือ', 'Helping'),
-    'completed' => tr('เสร็จสิ้น', 'Done'),
-    _ => tr('ปิด / หมดอายุ', 'Closed'),
+    'open' => tr('SOS ที่เปิดอยู่', 'Active SOS'),
+    _ => tr('ยกเลิก / หมดอายุ', 'Cancelled / expired'),
   };
 
   String _formatDate(DateTime utc) {
@@ -231,28 +182,19 @@ class _ResponderScreenState extends State<ResponderScreen> {
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (sheet) => StatefulBuilder(
-        builder: (sheet, updateSheet) {
+      builder: (sheet) => ListenableBuilder(
+        listenable: s,
+        builder: (sheet, _) {
           final alert =
               incidents['$owner:${initial.incidentId}']?.$2 ?? initial;
-          final key = '$owner:${alert.incidentId}';
-          final record = records[key];
-          final stage = _stageFor(key, alert);
-          final appearance = _stageAppearance(stage);
-          final canAct =
-              !busy && s.rescueMode && alert.isActiveAt(DateTime.now().toUtc());
-          final nextStages = record == null
-              ? <String>['pending']
-              : record['stage'] == 'completed'
-              ? <String>[]
-              : <String>['helping', 'completed'];
+          final appearance = _stageAppearance(_stageFor(alert));
 
           return Container(
             constraints: BoxConstraints(
               maxHeight: MediaQuery.sizeOf(sheet).height * 0.91,
             ),
             decoration: const BoxDecoration(
-              color: _RescuePalette.canvas,
+              color: _RescuePalette.white,
               borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
             ),
             child: SingleChildScrollView(
@@ -302,7 +244,7 @@ class _ResponderScreenState extends State<ResponderScreen> {
                             ),
                             const SizedBox(height: 5),
                             Text(
-                              t(alert.category.label),
+                              t(alert.categoriesLabel),
                               style: const TextStyle(
                                 fontSize: 14,
                                 color: _RescuePalette.muted,
@@ -389,90 +331,7 @@ class _ResponderScreenState extends State<ResponderScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.all(13),
-                    decoration: BoxDecoration(
-                      color: _RescuePalette.blue.withValues(alpha: .07),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: _RescuePalette.blue.withValues(alpha: .13),
-                      ),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(
-                          Icons.info_outline_rounded,
-                          color: _RescuePalette.blue,
-                          size: 19,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            tr(
-                              'สถานะรับเคสบันทึกเฉพาะเครื่องนี้ ยังไม่มีระบบยืนยันการจัดสรรเคสจากผู้แจ้ง',
-                              'Case progress is saved on this device only. The reporter has not confirmed assignment.',
-                            ),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              height: 1.5,
-                              color: _RescuePalette.ink,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (error != null) ...[
-                    const SizedBox(height: 12),
-                    _ErrorBanner(message: error!),
-                  ],
                   const SizedBox(height: 20),
-                  for (final nextStage in nextStages) ...[
-                    SizedBox(
-                      height: 50,
-                      child: FilledButton.icon(
-                        onPressed: canAct
-                            ? () async {
-                                updateSheet(() {});
-                                await _run(() async {
-                                  final store = ResponderStore(s);
-                                  await store.update(owner, alert, nextStage);
-                                  await store.notifyReporter(
-                                    owner,
-                                    alert.incidentId,
-                                  );
-                                });
-                                if (sheet.mounted) updateSheet(() {});
-                              }
-                            : null,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: _RescuePalette.blue,
-                          foregroundColor: Colors.white,
-                          disabledBackgroundColor: _RescuePalette.line,
-                          disabledForegroundColor: _RescuePalette.muted,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                        ),
-                        icon: Icon(
-                          nextStage == 'completed'
-                              ? Icons.check_circle_outline_rounded
-                              : Icons.volunteer_activism_outlined,
-                        ),
-                        label: Text(
-                          nextStage == 'pending'
-                              ? tr('รับเคสนี้', 'Accept case')
-                              : nextStage == 'helping'
-                              ? tr('เริ่มช่วยเหลือ', 'Start helping')
-                              : tr('บันทึกว่าเสร็จสิ้น', 'Mark completed'),
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                  ],
                   SizedBox(
                     height: 50,
                     child: OutlinedButton.icon(
@@ -503,26 +362,6 @@ class _ResponderScreenState extends State<ResponderScreen> {
                       ),
                     ),
                   ),
-                  if (record != null) ...[
-                    const SizedBox(height: 6),
-                    TextButton.icon(
-                      onPressed: busy
-                          ? null
-                          : () async {
-                              updateSheet(() {});
-                              await _run(
-                                () => ResponderStore(
-                                  s,
-                                ).notifyReporter(owner, alert.incidentId),
-                              );
-                              if (sheet.mounted) updateSheet(() {});
-                            },
-                      icon: const Icon(Icons.send_outlined, size: 17),
-                      label: Text(
-                        tr('ส่งการอัปเดตเคสอีกครั้ง', 'Resend case update'),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -536,23 +375,18 @@ class _ResponderScreenState extends State<ResponderScreen> {
   Widget build(BuildContext context) {
     final entries = incidents.entries.toList()
       ..sort((a, b) => b.value.$2.updatedAt.compareTo(a.value.$2.updatedAt));
-    final pending = entries
-        .where((entry) => _stageFor(entry.key, entry.value.$2) == 'pending')
+    final active = entries
+        .where((entry) => _stageFor(entry.value.$2) == 'open')
         .length;
-    final helping = entries
-        .where((entry) => _stageFor(entry.key, entry.value.$2) == 'helping')
-        .length;
+    final closed = entries.length - active;
     final visible = entries
         .where(
-          (entry) =>
-              filter == 'all' || _stageFor(entry.key, entry.value.$2) == filter,
+          (entry) => filter == 'all' || _stageFor(entry.value.$2) == filter,
         )
         .toList();
 
     return Scaffold(
-      backgroundColor: _RescuePalette.canvas,
       appBar: AppBar(
-        backgroundColor: _RescuePalette.canvas,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -615,7 +449,7 @@ class _ResponderScreenState extends State<ResponderScreen> {
                     ],
                     const SizedBox(height: 23),
                     Text(
-                      tr('ภาพรวมการช่วยเหลือ', 'Responder overview'),
+                      tr('ภาพรวมเหตุ SOS', 'SOS overview'),
                       style: const TextStyle(
                         color: _RescuePalette.ink,
                         fontSize: 17,
@@ -636,18 +470,21 @@ class _ResponderScreenState extends State<ResponderScreen> {
                         const SizedBox(width: 9),
                         Expanded(
                           child: _MetricCard(
-                            count: pending,
-                            title: tr('รอยืนยัน', 'Pending'),
-                            icon: Icons.hourglass_bottom_rounded,
-                            color: _RescuePalette.amber,
+                            count: active,
+                            title: tr('SOS ที่เปิดอยู่', 'Active SOS'),
+                            icon: Icons.notification_important_outlined,
+                            color: _RescuePalette.sos,
                           ),
                         ),
                         const SizedBox(width: 9),
                         Expanded(
                           child: _MetricCard(
-                            count: helping,
-                            title: tr('กำลังช่วย', 'Helping'),
-                            icon: Icons.volunteer_activism_outlined,
+                            count: closed,
+                            title: tr(
+                              'ยกเลิก / หมดอายุ',
+                              'Cancelled / expired',
+                            ),
+                            icon: Icons.block_outlined,
                             color: _RescuePalette.blue,
                           ),
                         ),
@@ -667,7 +504,7 @@ class _ResponderScreenState extends State<ResponderScreen> {
                           ),
                         ),
                         Text(
-                          '${visible.length} ${tr('รายการ', 'cases')}',
+                          '${visible.length} ${tr('รายการ', 'incidents')}',
                           style: const TextStyle(
                             color: _RescuePalette.muted,
                             fontSize: 13,
@@ -683,9 +520,6 @@ class _ResponderScreenState extends State<ResponderScreen> {
                           for (final value in const [
                             'all',
                             'open',
-                            'pending',
-                            'helping',
-                            'completed',
                             'closed',
                           ]) ...[
                             _FilterChip(
@@ -717,8 +551,8 @@ class _ResponderScreenState extends State<ResponderScreen> {
                                 'No incoming SOS yet',
                               )
                             : tr(
-                                'ไม่พบเคสในหมวดนี้',
-                                'No cases in this filter',
+                                'ไม่พบเหตุในหมวดนี้',
+                                'No incidents in this filter',
                               ),
                         subtitle: entries.isEmpty
                             ? tr(
@@ -734,11 +568,11 @@ class _ResponderScreenState extends State<ResponderScreen> {
                       for (final entry in visible) ...[
                         _IncidentCard(
                           alert: entry.value.$2,
-                          category: t(entry.value.$2.category.label),
+                          category: t(entry.value.$2.categoriesLabel),
                           date: _formatDate(entry.value.$2.updatedAt),
                           location: _locationLabel(entry.value.$2),
                           appearance: _stageAppearance(
-                            _stageFor(entry.key, entry.value.$2),
+                            _stageFor(entry.value.$2),
                           ),
                           peopleLabel: tr('คน', 'people'),
                           fallbackName: tr('ไม่ระบุชื่อ', 'Unknown'),

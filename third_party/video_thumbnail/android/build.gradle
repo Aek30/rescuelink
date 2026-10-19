@@ -1,0 +1,17 @@
+group 'xyz.justsoft.video_thumbnail'
+version '1.0-SNAPSHOT'
+
+apply plugin: 'com.android.library'
+
+android {
+    compileSdkVersion 37
+    namespace 'xyz.justsoft.video_thumbnail'
+
+    defaultConfig {
+        minSdkVersion 16
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+    lintOptions {
+        disable 'InvalidPackage'
+    }
+}

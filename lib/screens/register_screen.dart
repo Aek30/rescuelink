@@ -1101,9 +1101,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     ];
 
     return Scaffold(
-      backgroundColor: isDark
-          ? const Color(0xFF0C1017)
-          : const Color(0xFFFCF8F1),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'emergency_type_chip.dart';
 import '../services/message_service.dart';
 import '../screens/chat_screen.dart';
 import '../screens/incident_detail_screen.dart';
@@ -48,7 +49,7 @@ class PresenceList extends StatelessWidget {
     final dark = theme.brightness == Brightness.dark;
     final muted = dark ? const Color(0xFF94A3B8) : RescueTheme.muted;
     final accent = filter == PresenceFilter.sos
-        ? const Color(0xFFB91C1C)
+        ? kSosRed
         : filter == PresenceFilter.rescue
         ? const Color(0xFF2563EB)
         : const Color(0xFF0F766E);
@@ -251,7 +252,7 @@ class PresenceList extends StatelessWidget {
                                           child: sos
                                               ? const Icon(
                                                   Icons.warning_amber_rounded,
-                                                  color: Color(0xFFFF4D4D),
+                                                  color: kSosRed,
                                                   size: 22,
                                                 )
                                               : rescue
@@ -426,7 +427,7 @@ class PresenceList extends StatelessWidget {
                                       const SizedBox(width: 6),
                                       Expanded(
                                         child: Text(
-                                          '${state.sos!.category.label} • ${state.sos!.people} คน',
+                                          '${state.sos!.people} คน',
                                           style: TextStyle(
                                             fontWeight: FontWeight.w700,
                                             fontSize: 13,
@@ -435,6 +436,9 @@ class PresenceList extends StatelessWidget {
                                         ),
                                       ),
                                     ],
+                                  ),
+                                  EmergencyTypeChips(
+                                    types: state.sos!.categories,
                                   ),
                                   if (state.sos!.details.isNotEmpty) ...[
                                     const SizedBox(height: 4),

@@ -21,9 +21,11 @@ class TestAuth extends AuthService {
   TestAuth(AccountStorage storage, this.testClient)
     : super(storage: storage, vault: TestVault());
   final SupabaseClient testClient;
+  bool offline = false;
   @override
   Future<SupabaseClient> cloudClient(String owner) async {
     if (session?.userId != owner) throw StateError('บัญชีเปลี่ยนแล้ว');
+    if (offline) throw const SocketException('Offline');
     return testClient;
   }
 }

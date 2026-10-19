@@ -10,7 +10,7 @@ import '../widgets/location_button.dart';
 import '../widgets/media_bubble.dart';
 import '../services/media_upload_service.dart';
 import '../models/media_model.dart';
-import '../widgets/relay_badge.dart';
+import '../widgets/chat_message_bubble.dart';
 import '../theme/rescue_theme.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -31,6 +31,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final _text = TextEditingController();
   final _focusNode = FocusNode();
   bool _sending = false;
+  bool _searchVisible = false;
   String _query = '';
   String _filter = 'all';
   MediaService? get _media =>
@@ -67,12 +68,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         receiverId: widget.peerId,
         text: content,
       );
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('Chat action: $e\n$stack');
       if (mounted) {
         _text.text = content;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ทำรายการไม่สำเร็จ กรุณาลองใหม่')),
+        );
       }
     } finally {
       if (mounted) {
@@ -95,12 +97,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         senderName: svc.nearbyService.deviceName,
         receiverId: widget.peerId,
       );
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('Chat action: $e\n$stack');
       final msg = '$e';
       if (mounted && msg != 'No file selected') {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(msg)));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ส่งสื่อไม่สำเร็จ กรุณาลองใหม่')),
+        );
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -110,147 +113,91 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Future<void> _mediaAction(Future<void> Function() action) async {
     try {
       await action();
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('Chat action: $e\n$stack');
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ทำรายการไม่สำเร็จ กรุณาลองใหม่')),
+        );
       }
     }
   }
 
-  Widget _buildStatusIndicator(MessageStatus status, bool isDark) {
-    switch (status) {
-      case MessageStatus.pending:
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.schedule_rounded,
-              size: 12,
-              color: Colors.white.withValues(alpha: 0.9),
-            ),
-            const SizedBox(width: 2),
-            Text(
-              'รอส่ง',
-              style: TextStyle(
-                fontSize: 10,
-                color: Colors.white.withValues(alpha: 0.9),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        );
-      case MessageStatus.sent:
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.check_rounded,
-              size: 13,
-              color: Colors.white.withValues(alpha: 0.9),
-            ),
-            const SizedBox(width: 2),
-            Text(
-              'กำลังส่ง',
-              style: TextStyle(
-                fontSize: 10,
-                color: Colors.white.withValues(alpha: 0.9),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        );
-      case MessageStatus.delivered:
-      case MessageStatus.synced:
-        return const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.done_all_rounded, size: 14, color: Color(0xFFBAE6FD)),
-            SizedBox(width: 2),
-            Text(
-              'ส่งสำเร็จ',
-              style: TextStyle(
-                fontSize: 10,
-                color: Colors.white,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        );
+  ChatDeliveryState _deliveryState(MessageModel message, MediaFile? media) {
+    if (message.type != MessageType.media) {
+      return message.status == MessageStatus.delivered ||
+              message.status == MessageStatus.synced
+          ? ChatDeliveryState.delivered
+          : ChatDeliveryState.pending;
     }
+    if (media == null) return ChatDeliveryState.pending;
+    if ((media.status == MediaStatus.failed ||
+            media.status == MediaStatus.paused) &&
+        (media.retryCount >= 5 || media.errorMessage == 'ไม่พบไฟล์ในเครื่อง')) {
+      return ChatDeliveryState.failed;
+    }
+    final job = _media?.uploads.forMedia(media.mediaId);
+    // Cloud retry and transfer ACK are combined into exactly one indicator.
+    // Upload failures have nextAttempt and are retryable, never permanent.
+    if (job != null && job.state != UploadState.ready) {
+      return ChatDeliveryState.pending;
+    }
+    return media.status == MediaStatus.delivered ||
+            media.status == MediaStatus.received ||
+            media.status == MediaStatus.cloudReady
+        ? ChatDeliveryState.delivered
+        : ChatDeliveryState.pending;
   }
 
-  Widget _mediaActions(MediaFile media) {
+  Future<void> _showMediaOptions(MediaFile media) async {
     final uploads = _media!.uploads;
-    final job = uploads.forMedia(media.mediaId);
-    final active =
-        job?.state == UploadState.uploading ||
-        job?.state == UploadState.verifying;
-    final label = switch (job?.state) {
-      UploadState.uploading =>
-        'กำลังซิงก์ ${(job!.bytes * 100 / media.fileSize).toStringAsFixed(0)}%',
-      UploadState.verifying => 'กำลังตรวจไฟล์บน Cloud',
-      UploadState.ready => 'ซิงก์แล้ว • เปิดไฟล์ Cloud',
-      UploadState.failed => 'ซิงก์ไม่สำเร็จ • จะลองใหม่อัตโนมัติ',
-      UploadState.queued => 'อยู่ในคิว • ซิงก์อัตโนมัติเมื่อออนไลน์',
-      null =>
-        AuthService.instance.signedIn
-            ? 'รอซิงก์อัตโนมัติ'
-            : 'เก็บในเครื่อง • เข้าสู่ระบบเพื่อซิงก์',
-    };
-    return SizedBox(
-      width: 240,
-      child: Column(
-        children: [
-          if (active)
-            LinearProgressIndicator(
-              value: job!.state == UploadState.verifying
-                  ? null
-                  : job.bytes / media.fileSize,
-            ),
-          Wrap(
-            alignment: WrapAlignment.end,
-            children: [
-              if (media.senderId == widget.service.myId &&
-                  (media.status == MediaStatus.paused ||
-                      media.status == MediaStatus.failed ||
-                      media.status == MediaStatus.localReady))
-                TextButton(
-                  onPressed: () =>
-                      _mediaAction(() => _media!.retryMedia(media.mediaId)),
-                  child: const Text('ส่งใหม่'),
-                ),
-              TextButton(
-                onPressed: active
-                    ? null
-                    : () => _mediaAction(() async {
-                        if (job?.state == UploadState.ready) {
-                          final url = await uploads.accessUrl(media.mediaId);
-                          if (!mounted) return;
-                          await Navigator.push<void>(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  CloudMediaViewer(url: url, media: media),
-                            ),
-                          );
-                        } else {
-                          await uploads.enqueue(media.mediaId);
-                        }
-                      }),
-                child: Text(label),
+    final ready = uploads.forMedia(media.mediaId)?.state == UploadState.ready;
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (media.senderId == widget.service.myId)
+              ListTile(
+                leading: const Icon(Icons.refresh_rounded),
+                title: const Text('ส่งใหม่'),
+                minVerticalPadding: 12,
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _mediaAction(() => _media!.retryMedia(media.mediaId));
+                },
               ),
-            ],
-          ),
-          if (job?.state == UploadState.failed)
-            Text(
-              job!.error ?? 'ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่',
-              style: const TextStyle(fontSize: 11),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+            ListTile(
+              leading: Icon(
+                ready ? Icons.cloud_done_outlined : Icons.cloud_upload_outlined,
+              ),
+              title: Text(ready ? 'เปิดสื่อจาก Cloud' : 'ซิงก์สื่อไป Cloud'),
+              subtitle: !AuthService.instance.signedIn
+                  ? const Text('เข้าสู่ระบบเพื่อซิงก์')
+                  : null,
+              minVerticalPadding: 12,
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _mediaAction(() async {
+                  if (ready) {
+                    final url = await uploads.accessUrl(media.mediaId);
+                    if (!mounted) return;
+                    await Navigator.push<void>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            CloudMediaViewer(url: url, media: media),
+                      ),
+                    );
+                  } else {
+                    await uploads.enqueue(media.mediaId);
+                  }
+                });
+              },
             ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -332,6 +279,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
       return Scaffold(
         appBar: AppBar(
+          actions: [
+            IconButton(
+              tooltip: _searchVisible ? 'ปิดการค้นหา' : 'ค้นหาในแชท',
+              icon: Icon(
+                _searchVisible ? Icons.close_rounded : Icons.search_rounded,
+              ),
+              onPressed: () => setState(() {
+                _searchVisible = !_searchVisible;
+                if (!_searchVisible) {
+                  _query = '';
+                  _filter = 'all';
+                }
+              }),
+            ),
+          ],
           title: Row(
             children: [
               CircleAvatar(
@@ -362,7 +324,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           ? service.peerRoleLabel(widget.peerId)
                           : '${service.peerRoleLabel(widget.peerId)} • $connectionLabel',
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 12,
                         color: isDark
                             ? const Color(0xFF94A3B8)
                             : RescueTheme.mutedFor(context),
@@ -392,42 +354,59 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     child: const Text('ตั้งเวลา'),
                   ),
                 ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        decoration: const InputDecoration(
-                          prefixIcon: Icon(Icons.search),
-                          hintText: 'ค้นหาข้อความหรือชื่อไฟล์',
+              if (_searchVisible)
+                ColoredBox(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            style: const TextStyle(fontSize: 15),
+                            decoration: const InputDecoration(
+                              prefixIcon: Icon(Icons.search),
+                              hintText: 'ค้นหาข้อความหรือชื่อไฟล์',
+                            ),
+                            onChanged: (value) =>
+                                setState(() => _query = value),
+                          ),
                         ),
-                        onChanged: (value) => setState(() => _query = value),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    DropdownButton<String>(
-                      value: _filter,
-                      items: const [
-                        DropdownMenuItem(value: 'all', child: Text('ทั้งหมด')),
-                        DropdownMenuItem(value: 'text', child: Text('ข้อความ')),
-                        DropdownMenuItem(value: 'image', child: Text('รูปภาพ')),
-                        DropdownMenuItem(value: 'video', child: Text('วิดีโอ')),
-                        DropdownMenuItem(
-                          value: 'pending',
-                          child: Text('ค้างส่ง'),
+                        const SizedBox(width: 8),
+                        DropdownButton<String>(
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                          value: _filter,
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'all',
+                              child: Text('ทั้งหมด'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'text',
+                              child: Text('ข้อความ'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'image',
+                              child: Text('รูปภาพ'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'video',
+                              child: Text('วิดีโอ'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'pending',
+                              child: Text('ค้างส่ง'),
+                            ),
+                          ],
+                          onChanged: (value) =>
+                              setState(() => _filter = value ?? 'all'),
                         ),
                       ],
-                      onChanged: (value) =>
-                          setState(() => _filter = value ?? 'all'),
                     ),
-                  ],
-                ),
-              ),
-              if (service.error != null)
-                Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Text(service.error!),
+                  ),
                 ),
               Expanded(
                 child: messages.isEmpty
@@ -465,7 +444,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: RescueTheme.mutedFor(context),
-                                  fontSize: 13,
+                                  fontSize: 15,
                                 ),
                               ),
                             ],
@@ -487,188 +466,69 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           final sameAsPrevious =
                               index < messages.length - 1 &&
                               messages[index + 1].senderId == message.senderId;
-                          final topMargin = sameAsPrevious ? 2.5 : 8.0;
-
-                          // ─── Media bubble ─────────────────────────────────────
-                          if (message.type == MessageType.media) {
-                            final media = _media?.getCached(message.text);
-                            return Align(
-                              alignment: mine
-                                  ? Alignment.centerRight
-                                  : Alignment.centerLeft,
-                              child: Padding(
-                                padding: EdgeInsets.only(
-                                  top: topMargin,
-                                  bottom: 2.0,
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: mine
-                                      ? CrossAxisAlignment.end
-                                      : CrossAxisAlignment.start,
-                                  children: [
-                                    MediaBubble(media: media, isMine: mine),
-                                    if (media != null) _mediaActions(media),
-                                    const SizedBox(height: 2),
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 4,
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            timeFormatted,
-                                            style: TextStyle(
-                                              fontSize: 10.5,
-                                              color: isDark
-                                                  ? Colors.grey[400]
-                                                  : const Color(0xFF64748B),
-                                            ),
-                                          ),
-                                          if (mine) ...[
-                                            const SizedBox(width: 4),
-                                            _buildStatusIndicator(
-                                              message.status,
-                                              isDark,
-                                            ),
-                                          ],
-                                        ],
-                                      ),
+                          final media = message.type == MessageType.media
+                              ? _media?.getCached(message.text)
+                              : null;
+                          return Padding(
+                            padding: EdgeInsets.only(
+                              top: sameAsPrevious ? 8 : 16,
+                            ),
+                            child: ChatMessageBubble(
+                              key: ValueKey(message.id),
+                              isMine: mine,
+                              time: timeFormatted,
+                              status: _deliveryState(message, media),
+                              route: service.receivedRoutes[message.id],
+                              peers: {
+                                ...service.peers,
+                                if (service.myId != null)
+                                  service.myId!: 'เครื่องนี้',
+                              },
+                              onRetry: media == null
+                                  ? null
+                                  : () => _mediaAction(
+                                      () => _media!.retryMedia(media.mediaId),
                                     ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }
-
-                          // ─── Text / SOS bubble ────────────────────────────
-                          return Align(
-                            alignment: mine
-                                ? Alignment.centerRight
-                                : Alignment.centerLeft,
-                            child: Container(
-                              margin: EdgeInsets.only(
-                                top: topMargin,
-                                bottom: 2.0,
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 7,
-                              ),
-                              constraints: BoxConstraints(
-                                maxWidth:
-                                    MediaQuery.sizeOf(context).width * 0.78,
-                              ),
-                              decoration: BoxDecoration(
-                                color: mine
-                                    ? (isDark
-                                          ? const Color(0xFF9A3412)
-                                          : const Color(0xFFEA580C))
-                                    : (isDark
-                                          ? const Color(0xFF1E293B)
-                                          : Colors.white),
-                                border: Border.all(
-                                  color: mine
-                                      ? (isDark
-                                            ? const Color(0xFFB45309)
-                                            : const Color(0xFFC2410C))
-                                      : (isDark
-                                            ? const Color(0xFF334155)
-                                            : const Color(0xFFE2E8F0)),
-                                  width: 0.8,
-                                ),
-                                borderRadius: BorderRadius.only(
-                                  topLeft: const Radius.circular(16),
-                                  topRight: const Radius.circular(16),
-                                  bottomLeft: Radius.circular(mine ? 16 : 4),
-                                  bottomRight: Radius.circular(mine ? 4 : 16),
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(
-                                      alpha: isDark ? 0.2 : 0.04,
-                                    ),
-                                    blurRadius: 3,
-                                    offset: const Offset(0, 1),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  SelectableText(
-                                    message.type == MessageType.sos
-                                        ? SosAlert.fromJson(
-                                            message.text,
-                                          ).summary
-                                        : ResponderUpdate.cleanDisplay(
-                                            message.text,
-                                          ),
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      height: 1.35,
-                                      color: mine
-                                          ? Colors.white
-                                          : (isDark
+                              onLongPress: media == null
+                                  ? null
+                                  : () => _showMediaOptions(media),
+                              child: message.type == MessageType.media
+                                  ? MediaBubble(media: media, isMine: mine)
+                                  : Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        SelectableText(
+                                          message.type == MessageType.sos
+                                              ? SosAlert.fromJson(
+                                                  message.text,
+                                                ).summary
+                                              : ResponderUpdate.cleanDisplay(
+                                                  message.text,
+                                                ),
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            height: 1.35,
+                                            color: mine
                                                 ? Colors.white
-                                                : const Color(0xFF0F172A)),
-                                    ),
-                                  ),
-                                  if ((message.type == MessageType.message ||
-                                          message.type == MessageType.sos) &&
-                                      service.receivedRoutes[message.id] !=
-                                          null)
-                                    RelayBadge(
-                                      route: service.receivedRoutes[message.id],
-                                      peers: {
-                                        ...service.peers,
-                                        if (service.myId != null)
-                                          service.myId!: 'เครื่องนี้',
-                                      },
-                                    ),
-                                  if (message.type == MessageType.sos &&
-                                      SosAlert.fromJson(
-                                            message.text,
-                                          ).location !=
-                                          null)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 4),
-                                      child: LocationButton(
-                                        location: SosAlert.fromJson(
-                                          message.text,
-                                        ).location!,
-                                      ),
-                                    ),
-                                  const SizedBox(height: 2),
-                                  Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    mainAxisAlignment: MainAxisAlignment.end,
-                                    children: [
-                                      Text(
-                                        timeFormatted,
-                                        style: TextStyle(
-                                          fontSize: 10.5,
-                                          color: mine
-                                              ? Colors.white.withValues(
-                                                  alpha: 0.85,
-                                                )
-                                              : (isDark
-                                                    ? Colors.grey[400]
-                                                    : const Color(0xFF64748B)),
+                                                : Theme.of(
+                                                    context,
+                                                  ).colorScheme.onSurface,
+                                          ),
                                         ),
-                                      ),
-                                      if (mine) ...[
-                                        const SizedBox(width: 4),
-                                        _buildStatusIndicator(
-                                          message.status,
-                                          isDark,
-                                        ),
+                                        if (message.type == MessageType.sos &&
+                                            SosAlert.fromJson(
+                                                  message.text,
+                                                ).location !=
+                                                null)
+                                          LocationButton(
+                                            location: SosAlert.fromJson(
+                                              message.text,
+                                            ).location!,
+                                          ),
                                       ],
-                                    ],
-                                  ),
-                                ],
-                              ),
+                                    ),
                             ),
                           );
                         },
@@ -691,6 +551,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     Expanded(
                       child: TextField(
                         controller: _text,
+                        style: const TextStyle(fontSize: 15),
                         focusNode: _focusNode,
                         minLines: 1,
                         maxLines: 4,

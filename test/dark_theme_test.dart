@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rescuelink/screens/sos_screen.dart';
+import 'package:rescuelink/models/offline_map_data.dart';
 import 'package:rescuelink/theme/rescue_theme.dart';
 import 'sos_screen_test.dart' show UiMessages;
 
@@ -17,6 +18,7 @@ void main() {
   testWidgets('SOS adapts live to dark theme with readable secondary text', (
     tester,
   ) async {
+    await tester.runAsync(OfflineMapData.load);
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -45,7 +47,7 @@ void main() {
     await tester.pumpWidget(app(RescueTheme.dark));
     await tester.pumpAndSettle();
     expect(
-      tester.widget<Scaffold>(find.byType(Scaffold)).backgroundColor,
+      Theme.of(tester.element(find.byType(SosScreen))).scaffoldBackgroundColor,
       RescueTheme.darkBackground,
     );
     final context = tester.element(find.byType(SosScreen));
@@ -71,9 +73,9 @@ void main() {
                     as RenderRepaintBoundary)
                 .toImage(pixelRatio: 2);
         final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-        await File(
-          'docs/ui-audit/sos-dark.png',
-        ).writeAsBytes(bytes!.buffer.asUint8List());
+        final file = File('output/sos-ui/form-dark.png');
+        await file.parent.create(recursive: true);
+        await file.writeAsBytes(bytes!.buffer.asUint8List());
         image.dispose();
       });
     }
@@ -81,7 +83,7 @@ void main() {
     await tester.pumpWidget(app(RescueTheme.light));
     await tester.pumpAndSettle();
     expect(
-      tester.widget<Scaffold>(find.byType(Scaffold)).backgroundColor,
+      Theme.of(tester.element(find.byType(SosScreen))).scaffoldBackgroundColor,
       RescueTheme.cream,
     );
   });

@@ -43,7 +43,7 @@ class _MySosScreenState extends State<MySosScreen> {
     final name = TextEditingController(text: alert.name);
     final details = TextEditingController(text: alert.details);
     final people = TextEditingController(text: '${alert.people}');
-    var category = alert.category;
+    final categories = alert.categories.toSet();
     final form = GlobalKey<FormState>();
     final confirmed = await showDialog<bool>(
       context: context,
@@ -51,7 +51,7 @@ class _MySosScreenState extends State<MySosScreen> {
         builder: (context, update) => AlertDialog(
           title: Text(delete ? 'ลบเหตุที่ยุติแล้ว?' : 'แก้ไขเหตุที่ยุติแล้ว'),
           content: delete
-              ? Text('${alert.name}\n${alert.category.label}')
+              ? Text('${alert.name}\n${alert.categoriesLabel}')
               : SizedBox(
                   width: 420,
                   child: Form(
@@ -83,21 +83,31 @@ class _MySosScreenState extends State<MySosScreen> {
                                   : null;
                             },
                           ),
-                          DropdownButtonFormField<EmergencyType>(
-                            initialValue: category,
-                            isExpanded: true,
-                            decoration: const InputDecoration(
-                              labelText: 'ประเภทเหตุ',
-                            ),
-                            items: EmergencyType.values
-                                .map(
-                                  (e) => DropdownMenuItem(
-                                    value: e,
-                                    child: Text(e.label),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (v) => update(() => category = v!),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final type in EmergencyType.values)
+                                FilterChip(
+                                  label: Text(type.shortLabel),
+                                  selected: categories.contains(type),
+                                  onSelected: (selected) => update(() {
+                                    if (!selected) {
+                                      if (categories.length > 1) {
+                                        categories.remove(type);
+                                      }
+                                    } else if (type == EmergencyType.other) {
+                                      categories
+                                        ..clear()
+                                        ..add(type);
+                                    } else {
+                                      categories
+                                        ..remove(EmergencyType.other)
+                                        ..add(type);
+                                    }
+                                  }),
+                                ),
+                            ],
                           ),
                           TextFormField(
                             controller: details,
@@ -143,7 +153,8 @@ class _MySosScreenState extends State<MySosScreen> {
             active: false,
             name: name.text.trim(),
             people: int.parse(people.text),
-            category: category,
+            category: categories.first,
+            categories: categories.toList(),
             details: details.text.trim(),
             updatedAt: DateTime.now().toUtc(),
             location: alert.location,
@@ -249,7 +260,7 @@ class _MySosScreenState extends State<MySosScreen> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      record.alert.category.label,
+                                      record.alert.categoriesLabel,
                                       style: Theme.of(
                                         context,
                                       ).textTheme.titleMedium,

@@ -87,16 +87,13 @@ class _SyncScreenState extends State<SyncScreen> {
     final service = widget.service;
     final disabled = service.busy || _resolving;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final bg = dark ? RescueTheme.darkBackground : RescueTheme.cream;
     final surface = dark ? RescueTheme.darkSurface : Colors.white;
     final ink = dark ? RescueTheme.darkText : RescueTheme.navy;
     final muted = dark ? RescueTheme.darkTextMuted : RescueTheme.muted;
     final line = dark ? RescueTheme.darkBorder : RescueTheme.border;
 
     return Scaffold(
-      backgroundColor: bg,
       appBar: AppBar(
-        backgroundColor: bg,
         elevation: 0,
         scrolledUnderElevation: 0,
         title: Text(

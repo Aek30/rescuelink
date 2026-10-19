@@ -250,9 +250,6 @@ class _LoginScreenState extends State<LoginScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? const Color(0xFFF1F5F9) : navy;
     return Scaffold(
-      backgroundColor: isDark
-          ? const Color(0xFF0C1017)
-          : const Color(0xFFFCF8F1),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) => SingleChildScrollView(

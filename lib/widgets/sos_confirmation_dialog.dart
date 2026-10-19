@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import '../models/sos_alert.dart';
 import '../theme/rescue_theme.dart';
+import 'emergency_type_chip.dart';
 
-class SosConfirmationDialog extends StatelessWidget {
+/// Kept under its original name for callers; presented as a modal bottom sheet.
+class SosConfirmationDialog extends StatefulWidget {
   const SosConfirmationDialog({
     super.key,
     required this.name,
@@ -11,215 +14,188 @@ class SosConfirmationDialog extends StatelessWidget {
     required this.location,
     required this.recipients,
     required this.translate,
+    this.categories = const [],
+    this.sosLocation,
+    this.onRefreshLocation,
   });
-
   final String name, people, category, details, location;
   final List<String> recipients;
   final String Function(String) translate;
+  final List<EmergencyType> categories;
+  final SosLocation? sosLocation;
+  final Future<SosLocation?> Function()? onRefreshLocation;
+  @override
+  State<SosConfirmationDialog> createState() => _SosConfirmationDialogState();
+}
+
+class _SosConfirmationDialogState extends State<SosConfirmationDialog> {
+  late SosLocation? _location = widget.sosLocation;
+  bool _reading = false;
+  Future<void> _refresh() async {
+    setState(() => _reading = true);
+    try {
+      final value = await widget.onRefreshLocation!();
+      if (mounted && value != null) setState(() => _location = value);
+    } finally {
+      if (mounted) setState(() => _reading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final dark = scheme.brightness == Brightness.dark;
     final muted = RescueTheme.mutedFor(context);
-    final surface = dark ? const Color(0xFF161C24) : Colors.white;
-    final panel = dark ? const Color(0xFF202A36) : const Color(0xFFF6F7F9);
-    final red = dark ? const Color(0xFFFFA6A6) : const Color(0xFFB82E37);
-    final t = translate;
-
-    Widget detailRow(IconData icon, String label, String value) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
+    Widget row(String label, Widget value) => Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: muted),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: TextStyle(fontSize: 12, color: muted)),
-                const SizedBox(height: 3),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.4,
-                    fontWeight: FontWeight.w600,
-                    color: scheme.onSurface,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          Text(label, style: TextStyle(fontSize: 12, color: muted)),
+          const SizedBox(height: 4),
+          value,
         ],
       ),
     );
-
-    return AlertDialog(
-      backgroundColor: surface,
-      surfaceTintColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      scrollable: true,
-      titlePadding: const EdgeInsets.fromLTRB(22, 24, 22, 0),
-      contentPadding: const EdgeInsets.fromLTRB(22, 16, 22, 8),
-      actionsPadding: const EdgeInsets.fromLTRB(22, 8, 22, 20),
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            decoration: BoxDecoration(
-              color: red.withValues(alpha: .10),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.sos_rounded, size: 24, color: red),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    t('ขอความช่วยเหลือฉุกเฉิน'),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: red,
-                    ),
+    final location = _location;
+    return Material(
+      color: Theme.of(context).brightness == Brightness.dark
+          ? RescueTheme.darkSurface
+          : Colors.white,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      clipBehavior: Clip.antiAlias,
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * .85,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(24, 24, 24, 16),
+                child: Text(
+                  'ยืนยันข้อมูล SOS',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      row(
+                        'ผู้แจ้ง',
+                        Text(
+                          widget.name,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      row(
+                        'ประเภทเหตุ',
+                        widget.categories.isEmpty
+                            ? Text(widget.category)
+                            : EmergencyTypeChips(types: widget.categories),
+                      ),
+                      row(
+                        'จำนวนผู้ต้องการความช่วยเหลือ',
+                        Text(
+                          '${widget.people} คน',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      row(
+                        'ตำแหน่ง',
+                        location == null
+                            ? Text(widget.location)
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    sosCoordinates(location),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: muted,
+                                    ),
+                                  ),
+                                  SosLocationStatusChip(location: location),
+                                  if (sosLocationStale(location)) ...[
+                                    const SosStaleWarning(),
+                                    if (widget.onRefreshLocation != null)
+                                      OutlinedButton.icon(
+                                        onPressed: _reading ? null : _refresh,
+                                        icon: const Icon(Icons.my_location),
+                                        label: Text(
+                                          _reading
+                                              ? 'กำลังอัปเดตตำแหน่ง…'
+                                              : 'อัปเดตตำแหน่ง',
+                                        ),
+                                      ),
+                                  ],
+                                ],
+                              ),
+                      ),
+                      if (widget.details.trim().isNotEmpty)
+                        row('รายละเอียดเพิ่มเติม', Text(widget.details)),
+                      if (widget.recipients.isNotEmpty)
+                        row(
+                          'ผู้รับเพิ่มเติม',
+                          Text(widget.recipients.join(', ')),
+                        ),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: RescueTheme.accentFor(
+                            context,
+                          ).withValues(alpha: .1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.info_outline, size: 20),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'ประกาศไปยังเครื่องที่เชื่อมต่อและส่งต่อผ่านเครื่องอื่น ถ้าออฟไลน์จะเก็บไว้ส่งทีหลัง',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            t('ยืนยันข้อมูล SOS'),
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: scheme.onSurface,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            t('ตรวจสอบรายละเอียดก่อนส่งคำขอความช่วยเหลือ'),
-            style: TextStyle(fontSize: 13, height: 1.5, color: muted),
-          ),
-        ],
-      ),
-      content: SizedBox(
-        width: 380,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: panel,
-                borderRadius: BorderRadius.circular(16),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  detailRow(Icons.person_outline_rounded, t('ผู้แจ้ง'), name),
-                  Divider(
-                    height: 1,
-                    color: scheme.onSurface.withValues(alpha: .08),
-                  ),
-                  detailRow(
-                    Icons.people_outline_rounded,
-                    t('จำนวนผู้ต้องการความช่วยเหลือ'),
-                    '$people ${t('คน')}',
-                  ),
-                  Divider(
-                    height: 1,
-                    color: scheme.onSurface.withValues(alpha: .08),
-                  ),
-                  detailRow(
-                    Icons.warning_amber_rounded,
-                    t('ประเภทเหตุ'),
-                    category,
-                  ),
-                ],
-              ),
-            ),
-            if (details.trim().isNotEmpty) ...[
-              const SizedBox(height: 8),
-              detailRow(
-                Icons.notes_rounded,
-                t('รายละเอียดเหตุ'),
-                details.trim(),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: kSosRed,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size.fromHeight(56),
+                      ),
+                      onPressed: _reading
+                          ? null
+                          : () => Navigator.pop(context, true),
+                      icon: const Icon(Icons.sos_rounded),
+                      label: const Text('ยืนยันส่ง SOS'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('กลับไปแก้ไข'),
+                    ),
+                  ],
+                ),
               ),
             ],
-            detailRow(
-              Icons.location_on_outlined,
-              t('ตำแหน่งที่เกิดเหตุ'),
-              location,
-            ),
-            if (recipients.isNotEmpty)
-              detailRow(
-                Icons.alternate_email_rounded,
-                t('ผู้รับข้อความเพิ่มเติม'),
-                recipients.join(', '),
-              ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: red.withValues(alpha: .07),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '${t('ประกาศสถานะให้เครื่องที่เชื่อมต่อและผู้ใช้ผ่านเครื่องส่งต่อ รวมเครื่องที่เชื่อมต่อภายหลัง')}\n\n'
-                '${t('หากออฟไลน์ ระบบจะเก็บไว้ส่งเมื่อเชื่อมต่อผู้รับอีกครั้ง')}',
-                style: TextStyle(
-                  fontSize: 12,
-                  height: 1.5,
-                  color: scheme.onSurface,
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
-      actions: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            FilledButton.icon(
-              onPressed: () => Navigator.pop(context, true),
-              icon: const Icon(Icons.sos_rounded, size: 24),
-              label: Text(t('ยืนยันส่ง SOS')),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFB82E37),
-                foregroundColor: Colors.white,
-                minimumSize: const Size.fromHeight(50),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 14,
-                ),
-                textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              style: TextButton.styleFrom(
-                foregroundColor: muted,
-                minimumSize: const Size.fromHeight(48),
-              ),
-              child: Text(t('กลับไปแก้ไข')),
-            ),
-          ],
-        ),
-      ],
     );
   }
 }

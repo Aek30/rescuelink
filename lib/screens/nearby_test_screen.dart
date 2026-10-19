@@ -1,9 +1,11 @@
 import 'messages_screen.dart';
 import 'responder_screen.dart';
+import 'incident_detail_screen.dart';
 import '../services/app_preferences.dart';
 import '../services/auth_service.dart';
-import '../models/message_model.dart';
 import '../models/incoming_notice.dart';
+import '../models/sos_alert.dart';
+import '../models/peer_presence.dart';
 import '../widgets/location_button.dart';
 import 'dart:async';
 import 'settings_panel.dart';
@@ -15,8 +17,9 @@ import '../services/media_service.dart';
 import '../services/message_service.dart';
 import '../services/local_database_service.dart';
 import '../services/permission_service.dart';
+import '../services/sos_location_service.dart';
 import '../widgets/presence_list.dart';
-import '../widgets/nearby_mini_map.dart';
+import '../widgets/bundled_offline_map.dart';
 import 'chat_screen.dart';
 import 'sos_screen.dart';
 import '../widgets/outbox_queue.dart';
@@ -51,6 +54,9 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
   bool _exitingExpiredAccount = false;
   final List<IncomingNotice> _notices = [];
   IncomingNotice? _shownNotice;
+  SosLocation? _me;
+  bool _loadingGps = false;
+  String? _gpsError;
 
   static const Color _primary = RescueTheme.orangeInk;
   static const Color _success = Color(0xFF2E9B6F);
@@ -177,8 +183,9 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: (notice.sos == null ? RescueTheme.navy : RescueTheme.danger)
-                .withValues(alpha: .10),
+            color: (notice.sos == null ? RescueTheme.navy : kSosRed).withValues(
+              alpha: .10,
+            ),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(
@@ -186,7 +193,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
             size: 22,
             color: notice.sos == null
                 ? Theme.of(context).colorScheme.onSurface
-                : RescueTheme.danger,
+                : kSosRed,
           ),
         ),
         content: Column(
@@ -494,11 +501,9 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: _tab == 4 || _tab == 2
           ? null
           : AppBar(
-              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
               elevation: 0,
               scrolledUnderElevation: 0,
               titleSpacing: 18,
@@ -552,7 +557,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
           ),
           NavigationDestination(
             icon: CircleAvatar(
-              backgroundColor: RescueTheme.danger,
+              backgroundColor: kSosRed,
               radius: 20,
               child: Icon(Icons.sos, color: Colors.white, size: 26),
             ),
@@ -596,18 +601,9 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
       beforeAccountExit: () async {
         await _service.stopAll();
       },
-      pending: _messages.messages
-          .where(
-            (m) =>
-                m.senderId == _messages.myId &&
-                m.status == MessageStatus.pending &&
-                (m.type == MessageType.message || m.type == MessageType.sos),
-          )
-          .length,
       rescue: _messages.rescueMode,
       ready: _messages.ready && !_busy,
       onRescue: (value) => _run(() => _messages.setRescueMode(value)),
-      onQueue: () => setState(() => _tab = 3),
       onDevice: _openConnectionSettings,
       onConnection: _openConnectionSettings,
       onExit: () => _run(() async {
@@ -636,35 +632,685 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
   }
 
   // =========================================================
-  // TAB: ใกล้ฉัน
-  // Use our own incident and role; remote SOS never changes our home mode.
-  // (ข้อความ "ออฟไลน์" แสดงในการ์ดสถานะที่เดียว ไม่ซ้ำท้ายหน้า)
+  // TAB: ใกล้ฉัน (UI แผนที่เต็มจอ + DraggableScrollableSheet)
   // =========================================================
 
+  Future<void> _locate({bool share = false}) async {
+    setState(() {
+      _loadingGps = true;
+      _gpsError = null;
+    });
+    try {
+      final fix = await SosLocationService(
+        database: _messages.database,
+      ).capture();
+      if (!mounted) return;
+      setState(() => _me = fix);
+      if (share) await _messages.shareRescueLocation(fix);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _gpsError =
+              'อ่านหรือแชร์ตำแหน่งไม่ได้ ตรวจสิทธิ์/GPS และโหมดกู้ภัย แล้วลองใหม่',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingGps = false);
+    }
+  }
+
+  void _openIncidentDetail(String peerId) {
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            IncidentDetailScreen(service: _messages, peerId: peerId),
+      ),
+    );
+  }
+
+  String _formatRelativeTime(DateTime capturedAt) {
+    final now = DateTime.now();
+    final diff = now.difference(capturedAt.toLocal());
+    if (diff.isNegative || diff.inSeconds < 45) {
+      return 'เพิ่งอัปเดต';
+    }
+    if (diff.inMinutes < 60) {
+      return 'อัปเดตเมื่อ ${diff.inMinutes} นาทีที่แล้ว';
+    }
+    if (diff.inHours < 24) {
+      return 'อัปเดตเมื่อ ${diff.inHours} ชม. ก่อน';
+    }
+    if (diff.inDays < 7) {
+      return 'อัปเดตเมื่อ ${diff.inDays} วันก่อน';
+    }
+    final d = capturedAt.toLocal();
+    return 'อัปเดตเมื่อ ${d.day}/${d.month}/${d.year}';
+  }
+
+  String _formatCoordinates(double lat, double lng) {
+    return '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
+  }
+
   Widget _buildHomeTab() {
-    final sosMode = _messages.mySos?.isActiveAt(DateTime.now().toUtc()) == true;
-    final rescueMode = !sosMode && _messages.rescueMode;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 8, 18, 36),
+    final now = DateTime.now().toUtc();
+    final me = _me ?? _messages.rescueLocation ?? _messages.mySos?.location;
+    final points = _messages.presence.entries
+        .where((e) => e.value.mapLocation != null)
+        .toList();
+    final dark = _p.dark;
+
+    return Stack(
       children: [
-        _buildHeroCard(),
-        const SizedBox(height: 14),
-        if (_busy) ...[
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: const LinearProgressIndicator(minHeight: 4),
+        // 1. แผนที่ขยายเต็มพื้นที่ระหว่าง AppBar กับ bottom nav
+        Positioned.fill(
+          child: BundledOfflineMap(
+            key: const ValueKey('full-home-map'),
+            focus: me,
+            fullScreen: true,
+            onLocateMe: _loadingGps ? null : () => _locate(),
+            markers: [
+              for (final e in points)
+                OfflineMapMarker(
+                  id: e.key,
+                  label:
+                      '${_messages.peers[e.key] ?? 'ไม่ทราบชื่อ'} • แตะดูรายละเอียด',
+                  location: e.value.mapLocation!,
+                  color: !e.value.isFresh(now)
+                      ? Colors.grey
+                      : e.value.sos?.isActiveAt(now) == true
+                      ? kSosRed
+                      : e.value.rescue
+                      ? RescueTheme.rescue
+                      : Colors.grey,
+                  onTap: () => _openIncidentDetail(e.key),
+                ),
+              if (me != null)
+                OfflineMapMarker(
+                  id: 'self',
+                  label: 'ฉัน • พิกัดที่อ่านล่าสุด',
+                  location: me,
+                  color: const Color(0xFF167A65),
+                  isMe: true,
+                ),
+            ],
+          ),
+        ),
+
+        // Indicator เมื่อติดภารกิจ busy
+        if (_busy)
+          const Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: LinearProgressIndicator(minHeight: 3),
+          ),
+
+        // 2. DraggableScrollableSheet
+        _buildDraggableSheet(me, points, dark, now),
+      ],
+    );
+  }
+
+  Widget _buildDraggableSheet(
+    SosLocation? me,
+    List<MapEntry<String, PeerPresence>> points,
+    bool dark,
+    DateTime now,
+  ) {
+    final sheetBg = dark ? const Color(0xFF101C26) : RescueTheme.cream;
+    final borderColor = dark ? Colors.white12 : const Color(0xFFEAE2D8);
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.28,
+      minChildSize: 0.22,
+      maxChildSize: 0.88,
+      snap: true,
+      snapSizes: const [0.28, 0.60, 0.88],
+      builder: (context, scrollController) {
+        return Container(
+          decoration: BoxDecoration(
+            color: sheetBg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border(
+              top: BorderSide(color: borderColor, width: 1.2),
+              left: BorderSide(color: borderColor, width: 1),
+              right: BorderSide(color: borderColor, width: 1),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: dark ? 0.45 : 0.12),
+                blurRadius: 16,
+                offset: const Offset(0, -3),
+              ),
+            ],
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+            children: [
+              // ขีดจับเลื่อนแผ่นข้อมูล
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(top: 4, bottom: 12),
+                  decoration: BoxDecoration(
+                    color: dark ? Colors.white24 : const Color(0xFFD0C8BE),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+
+              // ==========================================
+              // สถานะย่อ (peek): ชื่อพื้นที่ + จำนวนอุปกรณ์ + chip "ออฟไลน์" + ปุ่ม "อัปเดตตำแหน่งของฉัน"
+              // ==========================================
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'มทร.ธัญบุรี • คลองหก',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.2,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          me != null
+                              ? _formatRelativeTime(me.capturedAt)
+                              : 'ยังไม่มีพิกัดของคุณ',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: dark
+                                ? Colors.white60
+                                : const Color(0xFF687782),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: dark
+                          ? const Color(0xFF162533)
+                          : const Color(0xFFFFEADB),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: borderColor),
+                    ),
+                    child: Text(
+                      'มีพิกัด ${points.length} เครื่อง • ออฟไลน์',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: RescueTheme.orangeInk,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 12),
+
+              // ปุ่ม "อัปเดตตำแหน่งของฉัน" (touch target >= 48dp)
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: FilledButton.icon(
+                  onPressed: _loadingGps ? null : () => _locate(),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF641F),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 0,
+                  ),
+                  icon: _loadingGps
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.my_location, size: 20),
+                  label: Text(
+                    _loadingGps
+                        ? 'กำลังอ่าน GPS…'
+                        : me == null
+                        ? 'อ่านตำแหน่งของฉัน'
+                        : 'อัปเดตตำแหน่งของฉัน',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+
+              // ==========================================
+              // สถานะขยาย: legend สี, พิกัด, ความแม่นยำ, เวลาบันทึก, คำเตือน
+              // ==========================================
+              if (_gpsError != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: dark
+                        ? const Color(0xFF331414)
+                        : const Color(0xFFFFEEEE),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: dark
+                          ? const Color(0xFF5C2020)
+                          : const Color(0xFFFFCCCC),
+                    ),
+                  ),
+                  child: Text(
+                    _gpsError!,
+                    style: const TextStyle(color: Colors.red, fontSize: 12),
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 16),
+
+              // 3. แถว Legend สี
+              _buildColorLegend(dark),
+
+              const SizedBox(height: 16),
+
+              // ข้อมูลพิกัด, ความแม่นยำ, เวลาบันทึก, คำเตือน
+              _buildLocationDetailCard(me, dark),
+
+              // ฟังก์ชันโหมดกู้ภัย (ถ้าเปิดอยู่)
+              if (_messages.rescueMode) ...[
+                const SizedBox(height: 16),
+                _buildRescueModeActions(dark),
+              ],
+
+              // รายการอุปกรณ์ที่มีพิกัดบนแผนที่
+              if (points.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on,
+                      size: 16,
+                      color: RescueTheme.orangeInk,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'ตำแหน่งอุปกรณ์รอบตัว (${points.length})',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                for (final e in points)
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    elevation: 0,
+                    color: dark ? const Color(0xFF162533) : Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      side: BorderSide(color: borderColor),
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 2,
+                      ),
+                      leading: CircleAvatar(
+                        radius: 16,
+                        backgroundColor:
+                            (!e.value.isFresh(now)
+                                    ? Colors.grey
+                                    : e.value.sos?.isActiveAt(now) == true
+                                    ? kSosRed
+                                    : e.value.rescue
+                                    ? RescueTheme.rescue
+                                    : Colors.grey)
+                                .withValues(alpha: 0.15),
+                        child: Icon(
+                          Icons.person_pin_circle_rounded,
+                          size: 20,
+                          color: !e.value.isFresh(now)
+                              ? Colors.grey
+                              : e.value.sos?.isActiveAt(now) == true
+                              ? kSosRed
+                              : e.value.rescue
+                              ? RescueTheme.rescue
+                              : Colors.grey,
+                        ),
+                      ),
+                      title: Text(
+                        _messages.peers[e.key] ?? 'เครื่องที่ไม่ทราบชื่อ',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '${_formatRelativeTime(e.value.mapLocation!.capturedAt)} • ${_formatCoordinates(e.value.mapLocation!.latitude, e.value.mapLocation!.longitude)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: dark
+                              ? Colors.white60
+                              : const Color(0xFF687782),
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_right, size: 20),
+                      onTap: () => _openIncidentDetail(e.key),
+                    ),
+                  ),
+              ],
+
+              const SizedBox(height: 24),
+
+              // การเชื่อมต่อและสถานะคนรอบตัว (Presence)
+              _buildPresenceSection(dark),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildColorLegend(bool dark) {
+    final items = [
+      (color: const Color(0xFF167A65), label: 'ฉัน'),
+      (color: kSosRed, label: 'SOS'),
+      (color: RescueTheme.rescue, label: 'กู้ภัย'),
+      (color: Colors.grey, label: 'ออฟไลน์/ปิดแล้ว'),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF162533) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: dark ? Colors.white12 : const Color(0xFFEAE2D8),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          for (final item in items)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 9,
+                  height: 9,
+                  decoration: BoxDecoration(
+                    color: item.color,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  item.label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: dark ? Colors.white70 : RescueTheme.navy,
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocationDetailCard(SosLocation? me, bool dark) {
+    final borderColor = dark ? Colors.white12 : const Color(0xFFEAE2D8);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF162533) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.pin_drop_outlined,
+                size: 18,
+                color: RescueTheme.orangeInk,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'พิกัดของฉันล่าสุด',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+              ),
+              const Spacer(),
+              if (me != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: (dark ? Colors.white : RescueTheme.navy).withValues(
+                      alpha: 0.08,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '±${me.accuracy.round()} ม.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: dark ? Colors.white70 : const Color(0xFF687782),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (me != null) ...[
+            SelectableText(
+              _formatCoordinates(me.latitude, me.longitude),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: dark ? Colors.white70 : const Color(0xFF687782),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${_formatRelativeTime(me.capturedAt)} (บันทึกเมื่อ: ${me.capturedAt.toLocal().toString().split('.').first})',
+              style: TextStyle(
+                fontSize: 12,
+                color: dark ? Colors.white54 : const Color(0xFF687782),
+              ),
+            ),
+          ] else ...[
+            Text(
+              'ยังไม่มีพิกัดของคุณ • กด “อัปเดตตำแหน่งของฉัน” เพื่ออ่าน GPS',
+              style: TextStyle(
+                fontSize: 12,
+                color: dark ? Colors.white54 : const Color(0xFF687782),
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Divider(height: 1, color: borderColor),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.info_outline,
+                size: 15,
+                color: dark ? Colors.white54 : const Color(0xFF687782),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'พิกัดเป็นจุดที่บันทึก ไม่ใช่การติดตามสด • อุปกรณ์ที่ไม่ส่งพิกัดจะไม่มีหมุด',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: dark ? Colors.white54 : const Color(0xFF687782),
+                    height: 1.35,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
-        if (_service.lastError != null) ...[
-          const SizedBox(height: 12),
-          _buildErrorCard(),
+      ),
+    );
+  }
+
+  Widget _buildRescueModeActions(bool dark) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF0F2642) : const Color(0xFFEBF3FF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'โหมดกู้ภัย: แชร์พิกัดให้เครื่องในเครือข่ายเห็นเป็นหมุดสีน้ำเงิน',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    onPressed: _loadingGps ? null : () => _locate(share: true),
+                    icon: const Icon(Icons.share_location, size: 18),
+                    label: const Text(
+                      'อ่าน GPS & แชร์พิกัด',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ),
+              ),
+              if (_messages.rescueLocation != null) ...[
+                const SizedBox(width: 8),
+                SizedBox(
+                  height: 48,
+                  child: TextButton(
+                    onPressed: _messages.clearRescueLocation,
+                    child: const Text(
+                      'หยุดแชร์',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ],
-        const SizedBox(height: 20),
+      ),
+    );
+  }
+
+  Widget _buildPresenceSection(bool dark) {
+    final sosMode = _messages.mySos?.isActiveAt(DateTime.now().toUtc()) == true;
+    final rescueMode = !sosMode && _messages.rescueMode;
+    final active = _nearbyActive;
+    final borderColor = dark ? Colors.white12 : const Color(0xFFEAE2D8);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'อุปกรณ์ใกล้เคียง & สัญญาณ',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+            ),
+            TextButton(
+              onPressed: _openConnectionSettings,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(48, 36),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              child: const Text(
+                'การเชื่อมต่อและสิทธิ์',
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_service.lastError != null) ...[
+          _buildErrorCard(),
+          const SizedBox(height: 12),
+        ],
         if (!_permissionsReady) ...[
           _buildPermissionCard(),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
         ],
+        // Discovery toggle button
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: OutlinedButton.icon(
+            onPressed: _busy
+                ? null
+                : () => _run(() async {
+                    _searchOnResume = !active;
+                    if (active) {
+                      await _service.stopAll();
+                    } else {
+                      await _service.startNearby();
+                    }
+                  }),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: active ? Colors.red.shade700 : RescueTheme.navy,
+              side: BorderSide(
+                color: active ? Colors.red.shade300 : borderColor,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            icon: Icon(
+              active ? Icons.stop_circle_outlined : Icons.wifi_tethering,
+              size: 18,
+            ),
+            label: Text(
+              active ? 'หยุดการค้นหาอุปกรณ์' : 'เริ่มค้นหาอุปกรณ์ใกล้เคียง',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
         PresenceList(
           service: _messages,
           filter: sosMode
@@ -674,379 +1320,14 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
               : PresenceFilter.all,
         ),
         if (sosMode || rescueMode) ...[
-          const SizedBox(height: 22),
+          const SizedBox(height: 16),
           PresenceList(
             service: _messages,
             excludeFilter: sosMode ? PresenceFilter.rescue : PresenceFilter.sos,
             reachableOnly: true,
           ),
         ],
-        const SizedBox(height: 22),
-        NearbyMiniMap(key: const ValueKey('home-map'), service: _messages),
       ],
-    );
-  }
-
-  // =========================================================
-  // Hero: สถานะ + ปุ่มเริ่ม/หยุด (รวมไว้ที่เดียว)
-  // =========================================================
-
-  Widget _buildHeroCard() {
-    final connectedCount = _service.connectedDevices.length;
-    final isDark = _p.dark;
-    final active = _nearbyActive;
-    final sosMode = _messages.mySos?.isActiveAt(DateTime.now().toUtc()) == true;
-    final rescueMode = !sosMode && _messages.rescueMode;
-
-    String title;
-    String description;
-    String status;
-    IconData icon;
-    Color statusColor;
-
-    if (connectedCount > 0) {
-      title = 'เชื่อมต่อคนรอบตัว';
-      description =
-          'เชื่อมต่อคนที่ค้นพบอัตโนมัติ ส่งข้อความถึงคนใกล้คุณได้ทันที';
-      status = 'เชื่อมต่อ';
-      icon = Icons.link_rounded;
-      statusColor = const Color(0xFF34D399);
-    } else if (_service.isDiscovering) {
-      title = 'กำลังค้นหาอุปกรณ์';
-      description = 'ค้นหาและเชื่อมต่อกับคนใกล้คุณอัตโนมัติ';
-      status = 'กำลังค้นหา';
-      icon = Icons.radar_rounded;
-      statusColor = const Color(0xFFFBBF24);
-    } else if (_service.isAdvertising) {
-      title = 'พร้อมให้อุปกรณ์อื่นค้นพบ';
-      description = 'โทรศัพท์ RescueLink เครื่องอื่นสามารถค้นหาเครื่องนี้ได้';
-      status = 'พร้อมค้นพบ';
-      icon = Icons.cell_tower_rounded;
-      statusColor = const Color(0xFF38BDF8);
-    } else {
-      title = 'พร้อมใช้งานแบบออฟไลน์';
-      description = 'ไม่ต้องใช้อินเทอร์เน็ต แตะปุ่มด้านล่างเพื่อเริ่มเชื่อมต่อ';
-      status = 'ยังไม่เริ่ม';
-      icon = Icons.shield_outlined;
-      statusColor = const Color(0xFF94A3B8);
-    }
-
-    if (sosMode || rescueMode) {
-      title = sosMode ? 'กำลังขอความช่วยเหลือ' : 'พร้อมช่วยเหลือคนใกล้คุณ';
-      status = sosMode ? 'SOS' : 'หน่วยกู้ภัย';
-      description = _connectionStatusThai;
-      icon = sosMode ? Icons.sos : Icons.health_and_safety;
-      statusColor = sosMode ? RescueTheme.danger : Colors.blue;
-    }
-    final glass = sosMode
-        ? const Color(0xCC991B1B)
-        : rescueMode
-        ? const Color(0xCC154AA0)
-        : const Color(0x520B1928);
-    final glassBorder = Border.all(
-      color: Colors.white.withValues(alpha: 0.22),
-      width: 1,
-    );
-
-    return Container(
-      key: const ValueKey('nearby-network-card'),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: isDark ? const Color(0x3394A3B8) : const Color(0x22102130),
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0.45)
-                : RescueTheme.navy.withValues(alpha: 0.16),
-            blurRadius: 16,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20.8),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: Image.asset(
-                'assets/onboarding/nearby.png',
-                fit: BoxFit.cover,
-                alignment: const Alignment(0, -0.15),
-              ),
-            ),
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: isDark
-                        ? const [
-                            Color(0x78091624),
-                            Color(0x90091624),
-                            Color(0xC406101B),
-                            Color(0xEB040B13),
-                          ]
-                        : const [
-                            Color(0x68091624),
-                            Color(0x82091624),
-                            Color(0xB8071321),
-                            Color(0xE0050E18),
-                          ],
-                    stops: const [0.0, 0.32, 0.62, 1.0],
-                  ),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // แถวบน: สถานะ (ซ้าย) + ชื่ออุปกรณ์ (ขวา)
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: glass,
-                          borderRadius: BorderRadius.circular(30),
-                          border: glassBorder,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                color: statusColor,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: statusColor.withValues(alpha: 0.6),
-                                    blurRadius: 6,
-                                    spreadRadius: 1,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 7),
-                            Text(
-                              status,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 11.5,
-                                letterSpacing: 0.2,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: glass,
-                              borderRadius: BorderRadius.circular(30),
-                              border: glassBorder,
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.smartphone_rounded,
-                                  color: Colors.white,
-                                  size: 14,
-                                ),
-                                const SizedBox(width: 6),
-                                Flexible(
-                                  child: Text(
-                                    _name.text,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 18),
-
-                  // หัวข้อ + ไอคอน
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(9),
-                        decoration: BoxDecoration(
-                          color: glass,
-                          borderRadius: BorderRadius.circular(12),
-                          border: glassBorder,
-                        ),
-                        child: Icon(icon, color: Colors.white, size: 22),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 19,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.2,
-                                shadows: [
-                                  Shadow(
-                                    color: Colors.black87,
-                                    blurRadius: 8,
-                                    offset: Offset(0, 1.5),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              description,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.90),
-                                height: 1.35,
-                                fontSize: 12.5,
-                                shadows: const [
-                                  Shadow(
-                                    color: Colors.black87,
-                                    blurRadius: 6,
-                                    offset: Offset(0, 1),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  // ปุ่มหลักเดียว: เริ่ม / หยุด
-                  if (sosMode || rescueMode) ...[
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: statusColor,
-                        ),
-                        onPressed: _busy
-                            ? null
-                            : () => _run(
-                                () => sosMode
-                                    ? _messages.cancelSos()
-                                    : _messages.setRescueMode(false),
-                              ),
-                        icon: const Icon(Icons.close),
-                        label: Text(
-                          sosMode ? 'ปิดโหมด SOS' : 'ปิดโหมดหน่วยกู้ภัย',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: _busy
-                          ? null
-                          : () => _run(() async {
-                              _searchOnResume = !active;
-                              if (active) {
-                                await _service.stopAll();
-                              } else {
-                                await _service.startNearby();
-                              }
-                            }),
-                      icon: Icon(
-                        active
-                            ? Icons.stop_circle_outlined
-                            : Icons.wifi_tethering,
-                      ),
-                      label: Text(
-                        active
-                            ? 'หยุดการทำงานใกล้เคียง'
-                            : 'เริ่มค้นหาอุปกรณ์ใกล้เคียง',
-                      ),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: active
-                            ? const Color(0x33FFFFFF)
-                            : const Color(0xFFFF641F),
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size.fromHeight(48),
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: active
-                              ? BorderSide(
-                                  color: Colors.white.withValues(alpha: 0.3),
-                                )
-                              : BorderSide.none,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  if (_service.backgroundActive) ...[
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.bolt_rounded,
-                          size: 15,
-                          color: Colors.white.withValues(alpha: 0.85),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'คงการเชื่อมต่อขณะสลับแอป/ดับหน้าจอ • กดหยุดเมื่อเลิกใช้งาน',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.85),
-                              fontSize: 11.5,
-                              height: 1.3,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -1121,9 +1402,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
               hintText: 'ชื่ออุปกรณ์ RescueLink',
               prefixIcon: const Icon(Icons.smartphone_rounded),
               filled: true,
-              fillColor: p.dark
-                  ? const Color(0xFF161C24)
-                  : const Color(0xFFFCF8F1),
+              fillColor: p.dark ? const Color(0xFF161C24) : RescueTheme.cream,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(15),
                 borderSide: BorderSide.none,

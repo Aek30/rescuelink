@@ -1,8 +1,33 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+const Color kSosRed = Color(0xFFB82E37);
+
+const Color kBackground = Color(0xFFFCF7F1);
 
 /// Shared visual language for onboarding, everyday messaging and rescue flows.
 abstract final class RescueTheme {
-  static const cream = Color(0xFFFCF8F1);
+  static const cream = kBackground;
+  static const lightSystemUi = SystemUiOverlayStyle(
+    statusBarColor: kBackground,
+    statusBarIconBrightness: Brightness.dark,
+    statusBarBrightness: Brightness.light,
+    systemNavigationBarColor: kBackground,
+    systemNavigationBarDividerColor: Colors.transparent,
+    systemNavigationBarIconBrightness: Brightness.dark,
+    systemStatusBarContrastEnforced: false,
+    systemNavigationBarContrastEnforced: false,
+  );
+  static const darkSystemUi = SystemUiOverlayStyle(
+    statusBarColor: darkBackground,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+    systemNavigationBarColor: Color(0xFF10141C),
+    systemNavigationBarDividerColor: Colors.transparent,
+    systemNavigationBarIconBrightness: Brightness.light,
+    systemStatusBarContrastEnforced: false,
+    systemNavigationBarContrastEnforced: false,
+  );
   static const navy = Color(0xFF102D43);
   static const orange = Color(0xFFFFB37B);
   static const orangeInk = Color(0xFFB94612);
@@ -51,6 +76,7 @@ abstract final class RescueTheme {
       scaffoldBackgroundColor: cream,
       textTheme: base.textTheme.apply(bodyColor: navy, displayColor: navy),
       appBarTheme: const AppBarTheme(
+        systemOverlayStyle: lightSystemUi,
         backgroundColor: cream,
         foregroundColor: navy,
         surfaceTintColor: Colors.transparent,
@@ -123,7 +149,8 @@ abstract final class RescueTheme {
         hintStyle: const TextStyle(color: muted),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: Colors.white,
+        // Keep the main navigation on the same cream canvas as each page.
+        backgroundColor: kBackground,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         height: 76,
@@ -144,6 +171,10 @@ abstract final class RescueTheme {
           ),
         ),
       ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: kBackground,
+        elevation: 0,
+      ),
       chipTheme: base.chipTheme.copyWith(
         backgroundColor: Colors.white,
         selectedColor: peach,
@@ -162,7 +193,8 @@ abstract final class RescueTheme {
       ),
       dividerTheme: const DividerThemeData(color: border, thickness: 1),
       bottomSheetTheme: const BottomSheetThemeData(
-        backgroundColor: cream,
+        backgroundColor: Colors.white,
+        modalBackgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
         showDragHandle: true,
         shape: RoundedRectangleBorder(
@@ -231,6 +263,7 @@ abstract final class RescueTheme {
         displayColor: darkText,
       ),
       appBarTheme: const AppBarTheme(
+        systemOverlayStyle: darkSystemUi,
         backgroundColor: darkBackground,
         foregroundColor: darkText,
         surfaceTintColor: Colors.transparent,

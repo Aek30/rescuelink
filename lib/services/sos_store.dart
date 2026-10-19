@@ -261,6 +261,7 @@ class SosStore {
           name: local.alert.name,
           people: local.alert.people,
           category: local.alert.category,
+          categories: local.alert.categories,
           details: local.alert.details,
           location: local.alert.location,
           updatedAt: DateTime.now().toUtc(),

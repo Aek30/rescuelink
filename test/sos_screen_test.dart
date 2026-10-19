@@ -41,11 +41,14 @@ class UiMessages extends MessageService {
   }
   Set<String>? sentTo;
   SosLocation? sentLocation;
+  List<EmergencyType>? sentCategories;
+  String? sentDetails;
   @override
   Future<void> publishSos({
     required String name,
     required int people,
     required EmergencyType category,
+    List<EmergencyType>? categories,
     required String details,
     required Set<String> recipients,
     SosLocation? location,
@@ -53,6 +56,8 @@ class UiMessages extends MessageService {
   }) async {
     sentTo = recipients;
     sentLocation = location;
+    sentCategories = categories ?? [category];
+    sentDetails = details;
   }
 }
 
@@ -72,7 +77,9 @@ void main() {
         service.nearbyService.dispose();
       });
       await tester.pumpWidget(MaterialApp(home: SosScreen(service: service)));
-      final send = find.text('ส่งสัญญาณ SOS');
+      await tester.tap(find.text('น้ำท่วม'));
+      await tester.pumpAndSettle();
+      final send = find.text('ส่ง SOS');
       await tester.scrollUntilVisible(
         send,
         250,
@@ -80,7 +87,7 @@ void main() {
       );
       await tester.tap(send);
       await tester.pumpAndSettle();
-      expect(find.textContaining('พิกัดล่าสุดที่บันทึกไว้'), findsOneWidget);
+      expect(find.text('ตำแหน่งเก่า'), findsWidgets);
       expect(service.sentTo, isNull);
       await tester.tap(find.text('ยืนยันส่ง SOS'));
       await tester.pumpAndSettle();
@@ -99,7 +106,9 @@ void main() {
         service.nearbyService.dispose();
       });
       await tester.pumpWidget(MaterialApp(home: SosScreen(service: service)));
-      final send = find.text('ส่งสัญญาณ SOS');
+      await tester.tap(find.text('น้ำท่วม'));
+      await tester.pumpAndSettle();
+      final send = find.text('ส่ง SOS');
       await tester.scrollUntilVisible(
         send,
         250,
