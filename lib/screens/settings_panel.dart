@@ -242,7 +242,7 @@ class SettingsPanel extends StatelessWidget {
             ),
             child: Ink(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
@@ -261,8 +261,8 @@ class SettingsPanel extends StatelessWidget {
                 child: Row(
                   children: [
                     Container(
-                      width: 62,
-                      height: 62,
+                      width: 80,
+                      height: 80,
                       padding: const EdgeInsets.all(2.5),
                       decoration: const BoxDecoration(
                         shape: BoxShape.circle,
@@ -276,7 +276,7 @@ class SettingsPanel extends StatelessWidget {
                         backgroundColor: RescueTheme.peach,
                         child: Icon(
                           Icons.person_rounded,
-                          size: 34,
+                          size: 40,
                           color: RescueTheme.navy,
                         ),
                       ),
@@ -427,7 +427,9 @@ class SettingsPanel extends StatelessWidget {
                       tile(
                         Icons.notifications_active_outlined,
                         t("การแจ้งเตือน"),
-                        subtitle: prefs.alerts ? t("เปิดอยู่") : t("ปิดอยู่"),
+                        subtitle: (prefs.chatAlerts || prefs.sosAlerts)
+                            ? t("เปิดอยู่")
+                            : t("ปิดอยู่"),
                         tap: () => openSheet(
                           (_) => ListenableBuilder(
                             listenable: prefs,
@@ -441,18 +443,65 @@ class SettingsPanel extends StatelessWidget {
                                     ),
                                     activeThumbColor: RescueTheme.orange,
                                     title: Text(
-                                      t("ข้อความและ SOS ขณะใช้แอป"),
+                                      t("ข้อความและสื่อ"),
                                       style: TextStyle(
                                         color: ink,
                                         fontWeight: FontWeight.w700,
                                       ),
                                     ),
-                                    value: prefs.alerts,
-                                    onChanged: (v) => save('sosAlerts', v),
+                                    value: prefs.chatAlerts,
+                                    onChanged: (v) => save('chatAlerts', v),
+                                  ),
+                                  SwitchListTile(
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 24,
+                                    ),
+                                    activeThumbColor: RescueTheme.orange,
+                                    title: Text(
+                                      t('คำขอ SOS'),
+                                      style: TextStyle(
+                                        color: ink,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    value: prefs.sosAlerts,
+                                    onChanged: (value) async {
+                                      if (!value) {
+                                        final confirmed = await showDialog<bool>(
+                                          context: context,
+                                          builder: (dialog) => AlertDialog(
+                                            title: Text(
+                                              t('ปิดการแจ้งเตือน SOS?'),
+                                            ),
+                                            content: Text(
+                                              t(
+                                                'คุณอาจพลาดคำขอช่วยเหลือฉุกเฉิน ต้องการปิดการแจ้งเตือน SOS หรือไม่',
+                                              ),
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(
+                                                  dialog,
+                                                  false,
+                                                ),
+                                                child: Text(t('ยกเลิก')),
+                                              ),
+                                              FilledButton(
+                                                onPressed: () =>
+                                                    Navigator.pop(dialog, true),
+                                                child: Text(t('ยืนยันปิด')),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                        if (confirmed != true) return;
+                                      }
+                                      await save('sosAlerts', value);
+                                    },
                                   ),
                                   sheetNote(
                                     t(
-                                      "ระบบเดิมใช้การแจ้งเตือนร่วมกัน ยังไม่รองรับแยกประเภท, Push Notification หรือแจ้งเตือนยืนยันเคส",
+                                      "เลือกแจ้งเตือนข้อความและสื่อ หรือคำขอ SOS แยกกันได้ การแจ้งเตือนขณะพักแอปต้องอนุญาตสิทธิ์ของระบบ",
                                     ),
                                   ),
                                 ],

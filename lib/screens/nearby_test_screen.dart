@@ -5,8 +5,8 @@ import '../services/app_preferences.dart';
 import '../services/auth_service.dart';
 import '../models/incoming_notice.dart';
 import '../models/sos_alert.dart';
-import '../models/peer_presence.dart';
 import '../widgets/location_button.dart';
+import '../widgets/my_location_summary.dart';
 import 'dart:async';
 import 'settings_panel.dart';
 import 'login_screen.dart';
@@ -17,8 +17,11 @@ import '../services/media_service.dart';
 import '../services/message_service.dart';
 import '../services/local_database_service.dart';
 import '../services/permission_service.dart';
+import '../services/connection_session.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../services/sos_location_service.dart';
 import '../widgets/presence_list.dart';
+import '../widgets/nearby_discovery_chip.dart';
 import '../widgets/bundled_offline_map.dart';
 import 'chat_screen.dart';
 import 'sos_screen.dart';
@@ -47,6 +50,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
   int _tab = 0;
 
   bool _foreground = true;
+  bool? _notificationsAllowed;
   bool _searchOnResume = true;
   bool _restartSearchAfterBusy = false;
   Timer? _noticeTimer;
@@ -97,7 +101,11 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
           mediaService: _media,
         );
 
+    _me = _messages.rescueLocation;
+    _messages.addListener(_rememberRescueLocation);
     _messages.onNotice = _receiveNotice;
+    _messages.onNoticeCancelled = _cancelNotice;
+    unawaited(_refreshNotificationPermission());
     _messages
         .initialize()
         .then((_) async {
@@ -131,6 +139,13 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
   // =========================================================
 
   void _profileNameChanged() {
+    unawaited(
+      _service.connectionSession.updateChannelNames().catchError((
+        Object error,
+      ) {
+        debugPrint('Notification channel names: $error');
+      }),
+    );
     final displayName = AppPreferences.instance.displayName;
     if (!mounted || displayName == null || displayName.trim().isEmpty) return;
     // Only the visible name changes. Persisted peer UUIDs and transport stay intact.
@@ -158,17 +173,60 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
     }());
   }
 
+  Future<void> _refreshNotificationPermission() async {
+    try {
+      final allowed = await ConnectionSession.notificationsAllowed();
+      if (mounted) setState(() => _notificationsAllowed = allowed);
+    } catch (error) {
+      debugPrint('Notification permission: $error');
+    }
+  }
+
+  Future<void> _requestNotificationPermission() async {
+    final status = await Permission.notification.request();
+    if (status.isPermanentlyDenied || status.isRestricted) {
+      await openAppSettings();
+    }
+    await _refreshNotificationPermission();
+  }
+
+  void _cancelNotice(String id) {
+    _notices.removeWhere((notice) => notice.notificationId == id);
+    if (_shownNotice?.notificationId == id) _dismissNotice();
+    unawaited(
+      _service.connectionSession.cancelNotice(id).catchError((Object error) {
+        debugPrint('Cancel notification: $error');
+      }),
+    );
+  }
+
   void _receiveNotice(IncomingNotice notice) {
     if (!mounted) return;
     if (!_foreground) {
       unawaited(
-        _service.connectionSession.notify(notice).catchError((Object e) {
-          debugPrint('Notification: $e');
-        }),
+        _service.connectionSession
+            .notify(
+              notice,
+              unreadCount: _messages.unreadCounts[notice.peerId] ?? 1,
+            )
+            .catchError((Object e) {
+              debugPrint('Notification: $e');
+            }),
       );
       return;
     }
-    _notices.add(notice);
+    // Replace queued notices for the same conversation or incident.
+    _notices.removeWhere(
+      (pending) => pending.notificationId == notice.notificationId,
+    );
+    if (_shownNotice?.notificationId == notice.notificationId) {
+      _noticeTimer?.cancel();
+      ScaffoldMessenger.of(context).removeCurrentMaterialBanner();
+      _shownNotice = null;
+      _notices.insert(0, notice);
+    } else {
+      _notices.add(notice);
+    }
     if (_shownNotice == null) _showNextNotice();
   }
 
@@ -310,6 +368,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
       _service.setForeground(false);
     } else if (state == AppLifecycleState.resumed) {
       _service.setForeground(true);
+      unawaited(_refreshNotificationPermission());
       if (_searchOnResume) {
         if (_busy) {
           _restartSearchAfterBusy = true;
@@ -486,6 +545,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
     _noticeTimer?.cancel();
     _service.connectionSession.detachNotifications();
 
+    _messages.removeListener(_rememberRescueLocation);
     _messages.dispose();
     _media.dispose();
     _service.dispose();
@@ -546,29 +606,43 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                 const SizedBox(width: 8),
               ],
             ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (value) => setState(() => _tab = value),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.radar), label: 'ใกล้ฉัน'),
-          NavigationDestination(
-            icon: Icon(Icons.chat_bubble_outline),
-            label: 'ข้อความ',
-          ),
-          NavigationDestination(
-            icon: CircleAvatar(
-              backgroundColor: kSosRed,
-              radius: 20,
-              child: Icon(Icons.sos, color: Colors.white, size: 26),
+      bottomNavigationBar: ListenableBuilder(
+        listenable: _messages,
+        builder: (context, _) => NavigationBar(
+          selectedIndex: _tab,
+          onDestinationSelected: (value) => setState(() => _tab = value),
+          destinations: [
+            NavigationDestination(icon: Icon(Icons.radar), label: 'ใกล้ฉัน'),
+            NavigationDestination(
+              icon: Badge(
+                isLabelVisible: _messages.totalUnread > 0,
+                label: Text(
+                  _messages.totalUnread > 99
+                      ? '99+'
+                      : _messages.totalUnread.toString(),
+                ),
+                child: const Icon(Icons.chat_bubble_outline),
+              ),
+              label: 'ข้อความ',
             ),
-            label: 'SOS',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.outbox_outlined),
-            label: 'คิวส่ง',
-          ),
-          NavigationDestination(icon: Icon(Icons.person_outline), label: 'ฉัน'),
-        ],
+            NavigationDestination(
+              icon: CircleAvatar(
+                backgroundColor: kSosRed,
+                radius: 20,
+                child: Icon(Icons.sos, color: Colors.white, size: 26),
+              ),
+              label: 'SOS',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.outbox_outlined),
+              label: 'คิวส่ง',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.person_outline),
+              label: 'ฉัน',
+            ),
+          ],
+        ),
       ),
       body: SafeArea(
         child: ListenableBuilder(
@@ -632,21 +706,34 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
   }
 
   // =========================================================
-  // TAB: ใกล้ฉัน (UI แผนที่เต็มจอ + DraggableScrollableSheet)
+  // TAB: ใกล้ฉัน (สรุปการเชื่อมต่อ รายชื่อ และแผนที่)
   // =========================================================
 
-  Future<void> _locate({bool share = false}) async {
+  void _rememberRescueLocation() {
+    final location = _messages.rescueLocation;
+    if (mounted && location != null && location != _me) {
+      setState(() => _me = location);
+    }
+  }
+
+  Future<void> _locate() async {
+    if (_loadingGps || _messages.rescueLocationLoading) return;
     setState(() {
       _loadingGps = true;
       _gpsError = null;
     });
     try {
+      if (_messages.rescueMode) {
+        final fix = await _messages.updateRescueLocation();
+        if (mounted && fix != null) setState(() => _me = fix);
+        return;
+      }
       final fix = await SosLocationService(
         database: _messages.database,
       ).capture();
       if (!mounted) return;
       setState(() => _me = fix);
-      if (share) await _messages.shareRescueLocation(fix);
+      if (_messages.rescueMode) await _messages.shareRescueLocation(fix);
     } catch (_) {
       if (mounted) {
         setState(
@@ -670,404 +757,256 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
     );
   }
 
-  String _formatRelativeTime(DateTime capturedAt) {
-    final now = DateTime.now();
-    final diff = now.difference(capturedAt.toLocal());
-    if (diff.isNegative || diff.inSeconds < 45) {
-      return 'เพิ่งอัปเดต';
-    }
-    if (diff.inMinutes < 60) {
-      return 'อัปเดตเมื่อ ${diff.inMinutes} นาทีที่แล้ว';
-    }
-    if (diff.inHours < 24) {
-      return 'อัปเดตเมื่อ ${diff.inHours} ชม. ก่อน';
-    }
-    if (diff.inDays < 7) {
-      return 'อัปเดตเมื่อ ${diff.inDays} วันก่อน';
-    }
-    final d = capturedAt.toLocal();
-    return 'อัปเดตเมื่อ ${d.day}/${d.month}/${d.year}';
-  }
-
-  String _formatCoordinates(double lat, double lng) {
-    return '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
+  Color _mapRoleColor({
+    required bool sos,
+    required bool rescue,
+    bool isMe = false,
+  }) {
+    if (sos) return kSosRed;
+    if (rescue) return RescueTheme.rescue;
+    return isMe ? const Color(0xFF167A65) : Colors.grey;
   }
 
   Widget _buildHomeTab() {
     final now = DateTime.now().toUtc();
-    final me = _me ?? _messages.rescueLocation ?? _messages.mySos?.location;
+    final me =
+        (_messages.rescueMode ? _messages.rescueLocation : null) ??
+        _me ??
+        _messages.mySos?.location;
+    final locating = _loadingGps || _messages.rescueLocationLoading;
     final points = _messages.presence.entries
-        .where((e) => e.value.mapLocation != null)
+        .where((e) => e.key != _messages.myId && _messages.isReachable(e.key))
+        .map(
+          (e) => (
+            id: e.key,
+            state: e.value,
+            location: e.value.sos?.isActiveAt(now) == true
+                ? e.value.sos!.location
+                : e.value.mapLocation,
+          ),
+        )
+        .where((e) => e.location != null)
         .toList();
     final dark = _p.dark;
 
-    return Stack(
-      children: [
-        // 1. แผนที่ขยายเต็มพื้นที่ระหว่าง AppBar กับ bottom nav
-        Positioned.fill(
-          child: BundledOfflineMap(
-            key: const ValueKey('full-home-map'),
-            focus: me,
-            fullScreen: true,
-            onLocateMe: _loadingGps ? null : () => _locate(),
-            markers: [
-              for (final e in points)
-                OfflineMapMarker(
-                  id: e.key,
-                  label:
-                      '${_messages.peers[e.key] ?? 'ไม่ทราบชื่อ'} • แตะดูรายละเอียด',
-                  location: e.value.mapLocation!,
-                  color: !e.value.isFresh(now)
-                      ? Colors.grey
-                      : e.value.sos?.isActiveAt(now) == true
-                      ? kSosRed
-                      : e.value.rescue
-                      ? RescueTheme.rescue
-                      : Colors.grey,
-                  onTap: () => _openIncidentDetail(e.key),
-                ),
-              if (me != null)
-                OfflineMapMarker(
-                  id: 'self',
-                  label: 'ฉัน • พิกัดที่อ่านล่าสุด',
-                  location: me,
-                  color: const Color(0xFF167A65),
-                  isMe: true,
-                ),
-            ],
-          ),
-        ),
-
-        // Indicator เมื่อติดภารกิจ busy
-        if (_busy)
-          const Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: LinearProgressIndicator(minHeight: 3),
-          ),
-
-        // 2. DraggableScrollableSheet
-        _buildDraggableSheet(me, points, dark, now),
-      ],
-    );
-  }
-
-  Widget _buildDraggableSheet(
-    SosLocation? me,
-    List<MapEntry<String, PeerPresence>> points,
-    bool dark,
-    DateTime now,
-  ) {
-    final sheetBg = dark ? const Color(0xFF101C26) : RescueTheme.cream;
-    final borderColor = dark ? Colors.white12 : const Color(0xFFEAE2D8);
-
-    return DraggableScrollableSheet(
-      initialChildSize: 0.28,
-      minChildSize: 0.22,
-      maxChildSize: 0.88,
-      snap: true,
-      snapSizes: const [0.28, 0.60, 0.88],
-      builder: (context, scrollController) {
-        return Container(
-          decoration: BoxDecoration(
-            color: sheetBg,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            border: Border(
-              top: BorderSide(color: borderColor, width: 1.2),
-              left: BorderSide(color: borderColor, width: 1),
-              right: BorderSide(color: borderColor, width: 1),
+    return SingleChildScrollView(
+      key: const ValueKey('nearby-home-scroll'),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_busy) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: const LinearProgressIndicator(minHeight: 3),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: dark ? 0.45 : 0.12),
-                blurRadius: 16,
-                offset: const Offset(0, -3),
-              ),
-            ],
-          ),
-          child: ListView(
-            controller: scrollController,
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-            children: [
-              // ขีดจับเลื่อนแผ่นข้อมูล
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(top: 4, bottom: 12),
-                  decoration: BoxDecoration(
-                    color: dark ? Colors.white24 : const Color(0xFFD0C8BE),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+            const SizedBox(height: 10),
+          ],
+          _buildPresenceSection(dark),
+          const SizedBox(height: 12),
+          _SectionCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: _p.accentSoft,
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: const Icon(
+                        Icons.map_outlined,
+                        size: 19,
+                        color: Color(0xFFB94612),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        'แผนที่และตำแหน่งของฉัน',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-
-              // ==========================================
-              // สถานะย่อ (peek): ชื่อพื้นที่ + จำนวนอุปกรณ์ + chip "ออฟไลน์" + ปุ่ม "อัปเดตตำแหน่งของฉัน"
-              // ==========================================
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'มทร.ธัญบุรี • คลองหก',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.2,
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 280,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: BundledOfflineMap(
+                      key: const ValueKey('full-home-map'),
+                      focus: me,
+                      fullScreen: true,
+                      showControls: true,
+                      onLocateMe: locating ? null : () => _locate(),
+                      markers: [
+                        for (final e in points)
+                          OfflineMapMarker(
+                            id: e.id,
+                            label:
+                                '${_messages.peers[e.id] ?? 'ไม่ทราบชื่อ'} • แตะดูรายละเอียด',
+                            location: e.location!,
+                            color: _mapRoleColor(
+                              sos: e.state.sos?.isActiveAt(now) == true,
+                              rescue: e.state.rescue,
+                            ),
+                            onTap: () => _openIncidentDetail(e.id),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          me != null
-                              ? _formatRelativeTime(me.capturedAt)
-                              : 'ยังไม่มีพิกัดของคุณ',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: dark
-                                ? Colors.white60
-                                : const Color(0xFF687782),
+                        if (me != null)
+                          OfflineMapMarker(
+                            id: 'self',
+                            label: 'ฉัน • พิกัดที่อ่านล่าสุด',
+                            location: me,
+                            color: _mapRoleColor(
+                              sos: _messages.mySos?.isActiveAt(now) == true,
+                              rescue: _messages.rescueMode,
+                              isMe: true,
+                            ),
+                            isMe: true,
                           ),
-                        ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: dark
-                          ? const Color(0xFF162533)
-                          : const Color(0xFFFFEADB),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: borderColor),
-                    ),
-                    child: Text(
-                      'มีพิกัด ${points.length} เครื่อง • ออฟไลน์',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: RescueTheme.orangeInk,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              // ปุ่ม "อัปเดตตำแหน่งของฉัน" (touch target >= 48dp)
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: FilledButton.icon(
-                  onPressed: _loadingGps ? null : () => _locate(),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF641F),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    elevation: 0,
-                  ),
-                  icon: _loadingGps
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.my_location, size: 20),
-                  label: Text(
-                    _loadingGps
-                        ? 'กำลังอ่าน GPS…'
-                        : me == null
-                        ? 'อ่านตำแหน่งของฉัน'
-                        : 'อัปเดตตำแหน่งของฉัน',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
                 ),
-              ),
-
-              // ==========================================
-              // สถานะขยาย: legend สี, พิกัด, ความแม่นยำ, เวลาบันทึก, คำเตือน
-              // ==========================================
-              if (_gpsError != null) ...[
+                const SizedBox(height: 10),
+                _buildColorLegend(dark),
                 const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: dark
-                        ? const Color(0xFF331414)
-                        : const Color(0xFFFFEEEE),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: dark
-                          ? const Color(0xFF5C2020)
-                          : const Color(0xFFFFCCCC),
+                SizedBox(
+                  height: 48,
+                  child: FilledButton.icon(
+                    onPressed: locating ? null : () => _locate(),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFB94612),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      elevation: 0,
                     ),
-                  ),
-                  child: Text(
-                    _gpsError!,
-                    style: const TextStyle(color: Colors.red, fontSize: 12),
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 16),
-
-              // 3. แถว Legend สี
-              _buildColorLegend(dark),
-
-              const SizedBox(height: 16),
-
-              // ข้อมูลพิกัด, ความแม่นยำ, เวลาบันทึก, คำเตือน
-              _buildLocationDetailCard(me, dark),
-
-              // ฟังก์ชันโหมดกู้ภัย (ถ้าเปิดอยู่)
-              if (_messages.rescueMode) ...[
-                const SizedBox(height: 16),
-                _buildRescueModeActions(dark),
-              ],
-
-              // รายการอุปกรณ์ที่มีพิกัดบนแผนที่
-              if (points.isNotEmpty) ...[
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.location_on,
-                      size: 16,
-                      color: RescueTheme.orangeInk,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'ตำแหน่งอุปกรณ์รอบตัว (${points.length})',
+                    icon: locating
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.my_location, size: 20),
+                    label: Text(
+                      locating
+                          ? 'กำลังอ่าน GPS…'
+                          : me == null
+                          ? 'อ่านตำแหน่งของฉัน'
+                          : 'อัปเดตตำแหน่งของฉัน',
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                  ],
+                  ),
                 ),
-                const SizedBox(height: 8),
-                for (final e in points)
-                  Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    elevation: 0,
-                    color: dark ? const Color(0xFF162533) : Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      side: BorderSide(color: borderColor),
+                if (_gpsError != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: dark
+                          ? const Color(0xFF331414)
+                          : const Color(0xFFFFEEEE),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: dark
+                            ? const Color(0xFF5C2020)
+                            : const Color(0xFFFFCCCC),
+                      ),
                     ),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 2,
-                      ),
-                      leading: CircleAvatar(
-                        radius: 16,
-                        backgroundColor:
-                            (!e.value.isFresh(now)
-                                    ? Colors.grey
-                                    : e.value.sos?.isActiveAt(now) == true
-                                    ? kSosRed
-                                    : e.value.rescue
-                                    ? RescueTheme.rescue
-                                    : Colors.grey)
-                                .withValues(alpha: 0.15),
-                        child: Icon(
-                          Icons.person_pin_circle_rounded,
-                          size: 20,
-                          color: !e.value.isFresh(now)
-                              ? Colors.grey
-                              : e.value.sos?.isActiveAt(now) == true
-                              ? kSosRed
-                              : e.value.rescue
-                              ? RescueTheme.rescue
-                              : Colors.grey,
-                        ),
-                      ),
-                      title: Text(
-                        _messages.peers[e.key] ?? 'เครื่องที่ไม่ทราบชื่อ',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      subtitle: Text(
-                        '${_formatRelativeTime(e.value.mapLocation!.capturedAt)} • ${_formatCoordinates(e.value.mapLocation!.latitude, e.value.mapLocation!.longitude)}',
-                        style: TextStyle(
-                          fontSize: 12,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          size: 18,
                           color: dark
-                              ? Colors.white60
-                              : const Color(0xFF687782),
+                              ? const Color(0xFFFFB4AB)
+                              : const Color(0xFF9C2028),
                         ),
-                      ),
-                      trailing: const Icon(Icons.chevron_right, size: 20),
-                      onTap: () => _openIncidentDetail(e.key),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _gpsError!,
+                            style: TextStyle(
+                              height: 1.4,
+                              color: dark
+                                  ? const Color(0xFFFFB4AB)
+                                  : const Color(0xFF9C2028),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                ],
+                const SizedBox(height: 12),
+                MyLocationSummary(location: me),
+                if (_messages.rescueMode) ...[
+                  const SizedBox(height: 12),
+                  _buildRescueModeActions(dark),
+                ],
               ],
-
-              const SizedBox(height: 24),
-
-              // การเชื่อมต่อและสถานะคนรอบตัว (Presence)
-              _buildPresenceSection(dark),
-            ],
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
   Widget _buildColorLegend(bool dark) {
     final items = [
-      (color: const Color(0xFF167A65), label: 'ฉัน'),
       (color: kSosRed, label: 'SOS'),
       (color: RescueTheme.rescue, label: 'กู้ภัย'),
-      (color: Colors.grey, label: 'ออฟไลน์/ปิดแล้ว'),
-    ];
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: dark ? const Color(0xFF162533) : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: dark ? Colors.white12 : const Color(0xFFEAE2D8),
+      (
+        color: _mapRoleColor(
+          sos: _messages.mySos?.isActiveAt(DateTime.now().toUtc()) == true,
+          rescue: _messages.rescueMode,
+          isMe: true,
         ),
+        label: 'ฉัน',
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      (color: Colors.grey, label: 'ผู้ใช้ทั่วไป'),
+    ];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF1B222C) : const Color(0xFFFCF7F1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 16,
+        runSpacing: 6,
         children: [
           for (final item in items)
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 9,
-                  height: 9,
+                  width: 10,
+                  height: 10,
                   decoration: BoxDecoration(
                     color: item.color,
                     shape: BoxShape.circle,
                   ),
                 ),
-                const SizedBox(width: 5),
+                const SizedBox(width: 6),
                 Text(
                   item.label,
                   style: TextStyle(
@@ -1083,155 +1022,48 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
     );
   }
 
-  Widget _buildLocationDetailCard(SosLocation? me, bool dark) {
-    final borderColor = dark ? Colors.white12 : const Color(0xFFEAE2D8);
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: dark ? const Color(0xFF162533) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.pin_drop_outlined,
-                size: 18,
-                color: RescueTheme.orangeInk,
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'พิกัดของฉันล่าสุด',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-              ),
-              const Spacer(),
-              if (me != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: (dark ? Colors.white : RescueTheme.navy).withValues(
-                      alpha: 0.08,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '±${me.accuracy.round()} ม.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: dark ? Colors.white70 : const Color(0xFF687782),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          if (me != null) ...[
-            SelectableText(
-              _formatCoordinates(me.latitude, me.longitude),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: dark ? Colors.white70 : const Color(0xFF687782),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${_formatRelativeTime(me.capturedAt)} (บันทึกเมื่อ: ${me.capturedAt.toLocal().toString().split('.').first})',
-              style: TextStyle(
-                fontSize: 12,
-                color: dark ? Colors.white54 : const Color(0xFF687782),
-              ),
-            ),
-          ] else ...[
-            Text(
-              'ยังไม่มีพิกัดของคุณ • กด “อัปเดตตำแหน่งของฉัน” เพื่ออ่าน GPS',
-              style: TextStyle(
-                fontSize: 12,
-                color: dark ? Colors.white54 : const Color(0xFF687782),
-              ),
-            ),
-          ],
-          const SizedBox(height: 10),
-          Divider(height: 1, color: borderColor),
-          const SizedBox(height: 10),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                Icons.info_outline,
-                size: 15,
-                color: dark ? Colors.white54 : const Color(0xFF687782),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'พิกัดเป็นจุดที่บันทึก ไม่ใช่การติดตามสด • อุปกรณ์ที่ไม่ส่งพิกัดจะไม่มีหมุด',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: dark ? Colors.white54 : const Color(0xFF687782),
-                    height: 1.35,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildRescueModeActions(bool dark) {
+    final status = _messages.rescueLocationLoading
+        ? 'กำลังอ่าน GPS เพื่อแชร์ตำแหน่งกู้ภัยอัตโนมัติ…'
+        : _messages.rescueLocationError ??
+              (_messages.rescueLocation != null
+                  ? 'แชร์ตำแหน่งกู้ภัยแล้ว • คนในเครือข่ายที่ได้รับพิกัดจะเห็นหมุดสีน้ำเงิน'
+                  : 'ยังไม่มีพิกัดกู้ภัย กดอัปเดตตำแหน่งเพื่อแชร์ให้คนในเครือข่าย');
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: dark ? const Color(0xFF0F2642) : const Color(0xFFEBF3FF),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+        border: Border.all(color: RescueTheme.rescue.withValues(alpha: .25)),
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'โหมดกู้ภัย: แชร์พิกัดให้เครื่องในเครือข่ายเห็นเป็นหมุดสีน้ำเงิน',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          const Icon(
+            Icons.shield_outlined,
+            size: 20,
+            color: RescueTheme.rescue,
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 48,
-                  child: OutlinedButton.icon(
-                    onPressed: _loadingGps ? null : () => _locate(share: true),
-                    icon: const Icon(Icons.share_location, size: 18),
-                    label: const Text(
-                      'อ่าน GPS & แชร์พิกัด',
-                      style: TextStyle(fontSize: 12),
-                    ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  status,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    height: 1.4,
                   ),
                 ),
-              ),
-              if (_messages.rescueLocation != null) ...[
-                const SizedBox(width: 8),
-                SizedBox(
-                  height: 48,
-                  child: TextButton(
-                    onPressed: _messages.clearRescueLocation,
-                    child: const Text(
-                      'หยุดแชร์',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                  ),
+                const SizedBox(height: 6),
+                const Text(
+                  'ใช้ปุ่มอัปเดตตำแหน่งด้านบนเพื่อแชร์พิกัดใหม่ • ปิดโหมดกู้ภัยเพื่อหยุดแชร์',
+                  style: TextStyle(fontSize: 12, height: 1.5),
                 ),
               ],
-            ],
+            ),
           ),
         ],
       ),
@@ -1242,32 +1074,23 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
     final sosMode = _messages.mySos?.isActiveAt(DateTime.now().toUtc()) == true;
     final rescueMode = !sosMode && _messages.rescueMode;
     final active = _nearbyActive;
-    final borderColor = dark ? Colors.white12 : const Color(0xFFEAE2D8);
+    final discoveryChip = NearbyDiscoveryChip(
+      active: active,
+      busy: _busy,
+      onSettings: _openConnectionSettings,
+      onStart: () => _run(() async {
+        _searchOnResume = true;
+        await _service.startNearby();
+      }),
+      onStop: () => _run(() async {
+        _searchOnResume = false;
+        await _service.stopAll();
+      }),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'อุปกรณ์ใกล้เคียง & สัญญาณ',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-            ),
-            TextButton(
-              onPressed: _openConnectionSettings,
-              style: TextButton.styleFrom(
-                minimumSize: const Size(48, 36),
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-              ),
-              child: const Text(
-                'การเชื่อมต่อและสิทธิ์',
-                style: TextStyle(fontSize: 12),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
         if (_service.lastError != null) ...[
           _buildErrorCard(),
           const SizedBox(height: 12),
@@ -1276,43 +1099,12 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
           _buildPermissionCard(),
           const SizedBox(height: 12),
         ],
-        // Discovery toggle button
-        SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: OutlinedButton.icon(
-            onPressed: _busy
-                ? null
-                : () => _run(() async {
-                    _searchOnResume = !active;
-                    if (active) {
-                      await _service.stopAll();
-                    } else {
-                      await _service.startNearby();
-                    }
-                  }),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: active ? Colors.red.shade700 : RescueTheme.navy,
-              side: BorderSide(
-                color: active ? Colors.red.shade300 : borderColor,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-            icon: Icon(
-              active ? Icons.stop_circle_outlined : Icons.wifi_tethering,
-              size: 18,
-            ),
-            label: Text(
-              active ? 'หยุดการค้นหาอุปกรณ์' : 'เริ่มค้นหาอุปกรณ์ใกล้เคียง',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
         PresenceList(
+          key: const ValueKey('nearby-primary-presence'),
           service: _messages,
+          reachableOnly: true,
+          flat: true,
+          headerAction: sosMode || rescueMode ? null : discoveryChip,
           filter: sosMode
               ? PresenceFilter.rescue
               : rescueMode
@@ -1320,9 +1112,12 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
               : PresenceFilter.all,
         ),
         if (sosMode || rescueMode) ...[
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           PresenceList(
+            key: const ValueKey('nearby-secondary-presence'),
+            headerAction: discoveryChip,
             service: _messages,
+            flat: true,
             excludeFilter: sosMode ? PresenceFilter.rescue : PresenceFilter.sos,
             reachableOnly: true,
           ),
@@ -1478,6 +1273,21 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
             ),
           ),
           const SizedBox(height: 6),
+          _PermissionRow(
+            name: 'การแจ้งเตือน',
+            value: _notificationsAllowed == null
+                ? 'ยังไม่ได้ตรวจสอบ'
+                : _notificationsAllowed!
+                ? 'อนุญาตแล้ว'
+                : 'ยังไม่อนุญาต',
+            ok: _notificationsAllowed == true,
+            action: _notificationsAllowed == true
+                ? null
+                : TextButton(
+                    onPressed: _requestNotificationPermission,
+                    child: const Text('ขอสิทธิ์ / เปิดตั้งค่า'),
+                  ),
+          ),
           ExpansionTile(
             tilePadding: EdgeInsets.zero,
             childrenPadding: EdgeInsets.zero,
@@ -1815,6 +1625,7 @@ class _StatusChip extends StatelessWidget {
 }
 
 class _PermissionRow extends StatelessWidget {
+  final Widget? action;
   final String name;
   final String value;
   final bool ok;
@@ -1823,6 +1634,7 @@ class _PermissionRow extends StatelessWidget {
     required this.name,
     required this.value,
     required this.ok,
+    this.action,
   });
 
   @override
@@ -1845,10 +1657,17 @@ class _PermissionRow extends StatelessWidget {
             ),
           ),
           Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.end,
-              style: TextStyle(color: p.muted, fontSize: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  value,
+                  textAlign: TextAlign.end,
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                ?action,
+              ],
             ),
           ),
         ],

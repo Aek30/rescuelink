@@ -8,7 +8,6 @@ import 'package:rescuelink/screens/nearby_test_screen.dart';
 import 'package:rescuelink/services/message_service.dart';
 import 'package:rescuelink/services/nearby_service.dart';
 import 'package:rescuelink/theme/rescue_theme.dart';
-import 'package:rescuelink/widgets/nearby_mini_map.dart';
 import 'package:rescuelink/widgets/presence_list.dart';
 import 'package:rescuelink/services/local_database_service.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -33,7 +32,10 @@ class _Nearby extends NearbyService {
   }
 
   @override
-  Future<void> stopAll() async {}
+  Future<void> stopAll() async {
+    isAdvertising = isDiscovering = false;
+    notifyListeners();
+  }
 }
 
 class _Messages extends MessageService {
@@ -70,6 +72,10 @@ void main() {
   testWidgets(
     'resume during permission work retries once; explicit stop stays stopped',
     (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
       final permission = Completer<void>();
       final nearby = _Nearby()..pendingStart = permission.future;
       final messages = _Messages(nearbyService: nearby);
@@ -88,7 +94,13 @@ void main() {
       permission.complete();
       await tester.pumpAndSettle();
       expect(nearby.searches, 2);
-      await tester.tap(find.text('หยุดการทำงานใกล้เคียง'));
+      await tester.ensureVisible(find.text('กำลังค้นหา •'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('กำลังค้นหา •'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('หยุดการค้นหา'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'หยุดการค้นหา'));
       await tester.pumpAndSettle();
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pumpAndSettle();
@@ -135,87 +147,46 @@ void main() {
       await tester.pumpAndSettle();
       expect(nearby.searches, 1);
       expect(find.text('กำลังขอความช่วยเหลือ'), findsNothing);
-      List<Widget> sections() =>
-          tester.widget<ListView>(find.byType(ListView).first).childrenDelegate
-              is SliverChildListDelegate
-          ? (tester
-                        .widget<ListView>(find.byType(ListView).first)
-                        .childrenDelegate
-                    as SliverChildListDelegate)
-                .children
-          : [];
-      int indexOf<T>() => sections().indexWhere((w) => w is T);
-      expect(indexOf<NearbyMiniMap>(), greaterThan(indexOf<PresenceList>()));
-      expect(
-        sections().whereType<PresenceList>().single.filter,
-        PresenceFilter.all,
-      );
+      final primary = find.byKey(const ValueKey('nearby-primary-presence'));
+      final secondary = find.byKey(const ValueKey('nearby-secondary-presence'));
+      final scrollable = find
+          .descendant(
+            of: find.byKey(const ValueKey('nearby-home-scroll')),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      await tester.scrollUntilVisible(primary, 200, scrollable: scrollable);
+      expect(tester.widget<PresenceList>(primary).filter, PresenceFilter.all);
+      expect(tester.widget<PresenceList>(primary).reachableOnly, isTrue);
       messages.mode(sos: true);
       await tester.pumpAndSettle();
-      expect(find.text('กำลังขอความช่วยเหลือ'), findsOneWidget);
-      expect(indexOf<PresenceList>(), lessThan(indexOf<NearbyMiniMap>()));
       expect(
-        (sections().whereType<PresenceList>().first).filter,
+        tester.widget<PresenceList>(primary).filter,
         PresenceFilter.rescue,
       );
-      expect(sections().whereType<PresenceList>().length, 2);
       expect(
-        sections().whereType<PresenceList>().last.excludeFilter,
+        tester.widget<PresenceList>(secondary).excludeFilter,
         PresenceFilter.rescue,
       );
-      expect(sections().whereType<PresenceList>().last.reachableOnly, isTrue);
+      expect(tester.widget<PresenceList>(secondary).reachableOnly, isTrue);
       expect(find.text('ผู้พร้อมช่วยเหลือ'), findsOneWidget);
-      await tester.scrollUntilVisible(
-        find.text('คนรอบตัวคุณ'),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      expect(find.text('คนรอบตัวคุณ'), findsOneWidget);
-      await tester.scrollUntilVisible(
-        find.text('ปิดโหมด SOS'),
-        -200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.tap(find.text('ปิดโหมด SOS'));
-      await tester.pumpAndSettle();
-      expect(indexOf<NearbyMiniMap>(), greaterThan(indexOf<PresenceList>()));
+      expect(tester.widget<PresenceList>(primary).reachableOnly, isTrue);
       messages.mode(rescue: true);
       await tester.pumpAndSettle();
-      expect(find.text('พร้อมช่วยเหลือคนใกล้คุณ'), findsOneWidget);
-      expect(indexOf<PresenceList>(), lessThan(indexOf<NearbyMiniMap>()));
+      await tester.scrollUntilVisible(primary, 200, scrollable: scrollable);
+      expect(tester.widget<PresenceList>(primary).filter, PresenceFilter.sos);
+      expect(tester.widget<PresenceList>(primary).reachableOnly, isTrue);
       expect(
-        (sections().whereType<PresenceList>().first).filter,
+        tester.widget<PresenceList>(secondary).excludeFilter,
         PresenceFilter.sos,
       );
-      expect(sections().whereType<PresenceList>().length, 2);
-      expect(
-        sections().whereType<PresenceList>().last.excludeFilter,
-        PresenceFilter.sos,
-      );
-      expect(sections().whereType<PresenceList>().last.reachableOnly, isTrue);
+      expect(tester.widget<PresenceList>(secondary).reachableOnly, isTrue);
       expect(find.text('คนที่ต้องการความช่วยเหลือ'), findsOneWidget);
-      await tester.scrollUntilVisible(
-        find.text('คนรอบตัวคุณ'),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      expect(find.text('คนรอบตัวคุณ'), findsOneWidget);
-      await tester.scrollUntilVisible(
-        find.text('ปิดโหมดหน่วยกู้ภัย'),
-        -200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.tap(find.text('ปิดโหมดหน่วยกู้ภัย'));
+      messages.mode();
       await tester.pumpAndSettle();
-      expect(
-        sections().whereType<PresenceList>().single.filter,
-        PresenceFilter.all,
-      );
-      expect(
-        sections().whereType<PresenceList>().single.reachableOnly,
-        isFalse,
-      );
-      expect(indexOf<NearbyMiniMap>(), greaterThan(indexOf<PresenceList>()));
+      expect(tester.widget<PresenceList>(primary).filter, PresenceFilter.all);
+      expect(tester.widget<PresenceList>(primary).reachableOnly, isTrue);
+      expect(secondary, findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       await tester.pumpAndSettle();

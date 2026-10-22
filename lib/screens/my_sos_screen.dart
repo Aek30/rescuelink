@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import '../models/sos_alert.dart';
 import '../services/sos_store.dart';
 import '../services/sos_sync_service.dart';
+import '../theme/rescue_theme.dart';
+import '../widgets/emergency_type_chip.dart';
+import '../widgets/sos_history_card.dart';
+import '../widgets/sos_history_section_header.dart';
 import 'sync_screen.dart';
 
 class MySosScreen extends StatefulWidget {
@@ -51,7 +55,9 @@ class _MySosScreenState extends State<MySosScreen> {
         builder: (context, update) => AlertDialog(
           title: Text(delete ? 'ลบเหตุที่ยุติแล้ว?' : 'แก้ไขเหตุที่ยุติแล้ว'),
           content: delete
-              ? Text('${alert.name}\n${alert.categoriesLabel}')
+              ? Text(
+                  '${sosHistoryDisplayName(alert.name)}\n${alert.categoriesLabel}',
+                )
               : SizedBox(
                   width: 420,
                   child: Form(
@@ -183,22 +189,24 @@ class _MySosScreenState extends State<MySosScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('รายการเหตุ SOS ของฉัน'),
+      title: const Text('ประวัติ SOS'),
       actions: [
         IconButton(
           tooltip: 'บัญชี / Sync',
           icon: const Icon(Icons.cloud_sync_outlined),
-          onPressed: () async {
-            final sync = SosSyncCoordinator.instance.current;
-            if (sync == null) return;
-            await Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) => SyncScreen(service: sync),
-              ),
-            );
-            await _load();
-          },
+          onPressed: SosSyncCoordinator.instance.current == null
+              ? null
+              : () async {
+                  final sync = SosSyncCoordinator.instance.current;
+                  if (sync == null) return;
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => SyncScreen(service: sync),
+                    ),
+                  );
+                  await _load();
+                },
         ),
         IconButton(
           tooltip: 'โหลดรายการใหม่',
@@ -207,12 +215,23 @@ class _MySosScreenState extends State<MySosScreen> {
         ),
       ],
     ),
-    floatingActionButton: widget.onCreate == null
+    floatingActionButton: widget.onCreate == null || _records.isEmpty
         ? null
-        : FloatingActionButton(
+        : FloatingActionButton.extended(
+            elevation: 0,
+            focusElevation: 0,
+            hoverElevation: 0,
+            highlightElevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(
+                color: RescueTheme.accentFor(context).withValues(alpha: .25),
+              ),
+            ),
             tooltip: 'แจ้งเหตุ SOS',
             onPressed: widget.onCreate,
-            child: const Icon(Icons.add),
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('แจ้งเหตุใหม่'),
           ),
     body: Center(
       child: ConstrainedBox(
@@ -233,89 +252,123 @@ class _MySosScreenState extends State<MySosScreen> {
                 onRefresh: _load,
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    12,
+                    20,
+                    MediaQuery.paddingOf(context).bottom + 104,
+                  ),
                   children: [
-                    if (!_busy && _records.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.all(32),
-                        child: Text(
-                          'ยังไม่มีเหตุ SOS',
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    for (final record in _records)
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    record.alert.active
-                                        ? Icons.sos
-                                        : Icons.check_circle_outline,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      record.alert.categoriesLabel,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.titleMedium,
-                                    ),
-                                  ),
-                                  Text(
-                                    record.alert.active
-                                        ? 'กำลังขอความช่วยเหลือ'
-                                        : 'ยุติแล้ว',
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                '${record.alert.name} • ${record.alert.people} คน',
-                              ),
-                              if (record.alert.details.isNotEmpty)
-                                SelectableText(record.alert.details),
-                              if (record.alert.location != null)
-                                SelectableText(record.alert.location!.summary),
-                              Text('${record.alert.updatedAt.toLocal()}'),
-                              if (record.conflict != null)
-                                const Text('ข้อมูลขัดแย้งกับ Cloud'),
-                              if (!record.alert.active)
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    IconButton(
-                                      tooltip: 'แก้ไขเหตุ',
-                                      onPressed:
-                                          _busy || record.conflict != null
-                                          ? null
-                                          : () => _edit(record),
-                                      icon: const Icon(Icons.edit_outlined),
-                                    ),
-                                    IconButton(
-                                      tooltip: 'ลบเหตุ',
-                                      onPressed:
-                                          _busy || record.conflict != null
-                                          ? null
-                                          : () => _edit(record, delete: true),
-                                      icon: const Icon(Icons.delete_outline),
-                                    ),
-                                  ],
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
+                    _historyHeader(),
+                    if (!_busy && _records.isEmpty) _emptyHistory(),
+                    ..._historySections(),
                   ],
                 ),
               ),
             ),
           ],
         ),
+      ),
+    ),
+  );
+
+  String _date(DateTime value) {
+    const months = [
+      'ม.ค.',
+      'ก.พ.',
+      'มี.ค.',
+      'เม.ย.',
+      'พ.ค.',
+      'มิ.ย.',
+      'ก.ค.',
+      'ส.ค.',
+      'ก.ย.',
+      'ต.ค.',
+      'พ.ย.',
+      'ธ.ค.',
+    ];
+    final local = value.toLocal();
+    return '${local.day} ${months[local.month - 1]} ${local.year + 543}';
+  }
+
+  Widget _historyHeader() => SosHistoryOverviewHeader(total: _records.length);
+
+  List<Widget> _historySections() {
+    final sorted = [..._records]
+      ..sort((a, b) => b.alert.updatedAt.compareTo(a.alert.updatedAt));
+    final now = DateTime.now().toUtc();
+    final children = <Widget>[];
+    for (final active in [true, false]) {
+      final records = sorted
+          .where((r) => r.alert.isActiveAt(now) == active)
+          .toList();
+      if (records.isEmpty) continue;
+      children.add(
+        SosHistorySectionHeader(
+          title: active ? 'กำลังดำเนินการ' : 'ยุติแล้ว',
+          active: active,
+        ),
+      );
+      for (var i = 0; i < records.length; i++) {
+        final record = records[i];
+        if (i == 0 ||
+            _date(record.alert.updatedAt) !=
+                _date(records[i - 1].alert.updatedAt)) {
+          children.add(
+            SosHistorySectionHeader(
+              title: _date(record.alert.updatedAt),
+              date: true,
+            ),
+          );
+        }
+        final editable =
+            !_busy && !record.alert.active && record.conflict == null;
+        children.add(
+          SosHistoryCard(
+            record: record,
+            active: active,
+            onEdit: editable ? () => _edit(record) : null,
+            onDelete: editable ? () => _edit(record, delete: true) : null,
+          ),
+        );
+      }
+    }
+    return children;
+  }
+
+  Widget _emptyHistory() => SosCard(
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 8),
+      child: Column(
+        children: [
+          Icon(
+            Icons.inbox_outlined,
+            size: 48,
+            color: RescueTheme.mutedFor(context),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'ยังไม่มีเหตุ SOS',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'คำขอที่คุณส่งจะแสดงที่นี่\nเพื่อกลับมาดูรายละเอียดได้ภายหลัง',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: RescueTheme.mutedFor(context),
+              fontSize: 13,
+            ),
+          ),
+          if (widget.onCreate != null) ...[
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: widget.onCreate,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('แจ้งเหตุใหม่'),
+            ),
+          ],
+        ],
       ),
     ),
   );

@@ -23,7 +23,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    await tester.drag(find.byType(ListView).first, const Offset(0, -600));
+    await tester.drag(
+      find.byKey(const ValueKey('nearby-home-scroll')),
+      const Offset(0, -600),
+    );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());

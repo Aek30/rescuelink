@@ -102,8 +102,8 @@ void main() {
         excluded == PresenceFilter.sos ? findsNothing : findsOneWidget,
       );
       expect(
-        find.text(excluded == PresenceFilter.rescue ? '4 คน' : '3 คน'),
-        findsOneWidget,
+        find.text(excluded == PresenceFilter.rescue ? '4 รายชื่อ' : '3 รายชื่อ'),
+        findsNothing,
       );
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
@@ -162,7 +162,7 @@ void main() {
     service.reachable = true;
     await show();
     expect(find.text('รออัปเดตสถานะ'), findsOneWidget);
-    await tester.tap(find.text('ส่งข้อความ'));
+    await tester.tap(find.byTooltip('ส่งข้อความ'));
     await tester.pumpAndSettle();
     expect(find.byType(ChatScreen), findsOneWidget);
   });
@@ -222,7 +222,7 @@ void main() {
       expect(find.text('Phone C'), findsNothing);
       expect(find.textContaining('ประวัติ SOS'), findsNothing);
       expect(find.text('รายละเอียด SOS'), findsNothing);
-      await tester.tap(find.text('ส่งข้อความ'));
+      await tester.tap(find.byTooltip('ส่งข้อความ'));
       await tester.pumpAndSettle();
       expect(find.byType(ChatScreen), findsOneWidget);
       expect(tester.takeException(), isNull);

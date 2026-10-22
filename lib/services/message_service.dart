@@ -14,6 +14,7 @@ import 'local_database_service.dart';
 import 'media_service.dart';
 import 'nearby_service.dart';
 import 'app_preferences.dart';
+import 'sos_location_service.dart';
 
 class MessageService extends ChangeNotifier {
   MessageService({
@@ -21,9 +22,11 @@ class MessageService extends ChangeNotifier {
     LocalDatabaseService? database,
     this.mediaService,
     DateTime Function()? clock,
+    this.captureRescueLocation,
   }) : database = database ?? LocalDatabaseService.instance,
        _clock = clock ?? DateTime.now;
   final DateTime Function() _clock;
+  final Future<SosLocation> Function()? captureRescueLocation;
   DateTime _now() => _clock().toUtc();
   final NearbyService nearbyService;
   final LocalDatabaseService database;
@@ -78,6 +81,7 @@ class MessageService extends ChangeNotifier {
       await database.markConversationRead(myId!, peerId, messageId);
       if (_disposed) return;
       unreadCounts = await database.getUnreadCounts(myId!);
+      onNoticeCancelled?.call('chat:$peerId');
       _notify();
     } finally {
       _markingRead.remove(peerId);
@@ -88,20 +92,64 @@ class MessageService extends ChangeNotifier {
   SosAlert? mySos;
   bool _publishingSos = false;
   bool rescueMode = false;
-  // Explicitly shared for this session only; never infer a rescue location from SOS.
+  // Fresh GPS shared while rescue mode is enabled; never infer it from an SOS.
   SosLocation? rescueLocation;
+  bool rescueLocationLoading = false;
+  String? rescueLocationError;
+  int _rescueLocationGeneration = 0;
+  Future<SosLocation>? _rescueCapture;
+
+  Future<SosLocation?> updateRescueLocation() async {
+    if (!ready || _disposed || !rescueMode) return null;
+    final generation = ++_rescueLocationGeneration;
+    rescueLocationLoading = true;
+    rescueLocationError = null;
+    _notify();
+    final capture = _rescueCapture ??= Future.sync(
+      captureRescueLocation ?? SosLocationService(database: database).capture,
+    );
+    try {
+      final location = await capture;
+      if (_disposed || !rescueMode || generation != _rescueLocationGeneration) {
+        return null;
+      }
+      await shareRescueLocation(location);
+      return location;
+    } catch (_) {
+      if (!_disposed && rescueMode && generation == _rescueLocationGeneration) {
+        rescueLocationError = rescueLocation == null
+            ? 'ยังแชร์ตำแหน่งไม่ได้ ตรวจสิทธิ์/GPS แล้วกดอัปเดตตำแหน่งอีกครั้ง'
+            : 'อัปเดตตำแหน่งไม่ได้ ยังแชร์พิกัดเดิมอยู่ ตรวจสิทธิ์/GPS แล้วลองใหม่';
+      }
+      return null;
+    } finally {
+      if (identical(_rescueCapture, capture)) _rescueCapture = null;
+      if (generation == _rescueLocationGeneration) {
+        rescueLocationLoading = false;
+        _notify();
+      }
+    }
+  }
+
+  void _resetRescueLocation() {
+    _rescueLocationGeneration++;
+    rescueLocation = null;
+    rescueLocationLoading = false;
+    rescueLocationError = null;
+  }
 
   Future<void> shareRescueLocation(SosLocation location) async {
     if (!ready || _disposed || !rescueMode) {
       throw StateError('เปิดโหมดกู้ภัยก่อนแชร์พิกัด');
     }
     rescueLocation = location;
+    rescueLocationError = null;
     _notify();
     await retry();
   }
 
   Future<void> clearRescueLocation() async {
-    rescueLocation = null;
+    _resetRescueLocation();
     _notify();
     await retry();
   }
@@ -158,14 +206,23 @@ class MessageService extends ChangeNotifier {
   void Function(String name)? onSosReceived;
   void Function(String name)? onMediaReceived;
   void Function(IncomingNotice notice)? onNotice;
+  void Function(String id)? onNoticeCancelled;
+  String? activeChatPeerId;
   final Set<String> clockSkewPeers = {};
 
   void _notice(IncomingNotice notice) {
-    if (_disposed || !AppPreferences.instance.alerts) return;
+    if (_disposed) return;
+    final prefs = AppPreferences.instance;
+    if (notice.sos != null) {
+      if (!prefs.sosAlerts) return;
+    } else {
+      if (!prefs.chatAlerts || notice.peerId == activeChatPeerId) return;
+    }
     onNotice?.call(notice);
   }
 
   void _sosNotice(String peer, SosAlert alert) {
+    if (!alert.active) return;
     if (!rescueMode || !alert.isActiveAt(_now())) return;
     onSosReceived?.call(alert.name);
     _notice(
@@ -212,12 +269,13 @@ class MessageService extends ChangeNotifier {
       if (value && mySos?.isActiveAt(_now()) == true) await cancelSos();
       await database.setSetting('rescueMode', '$value');
       rescueMode = value;
-      if (!value) rescueLocation = null;
+      if (!value) _resetRescueLocation();
       _notify();
       await retry();
     } finally {
       _changingRescue = false;
     }
+    if (value && rescueMode) unawaited(updateRescueLocation());
   }
 
   Future<void> publishSos({
@@ -267,7 +325,7 @@ class MessageService extends ChangeNotifier {
       if (active && rescueMode) {
         await database.setSetting('rescueMode', 'false');
         rescueMode = false;
-        rescueLocation = null;
+        _resetRescueLocation();
         _notify();
       }
       await database.saveSos(
@@ -387,7 +445,7 @@ class MessageService extends ChangeNotifier {
         };
         mediaService!.onRelayFileReady = _drainRelayQueues;
         mediaService!.onReceived = (media) {
-          if (!AppPreferences.instance.alerts) return;
+          if (!AppPreferences.instance.chatAlerts) return;
           onMediaReceived?.call(media.senderName);
           _notice(
             IncomingNotice(
@@ -414,6 +472,7 @@ class MessageService extends ChangeNotifier {
         (_) => unawaited(retry()),
       );
       await retry();
+      if (rescueMode) unawaited(updateRescueLocation());
     } catch (e) {
       myId = null;
       error = 'Cannot open message storage: $e';
@@ -627,6 +686,9 @@ class MessageService extends ChangeNotifier {
     if (!peers.containsKey(owner)) {
       await database.savePeer(owner, name);
       peers[owner] = name;
+    }
+    if (changed && !alert.active) {
+      onNoticeCancelled?.call('sos:${alert.incidentId}');
     }
     if (changed) _remoteSos = await database.getRemoteSos();
     _projectSos(owner);

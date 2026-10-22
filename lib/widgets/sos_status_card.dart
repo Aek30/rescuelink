@@ -3,6 +3,7 @@ import '../models/message_model.dart';
 import '../models/sos_alert.dart';
 import '../theme/rescue_theme.dart';
 import 'emergency_type_chip.dart';
+import 'incident_status_chip.dart';
 
 class SosStatusCard extends StatelessWidget {
   const SosStatusCard({
@@ -10,11 +11,13 @@ class SosStatusCard extends StatelessWidget {
     required this.alert,
     required this.deliveries,
     this.announced = false,
+    this.sending = false,
     this.confirmedMessageIds = const {},
   });
   final SosAlert alert;
   final List<MessageModel> deliveries;
   final bool announced;
+  final bool sending;
   final Set<String> confirmedMessageIds;
   @override
   Widget build(BuildContext context) {
@@ -44,11 +47,9 @@ class SosStatusCard extends StatelessWidget {
         ? 'ยกเลิกแล้ว'
         : expired
         ? 'SOS หมดอายุ'
-        : received > 0
-        ? 'มีผู้รับแล้ว $received เครื่อง'
-        : broadcast
-        ? 'ประกาศแล้ว'
-        : 'รอประกาศ';
+        : sending
+        ? 'กำลังส่ง SOS...'
+        : 'ส่ง SOS แล้ว';
     final icon = !alert.active || expired
         ? Icons.block
         : received > 0
@@ -61,26 +62,7 @@ class SosStatusCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: .1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 20, color: color),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    label,
-                    style: TextStyle(color: color, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          IncidentStatusChip(label: label, color: color, icon: icon),
           const SizedBox(height: 16),
           EmergencyTypeChips(types: alert.categories),
           const SizedBox(height: 8),
@@ -93,50 +75,6 @@ class SosStatusCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (var index = 0; index < 3; index++)
-                Expanded(
-                  child: Column(
-                    children: [
-                      Icon(
-                        [
-                          Icons.save_outlined,
-                          Icons.wifi_tethering,
-                          Icons.devices,
-                        ][index],
-                        color:
-                            (index == 0 ||
-                                index == 1 && broadcast ||
-                                index == 2 && received > 0)
-                            ? color
-                            : color.withValues(alpha: .25),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        [
-                          'บันทึกแล้ว',
-                          'ประกาศผ่าน P2P',
-                          'มีผู้รับยืนยัน',
-                        ][index],
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color:
-                              (index == 0 ||
-                                  index == 1 && broadcast ||
-                                  index == 2 && received > 0)
-                              ? color
-                              : RescueTheme.mutedFor(context),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
           Text(
             'ยังไม่ใช่การตอบรับจากเจ้าหน้าที่',
             style: TextStyle(

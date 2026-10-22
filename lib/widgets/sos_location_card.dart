@@ -82,32 +82,27 @@ class SosLocationCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                '2  ตำแหน่ง',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-            IconButton(
-              tooltip: 'ข้อมูลแผนที่ออฟไลน์',
-              icon: const Icon(Icons.info_outline),
-              onPressed: () => showModalBottomSheet<void>(
-                context: context,
-                useSafeArea: true,
-                builder: (_) => const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Text(
-                    'แผนที่ถนนออฟไลน์ครอบคลุมจังหวัดปทุมธานี\n\n'
-                    'ปรับหมุดได้ภายในพื้นที่แผนที่ นอกพื้นที่นี้ยังอ่านและคัดลอกพิกัด GPS ได้ '
-                    'การเปิดแอปแผนที่ภายนอกต้องมีเน็ตหรือแผนที่ที่ดาวน์โหลดไว้',
-                  ),
+        SosStepHeader(
+          step: 2,
+          title: 'ตำแหน่ง',
+          trailing: IconButton(
+            tooltip: 'ข้อมูลแผนที่ออฟไลน์',
+            icon: const Icon(Icons.info_outline),
+            onPressed: () => showModalBottomSheet<void>(
+              context: context,
+              useSafeArea: true,
+              builder: (_) => const Padding(
+                padding: EdgeInsets.all(24),
+                child: Text(
+                  'แผนที่ถนนออฟไลน์ครอบคลุมจังหวัดปทุมธานี\n\n'
+                  'ปรับหมุดได้ภายในพื้นที่แผนที่ นอกพื้นที่นี้ยังอ่านและคัดลอกพิกัด GPS ได้ '
+                  'การเปิดแอปแผนที่ภายนอกต้องมีเน็ตหรือแผนที่ที่ดาวน์โหลดไว้',
                 ),
               ),
             ),
-          ],
+          ),
         ),
+        const SizedBox(height: 6),
         Semantics(
           button: true,
           label: 'เปิดแผนที่เต็มจอเพื่อปรับหมุด',

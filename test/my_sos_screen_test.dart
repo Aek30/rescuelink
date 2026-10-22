@@ -104,7 +104,9 @@ void main() {
     expect(find.text('แก้ไขรายละเอียดแล้ว'), findsOneWidget);
     await tester.tap(find.byTooltip('ลบเหตุ'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('ลบ'));
+    await tester.tap(
+      find.descendant(of: find.byType(AlertDialog), matching: find.text('ลบ')),
+    );
     await tester.pumpAndSettle();
     expect(find.text('ยังไม่มีเหตุ SOS'), findsOneWidget);
     final sync = SosSyncService(store, null);

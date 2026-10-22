@@ -32,12 +32,17 @@ class BundledOfflineMap extends StatefulWidget {
     this.onLocateMe,
     this.onPickLocation,
     this.compact = false,
+    this.showControls = true,
+    this.showOfflineBadge = true,
+    this.showAccuracyCircles = false,
   });
   final List<OfflineMapMarker> markers;
   final SosLocation? focus;
   final double height;
   final bool fullScreen;
   final bool compact;
+  final bool showControls;
+  final bool showOfflineBadge, showAccuracyCircles;
   final VoidCallback? onLocateMe;
   final ValueChanged<SosLocation>? onPickLocation;
 
@@ -190,6 +195,26 @@ class _BundledOfflineMapState extends State<BundledOfflineMap> {
                   animation: _controller,
                   builder: (context, _) => Stack(
                     children: [
+                      if (widget.showAccuracyCircles)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: CustomPaint(
+                              painter: _AccuracyPainter(
+                                markers: widget.markers
+                                    .where((m) => data.contains(m.location))
+                                    .toList(),
+                                project: (p) => MatrixUtils.transformPoint(
+                                  _controller.value,
+                                  project(p),
+                                ),
+                                pixelsPerMeter:
+                                    mapSize.width /
+                                    data.widthMeters *
+                                    _controller.value.getMaxScaleOnAxis(),
+                              ),
+                            ),
+                          ),
+                        ),
                       for (final marker in widget.markers.where(
                         (m) => data.contains(m.location),
                       ))
@@ -203,56 +228,59 @@ class _BundledOfflineMapState extends State<BundledOfflineMap> {
                     ],
                   ),
                 ),
-                // 2. ย้าย "↑ N • ออฟไลน์" ให้เป็น chip เล็กๆ ไม่บังแผนที่
-                Positioned(
-                  top: 12,
-                  left: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: (dark ? const Color(0xFF102D43) : Colors.white)
-                          .withValues(alpha: 0.90),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: dark ? Colors.white24 : const Color(0xFFEAE2D8),
-                        width: 1,
+                // Compact incident previews supply their own offline label.
+                if (widget.showOfflineBadge)
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.08),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
+                      decoration: BoxDecoration(
+                        color: (dark ? const Color(0xFF102D43) : Colors.white)
+                            .withValues(alpha: 0.90),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: dark
+                              ? Colors.white24
+                              : const Color(0xFFEAE2D8),
+                          width: 1,
                         ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.navigation_rounded,
-                          size: 13,
-                          color: Color(0xFFB94612),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'N • ออฟไลน์',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: dark
-                                ? Colors.white
-                                : const Color(0xFF102D43),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.navigation_rounded,
+                            size: 13,
+                            color: Color(0xFFB94612),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'N • ออฟไลน์',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: dark
+                                  ? Colors.white
+                                  : const Color(0xFF102D43),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
                 // 2. เหลือแค่ ซูมเข้า/ออก (กลุ่มเดียว) และปุ่ม "ไปที่ตำแหน่งของฉัน" 1 ปุ่ม
-                if (!widget.compact)
+                if (!widget.compact && widget.showControls)
                   Positioned(
                     top: 12,
                     right: 12,
@@ -489,8 +517,8 @@ class _BundledOfflineMapState extends State<BundledOfflineMap> {
 
   // 2. แก้ปุ่มสีเขียวที่มีวงเงาเทาซ้อนอยู่ให้เป็นปุ่มเดียวที่สะอาด
   Widget _marker(OfflineMapMarker marker, Offset position) => Positioned(
-    left: position.dx - 22,
-    top: position.dy - 22,
+    left: position.dx - 24,
+    top: position.dy - 24,
     child: Semantics(
       label: marker.label,
       button: true,
@@ -512,8 +540,8 @@ class _BundledOfflineMapState extends State<BundledOfflineMap> {
               ),
             ),
         child: Container(
-          width: 44,
-          height: 44,
+          width: 48,
+          height: 48,
           decoration: BoxDecoration(
             color: marker.color,
             shape: BoxShape.circle,
@@ -543,4 +571,44 @@ Size _fit(OfflineMapData data, Size size) {
     (size.height - 24) / data.heightMeters,
   );
   return Size(data.widthMeters * scale, data.heightMeters * scale);
+}
+
+class _AccuracyPainter extends CustomPainter {
+  _AccuracyPainter({
+    required this.markers,
+    required this.project,
+    required this.pixelsPerMeter,
+  });
+  final List<OfflineMapMarker> markers;
+  final Offset Function(SosLocation) project;
+  final double pixelsPerMeter;
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
+    for (final marker in markers) {
+      if (marker.location.manuallySelected || marker.location.accuracy <= 0) {
+        continue;
+      }
+      final center = project(marker.location);
+      final radius = marker.location.accuracy * pixelsPerMeter;
+      canvas.drawCircle(
+        center,
+        radius,
+        Paint()..color = marker.color.withValues(alpha: .12),
+      );
+      canvas.drawCircle(
+        center,
+        radius,
+        Paint()
+          ..color = marker.color.withValues(alpha: .45)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _AccuracyPainter oldDelegate) => true;
 }

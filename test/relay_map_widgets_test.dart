@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rescuelink/widgets/relay_badge.dart';
-import 'package:rescuelink/widgets/offline_location_map.dart';
-import 'package:rescuelink/models/sos_alert.dart';
 
 void main() {
   testWidgets('relay separates intermediary devices from radio hops', (
@@ -32,32 +30,5 @@ void main() {
       ),
     );
     expect(find.byType(TextButton), findsNothing);
-  });
-  testWidgets('offline coordinate diagram is readable on narrow screens', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(320, 700);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: OfflineLocationMap(
-              location: SosLocation(
-                latitude: 13.7563,
-                longitude: 100.5018,
-                accuracy: 12,
-                capturedAt: DateTime.utc(2026),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    expect(find.text('13.756300, 100.501800'), findsOneWidget);
-    expect(find.textContaining('ไม่ใช่ตำแหน่งปัจจุบันของคุณ'), findsOneWidget);
-    expect(tester.takeException(), isNull);
   });
 }

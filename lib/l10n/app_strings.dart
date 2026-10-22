@@ -1,5 +1,17 @@
 /// English resources used by the existing AppPreferences localization.
 const appEnglish = <String, String>{
+  'ข้อความและสื่อ': 'Messages and media',
+  'คำขอ SOS': 'SOS requests',
+  'คำขอช่วยเหลือ SOS': 'SOS requests for help',
+  'ข้อความใหม่': 'new messages',
+  'ดู SOS': 'View SOS',
+  'เปิดแชต': 'Open chat',
+  'ปิดการแจ้งเตือน SOS?': 'Turn off SOS notifications?',
+  'คุณอาจพลาดคำขอช่วยเหลือฉุกเฉิน ต้องการปิดการแจ้งเตือน SOS หรือไม่':
+      'You may miss emergency requests for help. Turn off SOS notifications?',
+  'ยืนยันปิด': 'Confirm turn off',
+  'เลือกแจ้งเตือนข้อความและสื่อ หรือคำขอ SOS แยกกันได้ การแจ้งเตือนขณะพักแอปต้องอนุญาตสิทธิ์ของระบบ':
+      'Choose message and media or SOS alerts separately. Background notifications require system permission.',
   'ระบุเหตุ จำนวนคน และตำแหน่งของคุณ':
       'Add the emergency, number of people, and your location',
   'นับรวมตัวคุณและผู้ที่อยู่ด้วย': 'Include yourself and everyone with you',
@@ -46,9 +58,6 @@ const appEnglish = <String, String>{
       "Sent when the recipient device reconnects",
   "บัญชี / Sync": "Account / Sync",
   "การแจ้งเตือน": "Notifications",
-  "ข้อความและ SOS ขณะใช้แอป": "In-app messages and SOS",
-  "ระบบเดิมใช้การแจ้งเตือนร่วมกัน ยังไม่รองรับแยกประเภท, Push Notification หรือแจ้งเตือนยืนยันเคส":
-      "The existing service uses one shared preference. Separate categories, push notifications and case confirmation alerts are not supported.",
   "ธีมการแสดงผล": "Display theme",
   "ตามระบบ": "System",
   "โหมดสว่าง": "Light mode",

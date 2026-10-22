@@ -52,6 +52,82 @@ class EmergencyTypeChips extends StatelessWidget {
   );
 }
 
+class SosStepHeader extends StatelessWidget {
+  const SosStepHeader({
+    super.key,
+    required this.step,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+  });
+  final int step;
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final accent = RescueTheme.accentFor(context);
+    final badgeFg = dark ? RescueTheme.darkBackground : Colors.white;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          padding: const EdgeInsets.all(6),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: accent,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: accent.withValues(alpha: .24),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Text(
+            '$step',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              height: 1,
+              color: badgeFg,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (subtitle != null)
+                Text(
+                  subtitle!,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: RescueTheme.mutedFor(context),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        ?trailing,
+      ],
+    );
+  }
+}
+
 class SosCard extends StatelessWidget {
   const SosCard({super.key, required this.child});
   final Widget child;

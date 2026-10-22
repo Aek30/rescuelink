@@ -61,7 +61,7 @@ void main() {
     expect(find.text('หน่วยกู้ภัย'), findsNothing);
     expect(service.rescueMode, isFalse);
     final send = find.text('ส่ง SOS');
-    await tester.ensureVisible(find.text('3  จำนวนผู้ต้องการความช่วยเหลือ'));
+    await tester.ensureVisible(find.text('จำนวนผู้ต้องการความช่วยเหลือ'));
     expect(tester.getCenter(send).dy, lessThan(844));
     await tester.pumpAndSettle();
     if (const bool.fromEnvironment('UX_CAPTURE')) {

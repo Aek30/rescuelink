@@ -39,6 +39,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    widget.service.activeChatPeerId = widget.peerId;
     WidgetsBinding.instance.addObserver(this);
   }
 
@@ -50,6 +51,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    if (widget.service.activeChatPeerId == widget.peerId) {
+      widget.service.activeChatPeerId = null;
+    }
     _focusNode.dispose();
     _text.dispose();
     super.dispose();

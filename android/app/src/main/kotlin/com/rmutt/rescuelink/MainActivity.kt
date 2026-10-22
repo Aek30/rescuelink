@@ -11,11 +11,49 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.media.AudioAttributes
+import android.media.RingtoneManager
+import android.graphics.Color
+import android.content.pm.PackageManager
+import android.Manifest
 
 class MainActivity : FlutterActivity() {
     private var locationCapture: LocationCapture? = null
     private var sessionChannel: MethodChannel? = null
     private var notificationReady = false
+    private fun notificationId(key: String) = key.hashCode() and 0x7fffffff
+
+    private fun ensureChannels() {
+        if (Build.VERSION.SDK_INT < 26) return
+        val manager = getSystemService(NotificationManager::class.java)
+        val sos = NotificationChannel("rescue-sos-v3", "คำขอช่วยเหลือ SOS", NotificationManager.IMPORTANCE_HIGH).apply {
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 1000, 400, 1000, 400, 1500)
+            enableLights(true)
+            lightColor = Color.RED
+            setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+                AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        }
+        val chat = NotificationChannel("rescue-chat-v3", "ข้อความใหม่", NotificationManager.IMPORTANCE_HIGH).apply {
+            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+        }
+        manager.createNotificationChannels(listOf(sos, chat))
+    }
+
+    // Updating channel names preserves user-controlled sound/importance settings.
+    private fun updateChannelNames(sosName: String?, chatName: String?) {
+        if (Build.VERSION.SDK_INT < 26) return
+        val manager = getSystemService(NotificationManager::class.java)
+        for ((id, name) in listOf("rescue-sos-v3" to sosName, "rescue-chat-v3" to chatName)) {
+            val channel = manager.getNotificationChannel(id) ?: continue
+            if (!name.isNullOrBlank() && channel.name.toString() != name) {
+                channel.name = name
+                manager.createNotificationChannel(channel)
+            }
+        }
+    }
     private fun notificationData(source: Intent?): Map<String, String>? {
         if (source?.hasExtra("notice_peerId") != true) return null
         return listOf("id", "peerId", "name", "body", "sos").mapNotNull { key ->
@@ -43,6 +81,7 @@ class MainActivity : FlutterActivity() {
     }
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        ensureChannels()
         locationCapture = LocationCapture(this)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.rmutt.rescuelink/location")
             .setMethodCallHandler { call, result ->
@@ -69,30 +108,62 @@ class MainActivity : FlutterActivity() {
                             result.success(notificationData(intent))
                             clearNotificationData()
                         }
+                        "channelNames" -> {
+                            updateChannelNames(call.argument<String>("sosChannelName"), call.argument<String>("chatChannelName"))
+                            result.success(null)
+                        }
+                        "cancel" -> {
+                            val key = call.argument<String>("id")
+                                ?: call.argument<String>("peerId")?.let { "chat:$it" }
+                            if (key != null) getSystemService(NotificationManager::class.java)
+                                .cancel("rescuelink-notice", notificationId(key))
+                            result.success(null)
+                        }
                         "notify" -> {
+                            if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                                result.success(null)
+                                return@setMethodCallHandler
+                            }
                             val manager = getSystemService(NotificationManager::class.java)
                             val isSos = call.argument<String>("sos") != null
-                            val channelId = if (isSos) "rescue-sos-v2" else "rescue-chat-v2"
-                            if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(
-                                NotificationChannel(channelId, if (isSos) "คำขอช่วยเหลือ SOS" else "ข้อความใหม่", NotificationManager.IMPORTANCE_HIGH))
-                            val id = (call.argument<String>("id") ?: "notice").hashCode() and 0x7fffffff
+                            val channelId = if (isSos) "rescue-sos-v3" else "rescue-chat-v3"
+                            updateChannelNames(call.argument<String>("sosChannelName"), call.argument<String>("chatChannelName"))
+                            val key = call.argument<String>("notificationId") ?: call.argument<String>("id") ?: "notice"
+                            val id = notificationId(key)
                             val target = Intent(this, MainActivity::class.java)
                                 .setAction("com.rmutt.rescuelink.NOTICE.$id")
                                 .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                            for (key in listOf("id", "peerId", "name", "body", "sos")) {
-                                call.argument<String>(key)?.let { target.putExtra("notice_$key", it) }
+                            for (field in listOf("id", "peerId", "name", "body", "sos")) {
+                                call.argument<String>(field)?.let { target.putExtra("notice_$field", it) }
                             }
                             val open = PendingIntent.getActivity(this, id, target, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
                             val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, channelId) else Notification.Builder(this)
                             val body = call.argument<String>("preview") ?: call.argument<String>("body") ?: ""
-                            manager.notify("rescuelink-notice", id, builder
-                                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                            builder.setSmallIcon(R.drawable.ic_stat_rescuelink)
                                 .setContentTitle(call.argument<String>("title"))
                                 .setContentText(body).setStyle(Notification.BigTextStyle().bigText(body))
-                                .setContentIntent(open).setAutoCancel(true).setOnlyAlertOnce(true)
+                                .setContentIntent(open).setAutoCancel(true)
+                                .setOnlyAlertOnce(!isSos)
                                 .setPriority(Notification.PRIORITY_HIGH)
-                                .addAction(Notification.Action.Builder(null, if (isSos) "ดู SOS" else "เปิดแชต", open).build())
-                                .build())
+                                .setNumber(call.argument<Int>("unreadCount") ?: 1)
+                                .addAction(Notification.Action.Builder(null, call.argument<String>("actionLabel") ?: if (isSos) "ดู SOS" else "เปิดแชต", open).build())
+                            if (isSos) {
+                                builder.setCategory(Notification.CATEGORY_ALARM).setVisibility(Notification.VISIBILITY_PUBLIC)
+                                if (Build.VERSION.SDK_INT < 26) {
+                                    builder.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+                                        AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build())
+                                        .setVibrate(longArrayOf(0, 1000, 400, 1000, 400, 1500))
+                                        .setLights(Color.RED, 1000, 400)
+                                }
+                            } else {
+                                val publicBuilder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, channelId) else Notification.Builder(this)
+                                builder.setVisibility(Notification.VISIBILITY_PRIVATE)
+                                    .setPublicVersion(publicBuilder.setSmallIcon(R.drawable.ic_stat_rescuelink)
+                                        .setContentTitle(call.argument<String>("publicTitle") ?: "ข้อความใหม่")
+                                        .setVisibility(Notification.VISIBILITY_PUBLIC).build())
+                                if (Build.VERSION.SDK_INT < 26) builder.setDefaults(Notification.DEFAULT_ALL)
+                            }
+                            manager.notify("rescuelink-notice", id, builder.build())
                             result.success(null)
                         }
                         "start" -> {
@@ -101,28 +172,6 @@ class MainActivity : FlutterActivity() {
                             result.success(true)
                         }
                         "stop" -> { stopService(Intent(this, ConnectionService::class.java)); result.success(null) }
-                        "mediaAlert" -> {
-                            val manager = getSystemService(NotificationManager::class.java)
-                            if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel("chat-media", "รูปภาพและวิดีโอ", NotificationManager.IMPORTANCE_DEFAULT))
-                            val id = (call.argument<String>("messageId") ?: "media").hashCode() and 0x7fffffff
-                            val open = PendingIntent.getActivity(this, id, Intent(this, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-                            val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, "chat-media") else Notification.Builder(this)
-                            manager.notify("chat-media", id, builder.setSmallIcon(android.R.drawable.ic_menu_gallery)
-                                .setContentTitle("ได้รับรูปภาพหรือวิดีโอแล้ว")
-                                .setContentText(call.argument<String>("name") ?: "เปิด RescueLink เพื่อดูสื่อ")
-                                .setContentIntent(open).setAutoCancel(true).setOnlyAlertOnce(true).build())
-                            result.success(null)
-                        }
-                        "alert" -> {
-                            val manager = getSystemService(NotificationManager::class.java)
-                            if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel("sos", "คำขอ SOS", NotificationManager.IMPORTANCE_HIGH))
-                            val open = PendingIntent.getActivity(this, 1, Intent(this, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-                            val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, "sos") else Notification.Builder(this)
-                            manager.notify(1002, builder.setSmallIcon(android.R.drawable.ic_dialog_alert).setContentTitle("ได้รับคำขอ SOS")
-                                .setContentText(call.argument<String>("name") ?: "เปิด RescueLink เพื่อดูรายละเอียด")
-                                .setContentIntent(open).setAutoCancel(true).setPriority(Notification.PRIORITY_HIGH).build())
-                            result.success(null)
-                        }
                         else -> result.notImplemented()
                     }
                 } catch (e: Exception) { result.error("session", e.message, null) }

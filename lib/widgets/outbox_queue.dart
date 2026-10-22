@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/message_model.dart';
 import '../models/media_model.dart';
+import '../models/responder_update.dart';
 import '../services/media_upload_service.dart';
 import '../models/sos_alert.dart';
 import '../theme/rescue_theme.dart';
@@ -37,6 +38,14 @@ class _OutboxQueueState extends State<OutboxQueue> {
   int? _filter;
   final Set<String> _expanded = {};
 
+  static final RegExp _rawCoordRegExp = RegExp(
+    r'^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$',
+  );
+
+  static final RegExp _uuidRegExp = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+
   static const _labels = ['รอการยืนยัน', 'ถึงเครื่องรับแล้ว', 'ซิงก์แล้ว'];
   static const _icons = [
     Icons.schedule,
@@ -59,6 +68,38 @@ class _OutboxQueueState extends State<OutboxQueue> {
     Color(0xFF131F2A),
   ];
 
+  bool _isRawCoordinate(String text) {
+    final match = _rawCoordRegExp.firstMatch(text);
+    if (match == null) return false;
+    final lat = double.tryParse(match.group(1)!);
+    final lng = double.tryParse(match.group(2)!);
+    return lat != null &&
+        lng != null &&
+        lat.abs() <= 90 &&
+        lng.abs() <= 180;
+  }
+
+  String _formatMessageText(String raw) {
+    if (_isRawCoordinate(raw)) return 'แชร์ตำแหน่ง';
+    final clean = ResponderUpdate.cleanDisplay(raw).trim();
+    if (_isRawCoordinate(clean)) return 'แชร์ตำแหน่ง';
+    return clean;
+  }
+
+  String _receiverLabel(MessageModel m) {
+    final mapped = widget.peers[m.receiverId]?.trim();
+    if (mapped != null && mapped.isNotEmpty && !_uuidRegExp.hasMatch(mapped)) {
+      return mapped;
+    }
+    if (m.receiverId == 'all' || m.receiverId == 'broadcast') {
+      return 'อุปกรณ์ใกล้เคียง';
+    }
+    if (_uuidRegExp.hasMatch(m.receiverId)) {
+      return 'ผู้ติดต่อ';
+    }
+    return m.receiverId;
+  }
+
   bool _cloudReady(MessageModel m) => m.type == MessageType.media
       ? widget.mediaUploads[m.text]?.state == UploadState.ready
       : widget.cloudSyncedMessageIds.contains(m.id);
@@ -73,6 +114,7 @@ class _OutboxQueueState extends State<OutboxQueue> {
 
   String _date(DateTime value) {
     final d = value.toLocal();
+    final now = DateTime.now();
     const months = [
       'ม.ค.',
       'ก.พ.',
@@ -87,28 +129,12 @@ class _OutboxQueueState extends State<OutboxQueue> {
       'พ.ย.',
       'ธ.ค.',
     ];
-    return '${d.day} ${months[d.month - 1]} ค.ศ. ${d.year} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
-  }
-
-  String _compactDate(DateTime value) {
-    final d = value.toLocal();
-    const months = [
-      'ม.ค.',
-      'ก.พ.',
-      'มี.ค.',
-      'เม.ย.',
-      'พ.ค.',
-      'มิ.ย.',
-      'ก.ค.',
-      'ส.ค.',
-      'ก.ย.',
-      'ต.ค.',
-      'พ.ย.',
-      'ธ.ค.',
-    ];
-    final hh = d.hour.toString().padLeft(2, '0');
-    final mm = d.minute.toString().padLeft(2, '0');
-    return '${d.day} ${months[d.month - 1]} $hh:$mm';
+    final clock =
+        '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+    if (d.year == now.year) {
+      return '${d.day} ${months[d.month - 1]} $clock';
+    }
+    return '${d.day} ${months[d.month - 1]} พ.ศ. ${d.year + 543} $clock';
   }
 
   SosAlert? _alert(MessageModel m) {
@@ -120,53 +146,44 @@ class _OutboxQueueState extends State<OutboxQueue> {
     }
   }
 
-  String _title(MessageModel m, SosAlert? alert) => m.type == MessageType.sos
-      ? alert == null
-            ? 'ข้อความ SOS'
-            : '${alert.active ? 'ขอความช่วยเหลือ' : 'ยกเลิก SOS'} • ${alert.categoriesLabel}'
-      : m.type == MessageType.media
-      ? '${widget.mediaFiles[m.text]?.isVideo == true ? 'วิดีโอ' : 'รูปภาพ'}: ${widget.mediaFiles[m.text]?.fileName ?? 'ไฟล์สื่อ'}'
-      : m.text;
+  String _title(MessageModel m, SosAlert? alert) {
+    if (m.type == MessageType.sos) {
+      return alert == null
+          ? 'ข้อความ SOS'
+          : '${alert.active ? 'ขอความช่วยเหลือ' : 'ยกเลิก SOS'} • ${alert.categoriesLabel}';
+    }
+    if (m.type == MessageType.media) {
+      final media = widget.mediaFiles[m.text];
+      if (media == null) return 'ส่งรูป / สื่อ';
+      return media.isVideo ? 'ส่งวิดีโอ' : 'ส่งรูป';
+    }
+    return _formatMessageText(m.text);
+  }
 
-  void _details(MessageModel m) {
-    final alert = _alert(m);
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'รายละเอียดข้อความ',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 16),
-                SelectableText(
-                  alert?.summary ??
-                      (m.type == MessageType.sos
-                          ? 'ไม่สามารถอ่านรายละเอียด SOS ได้'
-                          : _title(m, alert)),
-                ),
-                const SizedBox(height: 16),
-                Text('ถึง ${widget.peers[m.receiverId] ?? m.receiverId}'),
-                Text('สร้างเมื่อ ${_date(m.timestamp)}'),
-                Text('สถานะ: ${_status(m)}'),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+  String? _mediaUploadSummary(MessageModel m) {
+    if (m.type != MessageType.media) return null;
+    final upload = widget.mediaUploads[m.text];
+    if (upload == null) return null;
+    final media = widget.mediaFiles[m.text];
+    final total = media?.fileSize ?? 0;
+    final percent = total > 0
+        ? ((upload.bytes / total) * 100).round().clamp(0, 100)
+        : null;
+
+    return switch (upload.state) {
+      UploadState.uploading =>
+        percent != null ? 'กำลังส่ง $percent%' : 'กำลังส่ง…',
+      UploadState.verifying => 'กำลังตรวจสอบไฟล์…',
+      UploadState.ready => 'ส่งเสร็จแล้ว',
+      UploadState.failed => 'ส่งไม่สำเร็จ • จะลองใหม่อัตโนมัติ',
+      UploadState.queued => 'อยู่ในคิว • ซิงก์อัตโนมัติเมื่อออนไลน์และเข้าสู่ระบบ',
+    };
   }
 
   String _status(MessageModel m) => _cloudReady(m)
-      ? 'สำรองข้อมูลไปยัง Supabase Cloud สำเร็จ • ${m.status == MessageStatus.delivered ? 'เครื่องรับยืนยันแล้ว' : 'ยังไม่ยืนยันการรับที่ปลายทาง'}'
+      ? (m.status == MessageStatus.delivered
+            ? 'เครื่องรับยืนยันแล้ว'
+            : 'ยังไม่ยืนยันการรับที่ปลายทาง')
       : m.type == MessageType.media
       ? '${switch (widget.mediaUploads[m.text]?.state) {
           UploadState.uploading => 'กำลังซิงก์ไฟล์ขึ้น Cloud',
@@ -182,6 +199,15 @@ class _OutboxQueueState extends State<OutboxQueue> {
           MessageStatus.synced =>
             'ข้อมูลเก่าระบุซิงก์แล้ว • ยังไม่มีผล Cloud ยืนยัน',
         };
+
+  String _sosReadableDetails(SosAlert alert) {
+    final lines = <String>[
+      'ผู้แจ้ง: ${alert.name} • ${alert.people} คน',
+      if (alert.details.trim().isNotEmpty) alert.details.trim(),
+      alert.location != null ? 'แนบพิกัดตำแหน่งแล้ว' : 'ไม่ได้แนบพิกัด',
+    ];
+    return lines.join('\n');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -381,7 +407,8 @@ class _OutboxQueueState extends State<OutboxQueue> {
         : _colors[group];
     final alert = _alert(m);
     final isExpanded = _expanded.contains(m.id);
-    final receiverName = widget.peers[m.receiverId] ?? m.receiverId;
+    final receiverName = _receiverLabel(m);
+    final uploadSummary = _mediaUploadSummary(m);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
@@ -465,7 +492,7 @@ class _OutboxQueueState extends State<OutboxQueue> {
                             ],
                           ),
                           const SizedBox(height: 3),
-                          // ─── Meta row: สถานะ • วันที่ • ผู้รับ ───
+                          // ─── Meta row: สถานะ • ผู้รับ ───
                           Wrap(
                             spacing: 6,
                             runSpacing: 2,
@@ -494,14 +521,6 @@ class _OutboxQueueState extends State<OutboxQueue> {
                                       ),
                                     ),
                                   ],
-                                ),
-                              ),
-                              Text(
-                                '${m.type == MessageType.sos ? 'SOS' : 'ข้อความ'} • ${_compactDate(m.timestamp)}',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: RescueTheme.mutedFor(context),
-                                  height: 1.2,
                                 ),
                               ),
                               Text(
@@ -534,27 +553,48 @@ class _OutboxQueueState extends State<OutboxQueue> {
                         : const Color(0xFFE2E8F0),
                   ),
                   const SizedBox(height: 8),
+                  if (m.type != MessageType.media) ...[
+                    Text(
+                      'รายละเอียดข้อความ',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12.5,
+                        color: color,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    SelectableText(
+                      alert != null
+                          ? _sosReadableDetails(alert)
+                          : (m.type == MessageType.sos
+                                ? 'ข้อความขอความช่วยเหลือฉุกเฉิน'
+                                : _formatMessageText(m.text)),
+                      style: TextStyle(
+                        fontSize: 13,
+                        height: 1.35,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                  ] else if (uploadSummary != null) ...[
+                    Text(
+                      uploadSummary,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                  ],
                   Text(
-                    'รายละเอียดข้อความ',
+                    'เวลาส่ง: ${_date(m.timestamp)}',
                     style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12.5,
-                      color: color,
+                      fontSize: 12,
+                      color: RescueTheme.mutedFor(context),
                     ),
                   ),
                   const SizedBox(height: 4),
-                  SelectableText(
-                    alert?.summary ??
-                        (m.type == MessageType.sos
-                            ? 'ไม่สามารถอ่านรายละเอียด SOS ได้'
-                            : m.text),
-                    style: TextStyle(
-                      fontSize: 13,
-                      height: 1.35,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
                   Row(
                     children: [
                       Icon(Icons.info_outline, size: 13, color: color),
@@ -570,47 +610,6 @@ class _OutboxQueueState extends State<OutboxQueue> {
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'สร้างเมื่อ ${_date(m.timestamp)}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: RescueTheme.mutedFor(context),
-                    ),
-                  ),
-                  if (alert?.location != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      '📍 พิกัด: ${alert!.location!.latitude.toStringAsFixed(6)}, ${alert.location!.longitude.toStringAsFixed(6)}',
-                      style: const TextStyle(fontSize: 11.5),
-                    ),
-                  ],
-                  if (alert != null && alert.details.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'รายละเอียด: ${alert.details}',
-                      style: const TextStyle(fontSize: 11.5),
-                    ),
-                  ],
-                  const SizedBox(height: 4),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: () => _details(m),
-                      icon: const Icon(Icons.open_in_new, size: 13),
-                      label: const Text(
-                        'เปิดหน้าต่างเต็ม',
-                        style: TextStyle(fontSize: 11),
-                      ),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ),
                   ),
                 ],
               ],

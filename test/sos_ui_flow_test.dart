@@ -131,10 +131,12 @@ void main() {
         ),
       );
       await show();
-      expect(find.text('รอประกาศ'), findsOneWidget);
+      expect(find.text('ส่ง SOS แล้ว'), findsOneWidget);
       expect(find.textContaining('มีผู้รับแล้ว'), findsNothing);
       await show(receipts: {'m'});
-      expect(find.text('มีผู้รับแล้ว 1 เครื่อง'), findsOneWidget);
+      expect(find.text('ส่ง SOS แล้ว'), findsOneWidget);
+      expect(find.text('ประกาศผ่าน P2P'), findsNothing);
+      expect(find.text('มีผู้รับยืนยัน'), findsNothing);
       await show(canceled: true, receipts: {'m'});
       expect(find.text('ยกเลิกแล้ว'), findsOneWidget);
       expect(find.byIcon(Icons.block), findsOneWidget);

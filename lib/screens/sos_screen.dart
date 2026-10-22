@@ -12,6 +12,7 @@ import '../widgets/emergency_type_chip.dart';
 import '../widgets/sos_confirmation_dialog.dart';
 import '../widgets/sos_location_card.dart';
 import '../widgets/sos_status_card.dart';
+import '../widgets/sos_cancel_dialog.dart';
 import 'my_sos_screen.dart';
 
 class SosScreen extends StatefulWidget {
@@ -36,10 +37,14 @@ class _SosScreenState extends State<SosScreen> {
   String? _error, _locationError;
   late final SosLocationService _locationService;
   Timer? _ageTimer;
+  Timer? _expiryTimer;
+  String? _activeIncidentId;
 
   String get _requesterName {
     final name =
-        widget.service.mySos?.name ??
+        (widget.service.mySos?.isActiveAt(DateTime.now().toUtc()) == true
+            ? widget.service.mySos?.name
+            : null) ??
         AppPreferences.instance.displayName?.trim();
     return name != null && name.isNotEmpty
         ? name
@@ -51,7 +56,8 @@ class _SosScreenState extends State<SosScreen> {
     super.initState();
     _locationService = SosLocationService(database: widget.service.database);
     final alert = widget.service.mySos;
-    if (alert != null) {
+    if (alert != null && alert.isActiveAt(DateTime.now().toUtc())) {
+      _activeIncidentId = alert.incidentId;
       _details.text = alert.details;
       _types
         ..clear()
@@ -61,12 +67,54 @@ class _SosScreenState extends State<SosScreen> {
       _recipients.addAll(widget.service.sosRecipients);
     }
     _detailsFocus.addListener(_rebuild);
+    widget.service.addListener(_syncIncident);
+    _scheduleExpiry();
     _ageTimer = Timer.periodic(const Duration(minutes: 1), (_) => _rebuild());
     WidgetsBinding.instance.addPostFrameCallback((_) => _initializeLocation());
   }
 
   void _rebuild() {
     if (mounted) setState(() {});
+  }
+
+  void _scheduleExpiry() {
+    _expiryTimer?.cancel();
+    final alert = widget.service.mySos;
+    final now = DateTime.now().toUtc();
+    if (alert != null && alert.isActiveAt(now)) {
+      _expiryTimer = Timer(alert.expiresAt.difference(now), _syncIncident);
+    }
+  }
+
+  void _syncIncident() {
+    if (!mounted) return;
+    final alert = widget.service.mySos;
+    final active = alert?.isActiveAt(DateTime.now().toUtc()) == true;
+    final ended = _activeIncidentId != null && !active;
+    _activeIncidentId = active ? alert!.incidentId : null;
+    _scheduleExpiry();
+    if (ended) {
+      setState(() {
+        _editing = false;
+        _details.clear();
+        _types.clear();
+        _recipients.clear();
+        _people = 1;
+        _location = null;
+        _locationRemoved = false;
+        _locationGeneration++;
+        _error = null;
+        _locationError = null;
+      });
+      // Reuse only the GPS cache, never the previous incident's manual pin.
+      unawaited(
+        (_locationRead ?? Future<SosLocation?>.value()).then((_) {
+          if (mounted) return _initializeLocation();
+        }),
+      );
+    } else {
+      _rebuild();
+    }
   }
 
   Future<void> _initializeLocation() async {
@@ -85,6 +133,8 @@ class _SosScreenState extends State<SosScreen> {
   @override
   void dispose() {
     _ageTimer?.cancel();
+    _expiryTimer?.cancel();
+    widget.service.removeListener(_syncIncident);
     _detailsFocus.removeListener(_rebuild);
     _detailsFocus.dispose();
     _details.dispose();
@@ -204,30 +254,7 @@ class _SosScreenState extends State<SosScreen> {
   Future<void> _cancel() async {
     final reason = await showDialog<String>(
       context: context,
-      builder: (context) => SimpleDialog(
-        title: const Text('ยกเลิก SOS?'),
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(24, 0, 24, 16),
-            child: Text('จะแจ้งผู้รับเดิมว่ายกเลิก\nเลือกเหตุผลเพื่อยืนยัน'),
-          ),
-          for (final reason in [
-            'ได้รับความช่วยเหลือแล้ว',
-            'ปลอดภัยแล้ว',
-            'แจ้งผิด',
-            'อื่น ๆ',
-          ])
-            SimpleDialogOption(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              onPressed: () => Navigator.pop(context, reason),
-              child: Text(reason),
-            ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('กลับ'),
-          ),
-        ],
-      ),
+      builder: (_) => const SosCancelDialog(),
     );
     if (reason == null || !mounted) return;
     await _run(() async {
@@ -324,15 +351,12 @@ class _SosScreenState extends State<SosScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          '1  ประเภทเหตุ',
-          style: TextStyle(fontWeight: FontWeight.w600),
+        const SosStepHeader(
+          step: 1,
+          title: 'ประเภทเหตุ',
+          subtitle: 'เลือกได้หลายประเภท',
         ),
-        Text(
-          'เลือกได้หลายประเภท',
-          style: TextStyle(fontSize: 12, color: RescueTheme.mutedFor(context)),
-        ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         for (var i = 0; i < types.length; i += 2)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -356,11 +380,11 @@ class _SosScreenState extends State<SosScreen> {
   Widget _peoplePicker() => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const Text(
-        '3  จำนวนผู้ต้องการความช่วยเหลือ',
-        style: TextStyle(fontWeight: FontWeight.w600),
+      const SosStepHeader(
+        step: 3,
+        title: 'จำนวนผู้ต้องการความช่วยเหลือ',
       ),
-      const SizedBox(height: 8),
+      const SizedBox(height: 10),
       Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -415,7 +439,7 @@ class _SosScreenState extends State<SosScreen> {
     builder: (_) => const Padding(
       padding: EdgeInsets.all(24),
       child: Text(
-        'การส่ง SOS ทำงานอย่างไร?\n\nใช้ P2P โดยไม่ต้องมีอินเทอร์เน็ต คำขอที่บันทึกจะประกาศเมื่อเชื่อมต่อเครื่องอื่น '
+        'การส่ง SOS ทำงานอย่างไร?\n\nส่งถึงเครื่องใกล้เคียงโดยไม่ต้องมีอินเทอร์เน็ต คำขอที่บันทึกจะประกาศเมื่อเชื่อมต่อเครื่องอื่น '
         'และส่งต่อผ่านเครื่องอื่น การรับข้อความไม่ใช่การยืนยันรับเคสจากเจ้าหน้าที่ '
         'หากยังไม่ได้รับความช่วยเหลือ สามารถส่งซ้ำหรือเพิ่มข้อมูลได้',
       ),
@@ -457,9 +481,18 @@ class _SosScreenState extends State<SosScreen> {
               onPressed: _help,
               icon: const Icon(Icons.help_outline),
             ),
-            IconButton(
+            IconButton.filledTonal(
               tooltip: 'รายการเหตุ SOS ของฉัน',
-              icon: const Icon(Icons.history),
+              style: IconButton.styleFrom(
+                backgroundColor: RescueTheme.accentFor(
+                  context,
+                ).withValues(alpha: .10),
+                foregroundColor: RescueTheme.accentFor(context),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              icon: const Icon(Icons.history_rounded),
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute<void>(
@@ -472,234 +505,260 @@ class _SosScreenState extends State<SosScreen> {
             ),
           ],
         ),
-        bottomNavigationBar: SafeArea(
-          top: false,
-          child: Container(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            padding: EdgeInsets.fromLTRB(
-              16,
-              8,
-              16,
-              8 + MediaQuery.viewInsetsOf(context).bottom,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: formVisible
-                        ? kSosRed
-                        : const Color(0xFF9A3412),
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size.fromHeight(56),
-                  ),
-                  onPressed:
-                      _busy || !service.ready || formVisible && _types.isEmpty
-                      ? null
-                      : formVisible
-                      ? _send
-                      : () => _run(service.retry),
-                  icon: Icon(formVisible ? Icons.sos_rounded : Icons.refresh),
-                  label: Text(
-                    _busy
-                        ? 'กำลังบันทึก…'
-                        : formVisible
-                        ? active
-                              ? 'อัปเดต SOS'
-                              : 'ส่ง SOS'
-                        : 'ส่งซ้ำ',
-                  ),
-                ),
-                if (formVisible)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 4),
-                    child: Text(
-                      'ตรวจสอบอีกครั้งก่อนส่ง',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Text(
-                    _error!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ),
-              if (current != null)
-                SosStatusCard(
-                  alert: current,
-                  deliveries: deliveries,
-                  announced: service.currentSosAnnounced,
-                  confirmedMessageIds: service.receivedRoutes.keys.toSet(),
-                ),
-              if (formVisible) ...[
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 16),
-                  child: Text(
-                    'เหตุ • ตำแหน่ง • จำนวนคน',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                ),
-                SosCard(child: _typePicker()),
-                SosCard(
-                  child: Column(
-                    children: [
-                      if (!_locationRemoved)
-                        SosLocationCard(
-                          location: _location,
-                          reading: _readingLocation,
-                          onRefresh: _busy ? () {} : _readLocation,
-                          onChanged: (value) => setState(() {
-                            _locationGeneration++;
-                            _location = value;
-                            _locationError = null;
-                          }),
-                        ),
-                      if (_locationError != null && !_locationRemoved)
-                        Text(
-                          _locationError!,
+        body: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Text(
+                          _error!,
                           style: TextStyle(
-                            fontSize: 12,
-                            color: RescueTheme.mutedFor(context),
+                            color: Theme.of(context).colorScheme.error,
                           ),
                         ),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text(
-                          'ไม่แนบพิกัด',
-                          style: TextStyle(fontSize: 14),
+                      ),
+                    if (active)
+                      SosStatusCard(
+                        alert: current!,
+                        sending: _busy,
+                        deliveries: deliveries,
+                        announced: service.currentSosAnnounced,
+                        confirmedMessageIds: service.receivedRoutes.keys
+                            .toSet(),
+                      ),
+                    if (formVisible) ...[
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 16),
+                        child: Text(
+                          'เหตุ • ตำแหน่ง • จำนวนคน',
+                          style: TextStyle(fontSize: 12),
                         ),
-                        value: _locationRemoved,
-                        onChanged: _busy
-                            ? null
-                            : (value) {
-                                setState(() {
-                                  _locationRemoved = value;
+                      ),
+                      SosCard(child: _typePicker()),
+                      SosCard(
+                        child: Column(
+                          children: [
+                            if (_locationRemoved)
+                              const SosStepHeader(step: 2, title: 'ตำแหน่ง')
+                            else
+                              SosLocationCard(
+                                location: _location,
+                                reading: _readingLocation,
+                                onRefresh: _busy ? () {} : _readLocation,
+                                onChanged: (value) => setState(() {
                                   _locationGeneration++;
-                                });
-                                if (!value && !_readingLocation) {
-                                  _readLocation();
-                                }
-                              },
+                                  _location = value;
+                                  _locationError = null;
+                                }),
+                              ),
+                            if (_locationError != null && !_locationRemoved)
+                              Text(
+                                _locationError!,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: RescueTheme.mutedFor(context),
+                                ),
+                              ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text(
+                                'ไม่แนบพิกัด',
+                                style: TextStyle(fontSize: 14),
+                              ),
+                              value: _locationRemoved,
+                              onChanged: _busy
+                                  ? null
+                                  : (value) {
+                                      setState(() {
+                                        _locationRemoved = value;
+                                        _locationGeneration++;
+                                      });
+                                      if (!value && !_readingLocation) {
+                                        _readLocation();
+                                      }
+                                    },
+                            ),
+                          ],
+                        ),
+                      ),
+                      SosCard(child: _peoplePicker()),
+                      SosCard(
+                        child: TextField(
+                          controller: _details,
+                          focusNode: _detailsFocus,
+                          enabled: !_busy,
+                          minLines: _detailsFocus.hasFocus ? 4 : 2,
+                          maxLines: 6,
+                          maxLength: 1000,
+                          onChanged: (_) => setState(() {}),
+                          buildCounter:
+                              (
+                                context, {
+                                required currentLength,
+                                required isFocused,
+                                maxLength,
+                              }) => currentLength >= 850
+                              ? Text(
+                                  '$currentLength/$maxLength',
+                                  style: const TextStyle(fontSize: 12),
+                                )
+                              : null,
+                          style: const TextStyle(fontSize: 14),
+                          decoration: const InputDecoration(
+                            labelText: 'รายละเอียดเพิ่มเติม (ไม่จำเป็น)',
+                            alignLabelWithHint: true,
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      SosCard(
+                        child: ExpansionTile(
+                          tilePadding: EdgeInsets.zero,
+                          title: const Text(
+                            'ผู้รับเพิ่มเติม',
+                            style: TextStyle(fontSize: 14),
+                          ),
+                          trailing: Badge.count(
+                            count: _recipients.length,
+                            backgroundColor: RescueTheme.accentFor(context),
+                          ),
+                          subtitle: active
+                              ? const Text(
+                                  'ยกเลิก SOS ก่อนเปลี่ยนผู้รับ',
+                                  style: TextStyle(fontSize: 12),
+                                )
+                              : null,
+                          children: [
+                            if (service.peers.isEmpty)
+                              const Text(
+                                'คำขอจะประกาศเมื่อเชื่อมต่อเครื่องอื่น',
+                              ),
+                            for (final peer in service.peers.entries)
+                              CheckboxListTile(
+                                title: Text(peer.value),
+                                subtitle: Text(
+                                  service.connectionLabel(peer.key),
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                value: _recipients.contains(peer.key),
+                                onChanged: _busy || active
+                                    ? null
+                                    : (value) => setState(() {
+                                        if (value == true) {
+                                          _recipients.add(peer.key);
+                                        } else {
+                                          _recipients.remove(peer.key);
+                                        }
+                                      }),
+                              ),
+                          ],
+                        ),
                       ),
                     ],
-                  ),
+
+                    const SizedBox(height: 24),
+                  ],
                 ),
-                SosCard(child: _peoplePicker()),
-                SosCard(
-                  child: TextField(
-                    controller: _details,
-                    focusNode: _detailsFocus,
-                    enabled: !_busy,
-                    minLines: _detailsFocus.hasFocus ? 4 : 2,
-                    maxLines: 6,
-                    maxLength: 1000,
-                    onChanged: (_) => setState(() {}),
-                    buildCounter:
-                        (
-                          context, {
-                          required currentLength,
-                          required isFocused,
-                          maxLength,
-                        }) => currentLength >= 850
-                        ? Text(
-                            '$currentLength/$maxLength',
-                            style: const TextStyle(fontSize: 12),
-                          )
-                        : null,
-                    style: const TextStyle(fontSize: 14),
-                    decoration: const InputDecoration(
-                      labelText: 'รายละเอียดเพิ่มเติม (ไม่จำเป็น)',
-                      alignLabelWithHint: true,
-                      border: OutlineInputBorder(),
+              ),
+            ),
+            SafeArea(
+              top: false,
+              child: Container(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: formVisible
+                            ? kSosRed
+                            : const Color(0xFF9A3412),
+                        foregroundColor: Colors.white,
+                        textStyle: Theme.of(context).textTheme.labelLarge,
+                        minimumSize: const Size.fromHeight(48),
+                      ),
+                      onPressed:
+                          _busy ||
+                              !service.ready ||
+                              formVisible && _types.isEmpty
+                          ? null
+                          : formVisible
+                          ? _send
+                          : () => _run(service.retry),
+                      icon: Icon(
+                        formVisible ? Icons.sos_rounded : Icons.refresh,
+                      ),
+                      label: Text(
+                        _busy
+                            ? 'กำลังส่ง SOS...'
+                            : formVisible
+                            ? active
+                                  ? 'อัปเดต SOS'
+                                  : 'ส่ง SOS'
+                            : 'ส่งซ้ำ',
+                      ),
                     ),
-                  ),
-                ),
-                SosCard(
-                  child: ExpansionTile(
-                    tilePadding: EdgeInsets.zero,
-                    title: const Text(
-                      'ผู้รับเพิ่มเติม',
-                      style: TextStyle(fontSize: 14),
-                    ),
-                    trailing: Badge.count(
-                      count: _recipients.length,
-                      backgroundColor: RescueTheme.accentFor(context),
-                    ),
-                    subtitle: active
-                        ? const Text(
-                            'ยกเลิก SOS ก่อนเปลี่ยนผู้รับ',
-                            style: TextStyle(fontSize: 12),
-                          )
-                        : null,
-                    children: [
-                      if (service.peers.isEmpty)
-                        const Text('คำขอจะประกาศเมื่อเชื่อมต่อเครื่องอื่น'),
-                      for (final peer in service.peers.entries)
-                        CheckboxListTile(
-                          title: Text(peer.value),
-                          subtitle: Text(
-                            service.connectionLabel(peer.key),
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          value: _recipients.contains(peer.key),
-                          onChanged: _busy || active
-                              ? null
-                              : (value) => setState(() {
-                                  if (value == true) {
-                                    _recipients.add(peer.key);
-                                  } else {
-                                    _recipients.remove(peer.key);
-                                  }
-                                }),
+                    if (active) ...[
+                      const SizedBox(height: 6),
+                      OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                          textStyle: Theme.of(context).textTheme.labelLarge,
+                          foregroundColor:
+                              Theme.of(context).brightness == Brightness.dark
+                              ? const Color(0xFF9BC9FF)
+                              : RescueTheme.rescue,
+                          side: const BorderSide(color: RescueTheme.rescue),
                         ),
+                        onPressed: _busy
+                            ? null
+                            : () => setState(() => _editing = !_editing),
+                        child: Text(
+                          _editing
+                              ? 'กลับไปหน้าสถานะ'
+                              : 'เพิ่มข้อมูล / อัปเดต SOS',
+                        ),
+                      ),
+                      if (!_editing) ...[
+                        const SizedBox(height: 6),
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor:
+                                Theme.of(context).brightness == Brightness.dark
+                                ? const Color(0xFFFFA6A6)
+                                : kSosRed,
+                            textStyle: Theme.of(context).textTheme.labelLarge,
+                            minimumSize: const Size.fromHeight(48),
+                            backgroundColor: kSosRed.withValues(alpha: .08),
+                            side: const BorderSide(color: kSosRed),
+                          ),
+                          onPressed: _busy ? null : _cancel,
+                          child: const Text('ยกเลิก SOS'),
+                        ),
+                      ],
                     ],
-                  ),
+                    if (formVisible && !active)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 4),
+                        child: Text(
+                          'ตรวจสอบอีกครั้งก่อนส่ง',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                  ],
                 ),
-              ],
-              if (active) ...[
-                OutlinedButton(
-                  onPressed: _busy
-                      ? null
-                      : () => setState(() => _editing = !_editing),
-                  child: Text(
-                    _editing ? 'กลับไปหน้าสถานะ' : 'เพิ่มข้อมูล / อัปเดต SOS',
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Align(
-                  alignment: Alignment.center,
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor:
-                          Theme.of(context).brightness == Brightness.dark
-                          ? const Color(0xFFFFA6A6)
-                          : kSosRed,
-                      side: const BorderSide(color: kSosRed),
-                    ),
-                    onPressed: _busy ? null : _cancel,
-                    icon: const Icon(Icons.block),
-                    label: const Text('ยกเลิก SOS'),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 24),
-            ],
-          ),
+              ),
+            ),
+          ],
         ),
       );
     },

@@ -62,6 +62,9 @@ void main() {
   testWidgets(
     'conversation list uses real history, sorts, searches and filters unread',
     (tester) async {
+      await tester.runAsync(() async {
+        await db.getMessages();
+      });
       service.messages = [
         MessageModel(
           id: '1',
@@ -97,7 +100,7 @@ void main() {
             )
             .first,
       );
-      expect(pageBackground.color, kBackground);
+      expect(pageBackground.color, const Color(0xFFFCF7F1));
       expect(find.text('No history'), findsNothing);
       expect(
         tester.getTopLeft(find.text('Bob')).dy,
@@ -112,6 +115,14 @@ void main() {
       await tester.pump();
       expect(find.text('Alice'), findsOneWidget);
       expect(find.text('Bob'), findsNothing);
+      await tester.tap(find.text('Alice'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ChatScreen), findsOneWidget);
+      await tester.runAsync(() async {
+        await db.getMessages();
+      });
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
     },
   );
   testWidgets(

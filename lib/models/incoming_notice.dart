@@ -11,6 +11,8 @@ class IncomingNotice {
   });
   final String id, peerId, name, body;
   final SosAlert? sos;
+  String get notificationId =>
+      sos == null ? 'chat:$peerId' : 'sos:${sos!.incidentId}';
   String? get _responderStage => ResponderUpdate.parse(body)?.stage;
 
   String get title => sos != null

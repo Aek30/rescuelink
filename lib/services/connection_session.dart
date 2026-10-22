@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/incoming_notice.dart';
+import 'app_preferences.dart';
 
 class ConnectionSession {
   static const channel = MethodChannel('com.rmutt.rescuelink/session');
@@ -10,6 +11,7 @@ class ConnectionSession {
     void Function(IncomingNotice) onOpen,
   ) async {
     if (kIsWeb || !Platform.isAndroid) return;
+    await updateChannelNames();
     channel.setMethodCallHandler((call) async {
       if (call.method == 'openNotification' && call.arguments is Map) {
         onOpen(IncomingNotice.fromMap(call.arguments as Map));
@@ -25,10 +27,46 @@ class ConnectionSession {
     if (!kIsWeb && Platform.isAndroid) channel.setMethodCallHandler(null);
   }
 
-  Future<void> notify(IncomingNotice notice) async {
-    if (!kIsWeb && Platform.isAndroid) {
-      await channel.invokeMethod<void>('notify', notice.toMap());
+  static Future<bool> notificationsAllowed() async {
+    if (kIsWeb || !Platform.isAndroid) return true;
+    return Permission.notification.isGranted;
+  }
+
+  Future<void> updateChannelNames() async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    final t = AppPreferences.instance.text;
+    await channel.invokeMethod<void>('channelNames', {
+      'sosChannelName': t('คำขอช่วยเหลือ SOS'),
+      'chatChannelName': t('ข้อความใหม่'),
+    });
+  }
+
+  Future<void> notify(IncomingNotice notice, {int unreadCount = 1}) async {
+    if (kIsWeb || !Platform.isAndroid || !await notificationsAllowed()) return;
+    final t = AppPreferences.instance.text;
+    try {
+      await channel.invokeMethod<void>('notify', {
+        ...notice.toMap(),
+        'notificationId': notice.notificationId,
+        'title': notice.sos == null && unreadCount > 1
+            ? '$unreadCount ${t('ข้อความใหม่')}'
+            : notice.title,
+        'unreadCount': unreadCount,
+        'sosChannelName': t('คำขอช่วยเหลือ SOS'),
+        'chatChannelName': t('ข้อความใหม่'),
+        'actionLabel': t(notice.sos == null ? 'เปิดแชต' : 'ดู SOS'),
+        'publicTitle': t('ข้อความใหม่'),
+      });
+    } on PlatformException {
+      // Permission may be revoked between checking it and posting.
+      if (!await notificationsAllowed()) return;
+      rethrow;
     }
+  }
+
+  Future<void> cancelNotice(String id) async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    await channel.invokeMethod<void>('cancel', {'id': id});
   }
 
   static Future<void> openDateSettings() async {
@@ -45,20 +83,5 @@ class ConnectionSession {
 
   Future<void> stop() async {
     if (!kIsWeb && Platform.isAndroid) await channel.invokeMethod<void>('stop');
-  }
-
-  Future<void> alert(String name) async {
-    if (!kIsWeb && Platform.isAndroid) {
-      await channel.invokeMethod<void>('alert', {'name': name});
-    }
-  }
-
-  Future<void> mediaAlert(String name, String messageId) async {
-    if (!kIsWeb && Platform.isAndroid) {
-      await channel.invokeMethod<void>('mediaAlert', {
-        'name': name,
-        'messageId': messageId,
-      });
-    }
   }
 }
