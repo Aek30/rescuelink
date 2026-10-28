@@ -1,0 +1,28 @@
+{
+  "projectRef": "yrpqhupqbzymesknalnq",
+  "verifiedAt": "2026-10-26T17:35:57.478Z",
+  "migration": "20261026090000_complete_chat_archive",
+  "migrationApplied": true,
+  "mediaAndSosEnabled": true,
+  "explicitOwnerIdentityEnabled": true,
+  "authenticatedRpc": true,
+  "anonymousRpc": false,
+  "transactionalServerChecks": {
+    "archiveKinds": [
+      "message",
+      "media",
+      "sos"
+    ],
+    "idempotency": true,
+    "ownerIdentityPreserved": true,
+    "twoInstallationIdentityRowsVisible": true,
+    "crossAccountIsolation": true,
+    "invalidIdentityRejected": true,
+    "anonymousBlocked": true,
+    "temporaryFixturesRolledBack": true
+  },
+  "migrationQuery": "https://supabase.com/dashboard/project/yrpqhupqbzymesknalnq/sql/911857ac-9765-4187-aedd-3f5f54772c9f",
+  "serverChecksQuery": "https://supabase.com/dashboard/project/yrpqhupqbzymesknalnq/sql/8509339c-5847-4017-b58a-a998be8fe3ae",
+  "twoClientLoginTest": "blocked: saved test-account credentials rejected",
+  "physicalPhonesTested": false
+}

@@ -240,7 +240,14 @@ class MediaUploadService extends ChangeNotifier {
         }
         jobs.putIfAbsent(
           media.mediaId,
-          () => MediaUpload(mediaId: media.mediaId, owner: _scopeOwner!),
+          () => MediaUpload(
+            mediaId: media.mediaId,
+            owner: _scopeOwner!,
+            state: media.status == MediaStatus.cloudReady
+                ? UploadState.ready
+                : UploadState.queued,
+            bytes: media.status == MediaStatus.cloudReady ? media.fileSize : 0,
+          ),
         );
       }
       await _save();

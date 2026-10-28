@@ -486,6 +486,7 @@ class MessageService extends ChangeNotifier {
 
   Future<void> _refreshCloudReceipts() async {
     try {
+      await mediaService?.reloadArchive();
       await _refresh();
     } catch (_) {
       if (_disposed) return;
@@ -506,11 +507,7 @@ class MessageService extends ChangeNotifier {
     Map<String, String> localPeers,
   ) async {
     final db = await database.database;
-    final rows = await db.query(
-      'chat_records',
-      where: 'deleted = 0',
-      orderBy: 'rowid ASC',
-    );
+    final rows = await db.query('chat_records', orderBy: 'rowid ASC');
     if (rows.isEmpty) {
       return (
         messages: localMessages,
@@ -520,16 +517,10 @@ class MessageService extends ChangeNotifier {
     }
     final cloudMessages = <MessageModel>[];
     for (final row in rows) {
+      if (row['deleted'] == 1) continue;
       try {
         cloudMessages.add(MessageModel.fromJson(row['payload'] as String));
       } catch (_) {}
-    }
-    if (cloudMessages.isEmpty) {
-      return (
-        messages: localMessages,
-        peers: localPeers,
-        restoredIds: const <String>{},
-      );
     }
     final myIds = <String>{?myId};
     final savedRadioIds = await database.getSetting('myRadioIds');
@@ -540,68 +531,47 @@ class MessageService extends ChangeNotifier {
         }
       } catch (_) {}
     }
-    final myName =
-        (await database.getSetting('profileNameDraft') ??
-                await database.getSetting('profileDisplayName') ??
-                AppPreferences.instance.displayName ??
-                '')
-            .trim();
-    if (myName.isNotEmpty) {
-      for (final m in cloudMessages) {
-        if (m.senderName.trim() == myName) {
-          myIds.add(m.senderId);
-        }
-      }
-      for (final m in cloudMessages) {
-        if (!myIds.contains(m.senderId) &&
-            !myIds.contains(m.receiverId) &&
-            m.senderName.trim().isNotEmpty &&
-            m.senderName.trim() != myName) {
-          myIds.add(m.receiverId);
-        }
-      }
-    }
-    final unmatched = cloudMessages
-        .where(
-          (m) => !myIds.contains(m.senderId) && !myIds.contains(m.receiverId),
-        )
-        .toList();
-    if (unmatched.isNotEmpty) {
-      final counts = <String, int>{};
-      for (final m in unmatched) {
-        counts[m.senderId] = (counts[m.senderId] ?? 0) + 1;
-        counts[m.receiverId] = (counts[m.receiverId] ?? 0) + 1;
-      }
-      String? bestId;
-      var bestCount = -1;
-      for (final entry in counts.entries) {
-        if (entry.value > bestCount) {
-          bestCount = entry.value;
-          bestId = entry.key;
-        }
-      }
-      if (bestId != null) myIds.add(bestId);
-    }
+    final archiveMetadata = <String, Map<String, dynamic>>{
+      for (final row in rows)
+        row['id'] as String: Map<String, dynamic>.from(
+          jsonDecode(row['payload'] as String) as Map,
+        ),
+    };
 
     final localIds = {for (final m in localMessages) m.id};
-    final combined = [...localMessages];
+    final archivedIds = {for (final row in rows) row['id']};
+    final localById = {for (final m in localMessages) m.id: m};
+    final combined = localMessages
+        .where((m) => !archivedIds.contains(m.id))
+        .toList();
     final peersMap = {...localPeers};
     final restoredIds = <String>{};
 
     for (final m in cloudMessages) {
       var senderId = m.senderId;
       var receiverId = m.receiverId;
+      final metadata = archiveMetadata[m.id]!;
+      final archiveIdentity = metadata['archiveIdentity'];
+      final ownedIds = {
+        ...myIds,
+        if (archiveIdentity == senderId || archiveIdentity == receiverId)
+          archiveIdentity as String,
+      };
       if (myId != null && senderId != myId && receiverId != myId) {
-        if (myIds.contains(senderId)) {
+        if (ownedIds.contains(senderId)) {
           senderId = myId!;
-        } else if (myIds.contains(receiverId)) {
+        } else if (ownedIds.contains(receiverId)) {
           receiverId = myId!;
         }
+      }
+      final peerId = senderId == myId ? receiverId : senderId;
+      final peerName = metadata['peerName'];
+      if (peerName is String && peerName.trim().isNotEmpty) {
+        peersMap.putIfAbsent(peerId, () => peerName.trim());
       }
       if (senderId != myId && m.senderName.trim().isNotEmpty) {
         peersMap.putIfAbsent(senderId, () => m.senderName.trim());
       }
-      if (localIds.contains(m.id)) continue;
       combined.add(
         MessageModel(
           id: m.id,
@@ -611,14 +581,14 @@ class MessageService extends ChangeNotifier {
           text: m.text,
           timestamp: m.timestamp,
           type: m.type,
-          status: MessageStatus.synced,
+          status: localById[m.id]?.status ?? MessageStatus.synced,
           ackFor: m.ackFor,
-          recordedAt: m.recordedAt,
+          recordedAt: localById[m.id]?.recordedAt ?? m.recordedAt,
         ),
       );
-      restoredIds.add(m.id);
+      if (!localIds.contains(m.id)) restoredIds.add(m.id);
     }
-    if (restoredIds.isNotEmpty) {
+    if (combined.isNotEmpty) {
       combined.sort((a, b) {
         final cmp = a.displayTime.compareTo(b.displayTime);
         return cmp != 0 ? cmp : a.timestamp.compareTo(b.timestamp);

@@ -525,7 +525,7 @@ void main() {
     expect(after['ack_payload'], isNull);
     expect(await dbs[1].getDeviceId(), identity);
     expect((await dbs[1].getMessages()).single.text, 'keep history');
-    expect(await (await dbs[1].database).getVersion(), 9);
+    expect(await (await dbs[1].database).getVersion(), 10);
     nodes[1] = MessageService(nearbyService: wires[1], database: dbs[1]);
     wires[1].devices.clear();
     await nodes[1].initialize();

@@ -263,7 +263,7 @@ void main() {
       await db.close();
       expect((await store.list()).single.alert.incidentId, 'incident');
       expect((await store.queue()).length, 1);
-      expect(await (await db.database).getVersion(), 9);
+      expect(await (await db.database).getVersion(), 10);
     },
   );
   test('late response cannot restore a resolved conflict', () async {

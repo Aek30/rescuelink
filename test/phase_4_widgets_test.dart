@@ -102,7 +102,9 @@ void main() {
         excluded == PresenceFilter.sos ? findsNothing : findsOneWidget,
       );
       expect(
-        find.text(excluded == PresenceFilter.rescue ? '4 รายชื่อ' : '3 รายชื่อ'),
+        find.text(
+          excluded == PresenceFilter.rescue ? '4 รายชื่อ' : '3 รายชื่อ',
+        ),
         findsNothing,
       );
       expect(tester.takeException(), isNull);
@@ -257,12 +259,8 @@ void main() {
           ),
         ),
       );
-      await tester.ensureVisible(
-        find.text('เปิดในแอปแผนที่ (ต้องมีเน็ตหรือแผนที่ที่ดาวน์โหลดไว้)'),
-      );
-      await tester.tap(
-        find.text('เปิดในแอปแผนที่ (ต้องมีเน็ตหรือแผนที่ที่ดาวน์โหลดไว้)'),
-      );
+      await tester.ensureVisible(find.text('เปิดในแอปแผนที่'));
+      await tester.tap(find.text('เปิดในแอปแผนที่'));
       await tester.pumpAndSettle();
       expect(captured!.method, 'open');
       expect(captured!.arguments, {'latitude': 14.123, 'longitude': 100.456});
@@ -270,12 +268,8 @@ void main() {
         channel,
         (_) async => throw PlatformException(code: 'unavailable'),
       );
-      await tester.ensureVisible(
-        find.text('เปิดในแอปแผนที่ (ต้องมีเน็ตหรือแผนที่ที่ดาวน์โหลดไว้)'),
-      );
-      await tester.tap(
-        find.text('เปิดในแอปแผนที่ (ต้องมีเน็ตหรือแผนที่ที่ดาวน์โหลดไว้)'),
-      );
+      await tester.ensureVisible(find.text('เปิดในแอปแผนที่'));
+      await tester.tap(find.text('เปิดในแอปแผนที่'));
       await tester.pumpAndSettle();
       expect(find.textContaining('เปิดแผนที่ไม่ได้'), findsOneWidget);
       expect(tester.takeException(), isNull);

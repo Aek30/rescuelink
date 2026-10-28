@@ -48,11 +48,15 @@ void main() {
       ),
     );
     await show();
-    expect(find.text('รูปภาพ: photo.png'), findsOneWidget);
+    expect(find.text('ส่งรูป'), findsOneWidget);
     expect(find.text('รอการยืนยัน (1)'), findsOneWidget);
-    await tester.tap(find.text('รูปภาพ: photo.png'));
+    await tester.tap(find.text('ส่งรูป'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('อยู่ในคิว'), findsOneWidget);
+    expect(find.text('ชื่อไฟล์: photo.png'), findsOneWidget);
+    expect(
+      find.text('อยู่ในคิว • ซิงก์อัตโนมัติเมื่อออนไลน์และเข้าสู่ระบบ'),
+      findsOneWidget,
+    );
     upload.state = UploadState.ready;
     await show();
     expect(find.text('ซิงก์แล้ว (1)'), findsOneWidget);

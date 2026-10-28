@@ -5,6 +5,7 @@ import '../models/sos_alert.dart';
 import '../models/responder_update.dart';
 import '../services/message_service.dart';
 import '../services/app_preferences.dart';
+import '../services/chat_sync_service.dart';
 import 'chat_screen.dart';
 
 class MessagesScreen extends StatefulWidget {
@@ -72,9 +73,17 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: Listenable.merge([widget.service, AppPreferences.instance]),
+    listenable: Listenable.merge([
+      widget.service,
+      AppPreferences.instance,
+      ChatSyncCoordinator.instance,
+    ]),
     builder: (context, _) {
       final s = widget.service;
+      final sync = ChatSyncCoordinator.instance.current;
+      final hasCloud = sync?.cloud != null;
+      final restoring = hasCloud && sync!.busy;
+      final restoreError = hasCloud ? sync!.error : null;
       final t = AppPreferences.instance.text;
       final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -214,7 +223,23 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 ],
               ),
             ),
-            if (!s.ready) const LinearProgressIndicator(),
+            if (!s.ready || restoring) const LinearProgressIndicator(),
+            if (restoreError != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(child: Text(restoreError)),
+                    TextButton(
+                      onPressed: restoring ? null : sync!.sync,
+                      child: const Text('ลองซิงก์อีกครั้ง'),
+                    ),
+                  ],
+                ),
+              ),
             if (s.error != null)
               Container(
                 margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
@@ -247,7 +272,22 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 ),
               ),
             Expanded(
-              child: s.ready && latest.isEmpty
+              child:
+                  s.ready &&
+                      latest.isEmpty &&
+                      (restoring || restoreError != null)
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          restoring
+                              ? 'กำลังกู้คืนประวัติแชทของบัญชีนี้…'
+                              : 'ยังโหลดประวัติแชทไม่ครบ กรุณาเชื่อมต่ออินเทอร์เน็ตแล้วลองซิงก์อีกครั้ง',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    )
+                  : s.ready && latest.isEmpty
                   ? Center(
                       child: SingleChildScrollView(
                         padding: const EdgeInsets.all(24),

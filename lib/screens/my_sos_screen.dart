@@ -23,7 +23,30 @@ class _MySosScreenState extends State<MySosScreen> {
   @override
   void initState() {
     super.initState();
+    widget.store.database.cloudReceiptsChanged.addListener(_historyChanged);
     _load();
+  }
+
+  void _historyChanged() {
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant MySosScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.store.database != widget.store.database) {
+      oldWidget.store.database.cloudReceiptsChanged.removeListener(
+        _historyChanged,
+      );
+      widget.store.database.cloudReceiptsChanged.addListener(_historyChanged);
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.store.database.cloudReceiptsChanged.removeListener(_historyChanged);
+    super.dispose();
   }
 
   Future<void> _load() async {

@@ -59,3 +59,9 @@ app.*.map.json
 /.build-tools/
 # Widget Preview related
 .widget_preview/
+
+# Empty logs from interrupted local verification attempts.
+/output/review-analyze.txt
+/output/review-tests.txt
+/output/submission-study-analyze.txt
+/output/submission-study-tests.txt

@@ -264,7 +264,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               'pending' =>
                 media != null
                     ? media.status != MediaStatus.delivered &&
-                          media.status != MediaStatus.received
+                          media.status != MediaStatus.received &&
+                          media.status != MediaStatus.cloudReady
                     : m.status.index < MessageStatus.delivered.index,
               _ => true,
             };

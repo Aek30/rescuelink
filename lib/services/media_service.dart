@@ -83,6 +83,15 @@ class MediaService extends ChangeNotifier {
   /// ดึง MediaFile จาก cache ทันที (ไม่ต้อง await)
   MediaFile? getCached(String mediaId) => _cache[mediaId];
 
+  /// Cloud restores files without replaying Nearby transfers or notifications.
+  Future<void> reloadArchive() async {
+    for (final media in await database.getAllMedia()) {
+      if (_disposed) return;
+      _cache[media.mediaId] = media;
+    }
+    _notify();
+  }
+
   /// ค้นหา MediaFile ที่เชื่อมกับ messageId
   Future<MediaFile?> getMediaForMessage(String messageId) async {
     final cached = _cache.values

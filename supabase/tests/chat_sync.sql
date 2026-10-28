@@ -37,6 +37,25 @@ begin
    perform public.sync_chat(gen_random_uuid(),gen_random_uuid(),0,'{}',false);
    raise exception 'Invalid payload accepted';
  exception when invalid_parameter_value then null; end;
+ -- Full conversation history preserves media/SOS entries and exact ownership.
+ declare
+   media_id uuid := gen_random_uuid();
+   sos_id uuid := gen_random_uuid();
+   invalid_id uuid := gen_random_uuid();
+ begin
+   perform public.sync_chat(gen_random_uuid(),media_id,0,
+     body || jsonb_build_object('id',media_id,'type','media','text',gen_random_uuid(),
+       'archiveIdentity','sender','peerName','Existing contact'),false);
+   perform public.sync_chat(gen_random_uuid(),sos_id,0,
+     body || jsonb_build_object('id',sos_id,'type','sos','archiveIdentity','receiver'),false);
+   if (select payload->>'archiveIdentity' from public.chat_records where id=media_id) <> 'sender'
+     then raise exception 'Archive identity lost'; end if;
+   begin
+     perform public.sync_chat(gen_random_uuid(),invalid_id,0,
+       body || jsonb_build_object('id',invalid_id,'archiveIdentity','unrelated'),false);
+     raise exception 'Invalid archive identity accepted';
+   exception when invalid_parameter_value then null; end;
+ end;
 end $$;
 select set_config('request.jwt.claim.sub','72222222-2222-4222-8222-222222222222',true);
 do $$

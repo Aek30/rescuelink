@@ -4,16 +4,29 @@ import 'package:flutter/widgets.dart';
 import 'auth_service.dart';
 import 'local_database_service.dart';
 import 'chat_store.dart';
+import 'chat_attachment_restore.dart';
 
 abstract interface class ChatCloud {
   Future<Map<String, dynamic>> push(Map<String, Object?> operation);
   Future<List<Map<String, dynamic>>> pull();
 }
 
-class SupabaseChatCloud implements ChatCloud {
-  SupabaseChatCloud(this.auth, this.owner);
+class SupabaseChatCloud implements ChatCloud, ChatAttachmentCloud {
+  SupabaseChatCloud(
+    this.auth,
+    this.owner, {
+    LocalDatabaseService? database,
+    this.attachments,
+  }) : database = database ?? LocalDatabaseService.instance;
   final AuthService auth;
   final String owner;
+  final LocalDatabaseService database;
+  final ChatAttachmentRestore? attachments;
+  @override
+  Future<void> restoreAttachments(LocalDatabaseService database) =>
+      (attachments ??
+              ChatAttachmentRestore(SupabaseAttachmentArchive(auth, owner)))
+          .restore(database);
   @override
   Future<Map<String, dynamic>> push(Map<String, Object?> operation) async {
     final client = await auth.cloudClient(owner);
@@ -35,24 +48,35 @@ class SupabaseChatCloud implements ChatCloud {
   @override
   Future<List<Map<String, dynamic>>> pull() async {
     final client = await auth.cloudClient(owner);
-    try {
-      final devices = await client
-          .from('account_devices')
-          .select('radio_identity')
-          .eq('user_id', owner);
-      final radioIds = <String>{
-        for (final row in devices)
+    {
+      await client.from('account_devices').upsert({
+        'user_id': owner,
+        'installation_id': await auth.storage.installationId,
+        'radio_identity': await database.getDeviceId(),
+        'last_seen_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'user_id,installation_id');
+      final radioIds = <String>{await database.getDeviceId()};
+      for (var offset = 0; ; offset += 200) {
+        if (auth.session?.userId != owner) throw StateError('บัญชีเปลี่ยนแล้ว');
+        final devices = await client
+            .from('account_devices')
+            .select('radio_identity')
+            .eq('user_id', owner)
+            .order('installation_id')
+            .range(offset, offset + 199);
+        for (final row in devices) {
           if (row['radio_identity'] is String &&
-              (row['radio_identity'] as String).isNotEmpty)
-            row['radio_identity'] as String,
-      };
-      if (radioIds.isNotEmpty) {
-        await LocalDatabaseService.instance.setSetting(
-          'myRadioIds',
-          jsonEncode(radioIds.toList()),
-        );
+              (row['radio_identity'] as String).isNotEmpty) {
+            radioIds.add(row['radio_identity'] as String);
+          }
+        }
+        if (devices.length < 200) break;
       }
-    } catch (_) {}
+      if (radioIds.isNotEmpty) {
+        if (auth.session?.userId != owner) throw StateError('บัญชีเปลี่ยนแล้ว');
+        await database.setSetting('myRadioIds', jsonEncode(radioIds.toList()));
+      }
+    }
     final records = <Map<String, dynamic>>[];
     for (var offset = 0; ; offset += 200) {
       if (auth.session?.userId != owner) throw StateError('บัญชีเปลี่ยนแล้ว');
@@ -102,8 +126,12 @@ class ChatSyncService extends ChangeNotifier {
     try {
       await refreshStatus();
       if (cloud == null) return;
+      await store.prepareForSync();
+      var uploadFailed = false;
+      final failedRecords = <Object?>{};
       for (final operation in await store.queue()) {
         if (_stopped) return;
+        if (failedRecords.contains(operation['record_id'])) continue;
         final db = await store.database.database;
         final current = await db.query(
           'chat_queue',
@@ -121,13 +149,19 @@ class ChatSyncService extends ChangeNotifier {
             'UPDATE chat_queue SET attempts = attempts + 1, error = ? WHERE operation_id = ?',
             ['เชื่อมต่อ Cloud ไม่สำเร็จ จะลองใหม่', operation['operation_id']],
           );
-          rethrow;
+          uploadFailed = true;
+          failedRecords.add(operation['record_id']);
         }
       }
       if (_stopped) return;
       await store.mergeRemote(
         await cloud!.pull().timeout(const Duration(seconds: 20)),
       );
+      if (_stopped) return;
+      if (cloud case final ChatAttachmentCloud attachments) {
+        await attachments.restoreAttachments(store.database);
+      }
+      if (uploadFailed) throw StateError('อัปโหลดประวัติบางรายการไม่สำเร็จ');
       lastSuccess = DateTime.now();
       await store.database.setSetting(
         'chatLastSync',
@@ -179,7 +213,9 @@ class ChatSyncCoordinator extends ChangeNotifier with WidgetsBindingObserver {
     _owner = owner;
     current = ChatSyncService(
       ChatStore(db),
-      owner == null ? null : SupabaseChatCloud(AuthService.instance, owner),
+      owner == null
+          ? null
+          : SupabaseChatCloud(AuthService.instance, owner, database: db),
     );
     current!.addListener(notifyListeners);
     notifyListeners();

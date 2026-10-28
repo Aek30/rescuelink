@@ -150,7 +150,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('มีผู้รับแล้ว 1 เครื่อง'), findsOneWidget);
+    expect(find.text('ส่ง SOS แล้ว'), findsOneWidget);
+    expect(find.byIcon(Icons.devices), findsOneWidget);
+    expect(find.text('ยังไม่ใช่การตอบรับจากเจ้าหน้าที่'), findsOneWidget);
     expect(find.text('ส่งซ้ำ'), findsOneWidget);
     expect(find.text('เพิ่มข้อมูล / อัปเดต SOS'), findsOneWidget);
     if (const bool.fromEnvironment('UX_CAPTURE')) {
@@ -168,7 +170,7 @@ void main() {
     }
     await tester.tap(find.text('ยกเลิก SOS'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('จะแจ้งผู้รับเดิมว่ายกเลิก'), findsOneWidget);
+    expect(find.text('แตะเหตุผลเพื่อยกเลิก SOS ทันที'), findsOneWidget);
     await tester.tap(find.text('กลับ'));
     await tester.pumpAndSettle();
     expect(service.mySos!.active, isTrue);

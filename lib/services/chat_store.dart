@@ -23,17 +23,27 @@ class ChatStore {
     await db.execute(
       'CREATE INDEX chat_queue_record ON chat_queue(record_id, seq)',
     );
-    for (final row in await db.query(
-      'messages',
-      where: 'type = ?',
-      whereArgs: ['message'],
-    )) {
+    await backfill(db);
+  }
+
+  static Future<void> backfill(DatabaseExecutor db) async {
+    for (final row in await db.rawQuery('''
+      SELECT messages.* FROM messages
+      LEFT JOIN chat_records ON chat_records.id = messages.id
+      WHERE messages.type IN ('message', 'media', 'sos') AND chat_records.id IS NULL
+    ''')) {
       await capture(db, MessageModel.fromMap(row));
     }
   }
 
   static Future<void> capture(DatabaseExecutor db, MessageModel message) async {
-    if (message.type != MessageType.message) return;
+    if (!{
+      MessageType.message,
+      MessageType.media,
+      MessageType.sos,
+    }.contains(message.type)) {
+      return;
+    }
     final rows = await db.query(
       'chat_records',
       where: 'id = ?',
@@ -41,7 +51,81 @@ class ChatStore {
     );
     // Duplicate radio packets cannot resurrect deleted or edited history.
     if (rows.isNotEmpty) return;
-    await _save(db, message.id, message.toJson(), 0, false);
+    await _save(
+      db,
+      message.id,
+      jsonEncode(await _archivePayload(db, message)),
+      0,
+      false,
+    );
+  }
+
+  static Future<Map<String, Object?>> _archivePayload(
+    DatabaseExecutor db,
+    MessageModel message,
+  ) async {
+    final settings = await db.query(
+      'settings',
+      where: "key IN ('deviceId', 'myRadioIds')",
+    );
+    final identities = <String>{};
+    for (final row in settings) {
+      if (row['key'] == 'deviceId') identities.add(row['value'] as String);
+      if (row['key'] == 'myRadioIds') {
+        identities.addAll(
+          (jsonDecode(row['value'] as String) as List).cast<String>(),
+        );
+      }
+    }
+    final identity = identities.contains(message.senderId)
+        ? message.senderId
+        : identities.contains(message.receiverId)
+        ? message.receiverId
+        : null;
+    final peer = identity == message.senderId
+        ? message.receiverId
+        : message.senderId;
+    final peers = await db.query('peers', where: 'id = ?', whereArgs: [peer]);
+    return {
+      ...message.toMap(),
+      if (message.recordedAt != null)
+        'recordedAt': message.recordedAt!.toUtc().toIso8601String(),
+      'archiveIdentity': ?identity,
+      if (peers.isNotEmpty) 'peerName': peers.single['name'],
+    };
+  }
+
+  /// Upgrade existing archives using the owning database's identities only.
+  /// Never infer ownership from display names or message frequency.
+  Future<void> prepareForSync() async {
+    await database.getDeviceId();
+    await (await database.database).transaction((txn) async {
+      await backfill(txn);
+      for (final row in await txn.query(
+        'chat_records',
+        where: 'deleted = 0 AND conflict IS NULL',
+      )) {
+        final payload = Map<String, dynamic>.from(
+          jsonDecode(row['payload'] as String) as Map,
+        );
+        if (payload['archiveIdentity'] != null) continue;
+        final enriched = await _archivePayload(
+          txn,
+          MessageModel.fromMap(payload),
+        );
+        if (enriched['archiveIdentity'] == null) continue;
+        final encoded = jsonEncode(enriched);
+        // Queue a new version. Even an operation with zero recorded attempts
+        // might have committed just before a crash; never change its body.
+        await _save(
+          txn,
+          row['id'] as String,
+          encoded,
+          row['version'] as int,
+          false,
+        );
+      }
+    });
   }
 
   static Future<void> _save(
@@ -93,6 +177,9 @@ class ChatStore {
       }
       final payload =
           jsonDecode(row['payload'] as String) as Map<String, dynamic>;
+      if (!delete && payload['type'] != 'message') {
+        throw StateError('แก้ไขได้เฉพาะข้อความ');
+      }
       if (!delete) payload['text'] = text!.trim();
       await _save(txn, id, jsonEncode(payload), row['version'] as int, delete);
     });
@@ -106,12 +193,17 @@ class ChatStore {
     final message = MessageModel.fromMap(
       Map<String, dynamic>.from(remote['payload'] as Map),
     );
-    if (message.id != remote['id'] || message.type != MessageType.message) {
+    if (message.id != remote['id'] ||
+        !{
+          MessageType.message,
+          MessageType.media,
+          MessageType.sos,
+        }.contains(message.type)) {
       throw const FormatException('Invalid remote chat');
     }
     await txn.insert('chat_records', {
       'id': remote['id'],
-      'payload': message.toJson(),
+      'payload': jsonEncode(remote['payload']),
       'version': remote['version'],
       'deleted': remote['deleted'] == true ? 1 : 0,
     }, conflictAlgorithm: ConflictAlgorithm.replace);

@@ -73,10 +73,7 @@ class _OutboxQueueState extends State<OutboxQueue> {
     if (match == null) return false;
     final lat = double.tryParse(match.group(1)!);
     final lng = double.tryParse(match.group(2)!);
-    return lat != null &&
-        lng != null &&
-        lat.abs() <= 90 &&
-        lng.abs() <= 180;
+    return lat != null && lng != null && lat.abs() <= 90 && lng.abs() <= 180;
   }
 
   String _formatMessageText(String raw) {
@@ -176,7 +173,8 @@ class _OutboxQueueState extends State<OutboxQueue> {
       UploadState.verifying => 'กำลังตรวจสอบไฟล์…',
       UploadState.ready => 'ส่งเสร็จแล้ว',
       UploadState.failed => 'ส่งไม่สำเร็จ • จะลองใหม่อัตโนมัติ',
-      UploadState.queued => 'อยู่ในคิว • ซิงก์อัตโนมัติเมื่อออนไลน์และเข้าสู่ระบบ',
+      UploadState.queued =>
+        'อยู่ในคิว • ซิงก์อัตโนมัติเมื่อออนไลน์และเข้าสู่ระบบ',
     };
   }
 
@@ -576,16 +574,25 @@ class _OutboxQueueState extends State<OutboxQueue> {
                       ),
                     ),
                     const SizedBox(height: 6),
-                  ] else if (uploadSummary != null) ...[
-                    Text(
-                      uploadSummary,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white : Colors.black87,
+                  ] else ...[
+                    if (widget.mediaFiles[m.text] case final media?) ...[
+                      Text(
+                        'ชื่อไฟล์: ${media.fileName}',
+                        style: const TextStyle(fontSize: 12.5),
                       ),
-                    ),
-                    const SizedBox(height: 6),
+                      const SizedBox(height: 6),
+                    ],
+                    if (uploadSummary != null) ...[
+                      Text(
+                        uploadSummary,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                    ],
                   ],
                   Text(
                     'เวลาส่ง: ${_date(m.timestamp)}',

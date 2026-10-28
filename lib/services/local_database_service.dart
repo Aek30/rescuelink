@@ -34,7 +34,7 @@ class LocalDatabaseService {
       return await _factory.openDatabase(
         path ?? p.join(await _factory.getDatabasesPath(), 'rescuelink.db'),
         options: OpenDatabaseOptions(
-          version: 9,
+          version: 10,
           onUpgrade: (db, oldVersion, _) async {
             if (oldVersion < 2) await _createRelaySeen(db);
             if (oldVersion < 3) await SosStore.createSchema(db);
@@ -50,6 +50,7 @@ class LocalDatabaseService {
             if (oldVersion < 7) await _createRelayQueueSchema(db);
             if (oldVersion < 8) await _upgradeRelayQueues(db);
             if (oldVersion < 9) await ChatStore.createSchema(db);
+            if (oldVersion < 10) await ChatStore.backfill(db);
           },
           onCreate: (db, _) async {
             await _createRelaySeen(db);
@@ -675,6 +676,7 @@ class LocalDatabaseService {
           media.toMap(),
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
+        await ChatStore.capture(txn, message);
         return false;
       }
       await txn.insert(
@@ -683,6 +685,7 @@ class LocalDatabaseService {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
       await txn.insert('messages', message.toMap());
+      await ChatStore.capture(txn, message);
       return true;
     });
   }

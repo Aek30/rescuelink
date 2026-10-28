@@ -1,0 +1,608 @@
+00:00 +0: loading D:/3-1/project_keeratiburt/miniProject/rescuelink/test/account_auth_test.dart
+00:00 +0: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/account_auth_test.dart: resend calls backend and throttles repeated attempts
+00:00 +1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/account_deletion_storage_test.dart: deletion isolates other owners and retained handles cannot recreate deleted database
+00:00 +2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/account_deletion_storage_test.dart: deletion isolates other owners and retained handles cannot recreate deleted database
+00:00 +3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/account_auth_test.dart: sign in creates user-specific storage without transferring Guest data
+00:00 +4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_live_test.dart: live same-account login on two installations restores text, SOS and image in the same conversation
+00:00 +4 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/account_auth_test.dart: sign in without claim leaves Guest history private; accounts are isolated
+00:01 +5 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/account_auth_test.dart: confirmation and invalid credentials do not adopt Guest data
+00:01 +6 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/account_auth_test.dart: secure-storage failure prevents Guest claim and logout fails closed
+00:01 +7 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:01 +8 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:02 +9 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:02 +10 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:03 +11 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:04 +12 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:05 +13 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:05 +14 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:05 +15 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:06 +16 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:06 +17 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:06 +18 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:06 +19 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:07 +20 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:07 +21 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:09 +22 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:09 +23 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:09 +24 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:09 +25 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:10 +26 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:12 +27 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:12 +28 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:13 +29 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:13 +30 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:13 +31 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:14 +32 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:18 +33 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:22 +34 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:26 +35 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:27 +36 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:27 +37 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/chat_cross_device_test.dart: fresh device restores every conversation, direction and peer name without guessing names
+00:28 +38 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/emergency_profile_test.dart: expired verified session permits local offline use; rejected refresh does not
+00:29 +39 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/emergency_profile_test.dart: expired verified session permits local offline use; rejected refresh does not
+00:29 +40 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/emergency_profile_test.dart: expired verified session permits local offline use; rejected refresh does not
+00:29 +41 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/emergency_profile_test.dart: expired verified session permits local offline use; rejected refresh does not
+00:29 +42 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/emergency_profile_test.dart: expired verified session permits local offline use; rejected refresh does not
+00:29 +43 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/emergency_profile_test.dart: expired verified session permits local offline use; rejected refresh does not
+00:30 +44 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/emergency_profile_test.dart: expired verified session permits local offline use; rejected refresh does not
+00:31 +45 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/emergency_profile_test.dart: expired verified session permits local offline use; rejected refresh does not
+00:31 +46 ~1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/emergency_profile_test.dart: expired verified session permits local offline use; rejected refresh does not
+00:33 +46 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/emergency_profile_test.dart: expired verified session permits local offline use; rejected refresh does not
+00:34 +47 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/emergency_profile_test.dart: expired verified session permits local offline use; rejected refresh does not
+00:35 +48 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/login_screen_test.dart: signup collects all steps and resends without repeating signup
+00:38 +49 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/login_screen_test.dart: signup collects all steps and resends without repeating signup
+00:39 +49 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/media_service_test.dart: FILE start and init cannot finalize until SUCCESS; duplicate notifies once
+[Media] mediaInit: 11111111-1111-4111-8111-111111111111
+[Media] Received & verified: 11111111-1111-4111-8111-111111111111
+00:39 +50 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/login_screen_test.dart: signup collects all steps and resends without repeating signup
+00:39 +51 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/login_screen_test.dart: signup collects all steps and resends without repeating signup
+00:39 +51 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/media_service_test.dart: SUCCESS before init is retained and verified after metadata arrives
+[Media] Received & verified: 11111111-1111-4111-8111-111111111111
+[Media] mediaInit: 11111111-1111-4111-8111-111111111111
+00:39 +52 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/login_screen_test.dart: signup collects all steps and resends without repeating signup
+00:39 +52 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/media_service_test.dart: corrupt file does not enter chat or send success ACK
+[Media] mediaInit: 11111111-1111-4111-8111-111111111111
+Media service: Media verification failed: Bad state: Checksum mismatch: expected=74f81fe167d99b4cb41d6d0ccda82278caee9f3e2f25d5e5a3936ff3dcec60d0, got=31609426297325bdb28c86ab3ceeed4a3c438966733fd61b8aea00ee8b23b7bc
+[Media] Verification failed (11111111-1111-4111-8111-111111111111): Bad state: Checksum mismatch: expected=74f81fe167d99b4cb41d6d0ccda82278caee9f3e2f25d5e5a3936ff3dcec60d0, got=31609426297325bdb28c86ab3ceeed4a3c438966733fd61b8aea00ee8b23b7bc
+00:40 +53 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/login_screen_test.dart: signup collects all steps and resends without repeating signup
+00:40 +53 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/media_service_test.dart: completed receive survives DB close and service restart
+[Media] mediaInit: 11111111-1111-4111-8111-111111111111
+[Media] Received & verified: 11111111-1111-4111-8111-111111111111
+00:40 +54 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/login_screen_test.dart: signup collects all steps and resends without repeating signup
+00:40 +55 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/login_screen_test.dart: signup collects all steps and resends without repeating signup
+00:40 +55 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/media_service_test.dart: lost ACK times out; wrong peer cannot acknowledge; retry keeps IDs
+[Media] Sent init: 11111111-1111-4111-8111-111111111111 payloadId=1
+[Media] File sent (waiting for ACK): 11111111-1111-4111-8111-111111111111
+[Media] Sent init: 11111111-1111-4111-8111-111111111111 payloadId=2
+00:40 +55 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/media_upload_test.dart: offline queue survives restart and retries automatically using same ID
+Media upload (media): SocketException: offline
+00:40 +55 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/media_service_test.dart: lost ACK times out; wrong peer cannot acknowledge; retry keeps IDs
+[Media] ACK for 11111111-1111-4111-8111-111111111111: success=true
+00:40 +56 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/login_screen_test.dart: signup collects all steps and resends without repeating signup
+00:40 +57 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/login_screen_test.dart: signup collects all steps and resends without repeating signup
+00:41 +57 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/media_upload_test.dart: discovers saved media automatically and continues after five failures
+Media upload (media): SocketException: offline
+Media upload (media): SocketException: offline
+Media upload (media): SocketException: offline
+Media upload (media): SocketException: offline
+Media upload (media): SocketException: offline
+Media upload (media): SocketException: offline
+00:41 +58 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/login_screen_test.dart: signup collects all steps and resends without repeating signup
+00:41 +59 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/login_screen_test.dart: signup collects all steps and resends without repeating signup
+00:41 +60 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/login_screen_test.dart: signup collects all steps and resends without repeating signup
+00:41 +60 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/media_upload_test.dart: local file corruption prevents upload
+Media upload (media): Bad state: ไฟล์ในเครื่องไม่ตรงกับ metadata
+00:41 +61 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/login_screen_test.dart: signup collects all steps and resends without repeating signup
+00:42 +62 ~2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/login_screen_test.dart: signup collects all steps and resends without repeating signup
+00:42 +62 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/login_screen_test.dart: signup collects all steps and resends without repeating signup
+00:44 +63 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/member_profile_draft_test.dart: offline save survives reopening; only an acknowledged upload clears draft
+00:44 +64 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/member_repository_test.dart: real SDK reads and updates owned profile, then calls guarded deletion and clears owner storage
+00:44 +65 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/member_repository_test.dart: real SDK reads and updates owned profile, then calls guarded deletion and clears owner storage
+00:44 +66 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/login_screen_test.dart: skip removes health even when consent was checked
+00:45 +67 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/login_screen_test.dart: skip removes health even when consent was checked
+00:45 +68 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/login_screen_test.dart: skip removes health even when consent was checked
+00:45 +69 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/login_screen_test.dart: skip removes health even when consent was checked
+00:46 +70 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/login_screen_test.dart: skip removes health even when consent was checked
+00:46 +71 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/member_screen_test.dart: name sheet fits small screens with keyboard dark=false
+00:47 +72 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/member_screen_test.dart: name sheet fits small screens with keyboard dark=false
+00:47 +73 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/member_screen_test.dart: name sheet fits small screens with keyboard dark=false
+00:47 +74 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/member_screen_test.dart: name sheet fits small screens with keyboard dark=false
+00:47 +75 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/messages_cloud_state_test.dart: empty history shows cloud loading state
+00:48 +76 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/messages_cloud_state_test.dart: empty history shows cloud loading state
+00:48 +77 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/messages_cloud_state_test.dart: empty history shows cloud loading state
+00:48 +78 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/messages_layout_test.dart: messages status, badges and layout at 320.0 dark=false
+00:48 +79 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/messages_layout_test.dart: messages status, badges and layout at 320.0 dark=false
+00:48 +80 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/messages_layout_test.dart: messages status, badges and layout at 320.0 dark=false
+00:49 +81 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/messages_layout_test.dart: messages status, badges and layout at 320.0 dark=false
+00:49 +82 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/member_screen_test.dart: delete cancellation and incorrect password preserve account
+00:50 +83 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/messages_responder_settings_test.dart: conversation list uses real history, sorts, searches and filters unread
+00:50 +84 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/messages_responder_settings_test.dart: conversation list uses real history, sorts, searches and filters unread
+00:50 +85 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/messages_responder_settings_test.dart: conversation list uses real history, sorts, searches and filters unread
+00:50 +86 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/messages_responder_settings_test.dart: conversation list uses real history, sorts, searches and filters unread
+00:51 +87 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/messages_responder_settings_test.dart: conversation list uses real history, sorts, searches and filters unread
+00:52 +88 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/messages_responder_settings_test.dart: conversation list uses real history, sorts, searches and filters unread
+00:52 +89 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/messages_responder_settings_test.dart: conversation list uses real history, sorts, searches and filters unread
+00:52 +90 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/messages_responder_settings_test.dart: conversation list uses real history, sorts, searches and filters unread
+00:52 +91 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: A to B to C and ACK preserve origin; duplicates and restart do not add chat rows
+00:53 +92 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: A to B to C and ACK preserve origin; duplicates and restart do not add chat rows
+00:53 +93 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/my_location_summary_test.dart: details expand and copy works without accuracy or age summary
+00:53 +94 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/my_location_summary_test.dart: details expand and copy works without accuracy or age summary
+00:54 +94 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: looped path, wrong last hop, unsupported type and excessive hops are rejected
+Message service: Receive failed: FormatException: Invalid relay envelope
+Message service: Receive failed: FormatException: Unexpected character (at character 1)
+00:54 +95 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/my_location_summary_test.dart: details expand and copy works without accuracy or age summary
+00:54 +95 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: looped path, wrong last hop, unsupported type and excessive hops are rejected
+ช่วยด้วย 🌍
+^
+
+Message service: Receive failed: FormatException: Invalid relay envelope
+00:54 +96 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/my_location_summary_test.dart: details expand and copy works without accuracy or age summary
+00:54 +97 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/my_location_summary_test.dart: details expand and copy works without accuracy or age summary
+00:54 +98 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/my_location_summary_test.dart: details expand and copy works without accuracy or age summary
+00:54 +99 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/my_location_summary_test.dart: details expand and copy works without accuracy or age summary
+00:55 +100 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/my_location_summary_test.dart: details expand and copy works without accuracy or age summary
+00:55 +101 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/my_location_summary_test.dart: details expand and copy works without accuracy or age summary
+00:55 +102 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/messages_responder_settings_test.dart: all five tabs remain in one route and SOS has no back or role switch
+00:55 +103 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/messages_responder_settings_test.dart: all five tabs remain in one route and SOS has no back or role switch
+00:55 +104 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/messages_responder_settings_test.dart: all five tabs remain in one route and SOS has no back or role switch
+00:56 +105 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/messages_responder_settings_test.dart: all five tabs remain in one route and SOS has no back or role switch
+00:56 +106 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/messages_responder_settings_test.dart: all five tabs remain in one route and SOS has no back or role switch
+00:56 +107 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: failed native send remains queued and retries without reconnect after backoff
+00:56 +108 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: failed native send remains queued and retries without reconnect after backoff
+00:57 +109 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: failed native send remains queued and retries without reconnect after backoff
+00:57 +109 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/message_service_test.dart: invalid SOS receives no ACK and does not enter history
+Message service: Receive failed: FormatException: Unexpected character (at character 1)
+สวัสดี 🌍
+^
+
+00:57 +110 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: failed native send remains queued and retries without reconnect after backoff
+Message service: Relay failed (queued): Bad state: Link down
+00:57 +111 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: failed native send remains queued and retries without reconnect after backoff
+00:57 +112 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/my_sos_screen_test.dart: history edit/delete and responsive SOS and Sync screens
+00:57 +113 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/my_sos_screen_test.dart: history edit/delete and responsive SOS and Sync screens
+00:58 +114 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/my_sos_screen_test.dart: history edit/delete and responsive SOS and Sync screens
+00:58 +115 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/my_sos_screen_test.dart: history edit/delete and responsive SOS and Sync screens
+00:59 +116 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/my_sos_screen_test.dart: history edit/delete and responsive SOS and Sync screens
+00:59 +117 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/my_sos_screen_test.dart: history edit/delete and responsive SOS and Sync screens
+00:59 +117 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/message_service_test.dart: failed send stays pending; lost ACK retries same ID; ACK completes delivery
+Message service: Waiting to retry Phone B: Bad state: Disconnected
+00:59 +118 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/my_sos_screen_test.dart: history edit/delete and responsive SOS and Sync screens
+00:59 +119 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/my_sos_screen_test.dart: history edit/delete and responsive SOS and Sync screens
+01:00 +119 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/message_service_test.dart: same ID with different content is not acknowledged or overwritten
+Message service: Receive failed: Bad state: Conflicting message ID
+01:00 +120 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/my_sos_screen_test.dart: history edit/delete and responsive SOS and Sync screens
+01:00 +121 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/my_sos_screen_test.dart: history edit/delete and responsive SOS and Sync screens
+01:00 +121 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/message_service_test.dart: a failing endpoint cannot starve another peer outbox
+Message service: Waiting to retry Phone B: Bad state: Disconnected
+01:00 +122 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/my_sos_screen_test.dart: history edit/delete and responsive SOS and Sync screens
+01:00 +123 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/my_sos_screen_test.dart: history edit/delete and responsive SOS and Sync screens
+01:01 +124 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_discovery_chip_test.dart: stopping requires confirmation; cancel preserves discovery
+01:01 +125 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_discovery_chip_test.dart: stopping requires confirmation; cancel preserves discovery
+01:01 +125 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: C queues ACK before send and recovers it after restart
+Message service: Relay ACK retry failed: Bad state: Link down
+Message service: Waiting to retry 1: Bad state: Link down
+01:01 +126 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: C queues ACK before send and recovers it after restart
+01:01 +126 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/message_service_test.dart: malformed packets and mismatched ACK sender cannot change delivery
+Message service: Receive failed: FormatException: Unexpected character (at character 1)
+not JSON
+^
+
+01:01 +127 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: C queues ACK before send and recovers it after restart
+01:01 +128 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_discovery_chip_test.dart: stopped discovery can restart; busy controls cannot open
+01:01 +129 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/message_service_test.dart: empty and oversized encoded messages never enter the outbox
+01:01 +130 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: B caches receipt and recovers pending return ACK after restart
+Message service: Relay ACK retry failed: Bad state: Link down
+Message service: Waiting to retry 0: Bad state: Link down
+01:02 +131 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: lost return ACK is replayed from durable receipt on origin retry
+01:04 +132 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: resume during permission work retries once; explicit stop stays stopped
+01:04 +132 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: unrelated ACK sender and invalid routes cannot mark delivered
+Message service: Receive failed: FormatException: Invalid relay ACK route
+01:04 +133 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: resume during permission work retries once; explicit stop stays stopped
+01:05 +133 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: claim and queue insertion roll back together on storage failure
+Message service: Receive failed: SqfliteFfiException(sqlite_error: 1811, , SqliteException(1811): while executing statement, test queue storage failure, constraint failed (code 1811)
+  Causing statement: INSERT INTO relay_queue (packet_id, payload, dest_peer, attempts, created_at) VALUES (?, ?, ?, ?, ?), parameters: bd12ef7b-3877-47a5-9ab5-eaf6155e4a9d, {"id":"bd12ef7b-3877-47a5-9ab5-eaf6155e4a9d","senderId":"79516a91-0b5f-4bf8-9ba4-5f5ce411723e","senderName":"Rescue-e817a4","receiverId":"fdf68af2-6628-4dde-a108-91640e6d06df","text":"ช่วยด้วย 🌍","timestamp":"2026-10-27T10:12:22.735158Z","type":"message","status":"pending","ackFor":null,"relayVersion":1,"relayPath":["79516a91-0b5f-4bf8-9ba4-5f5ce411723e","804387fd-e5ff-4528-bc5d-df47900e83c4"]}, fdf68af2-6628-4dde-a108-91640e6d06df, 0, 2026-10-27T10:12:22.842270Z}) DatabaseException(SqliteException(1811): while executing statement, test queue storage failure, constraint failed (code 1811)
+  Causing statement: INSERT INTO relay_queue (packet_id, payload, dest_peer, attempts, created_at) VALUES (?, ?, ?, ?, ?), parameters: bd12ef7b-3877-47a5-9ab5-eaf6155e4a9d, {"id":"bd12ef7b-3877-47a5-9ab5-eaf6155e4a9d","senderId":"79516a91-0b5f-4bf8-9ba4-5f5ce411723e","senderName":"Rescue-e817a4","receiverId":"fdf68af2-6628-4dde-a108-91640e6d06df","text":"ช่วยด้วย 🌍","timestamp":"2026-10-27T10:12:22.735158Z","type":"message","status":"pending","ackFor":null,"relayVersion":1,"relayPath":["79516a91-0b5f-4bf8-9ba4-5f5ce411723e","804387fd-e5ff-4528-bc5d-df47900e83c4"]}, fdf68af2-6628-4dde-a108-91640e6d06df, 0, 2026-10-27T10:12:22.842270Z) sql 'INSERT INTO relay_queue (packet_id, payload, dest_peer, attempts, created_at) VALUES (?, ?, ?, ?, ?)' args [bd12ef7b-3877-47a5-9ab5-eaf6155e4a9d, {"id":"bd12ef7b-3877-47a5-9ab5-eaf6155e4a9d","send..., fdf68af2-6628-4dde-a108-91640e6d06df, 0, 2026-10-27T10:12:22.842270Z] {details: {database: {path: C:\Users\Asus\AppData\Local\Temp\relay-test-414b6db5\1.db, id: 42, readOnly: false, singleInstance: true}}}
+01:05 +134 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: resume during permission work retries once; explicit stop stays stopped
+01:06 +134 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: same ID with changed content is rejected without changing queued job
+Message service: Receive failed: FormatException: Conflicting relay packet ID
+01:06 +135 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: resume during permission work retries once; explicit stop stays stopped
+01:06 +136 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: map follows reachable peers and current SOS/rescue roles
+01:06 +136 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_screen_test.dart: nearby page renders and scrolls on a phone
+[RescueLink] This POC requires a physical Android phone.
+01:06 +137 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: map follows reachable peers and current SOS/rescue roles
+01:07 +138 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: map follows reachable peers and current SOS/rescue roles
+01:07 +139 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: map follows reachable peers and current SOS/rescue roles
+01:07 +140 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: retry continues beyond five attempts rather than abandoning work
+01:08 +141 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: home changes priority using own mode, dark=true
+01:08 +142 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:08 +142 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: active background session retains payload delivery when paused and STOP releases it
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:08 +143 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:08 +143 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: home search connects automatically and keeps scanning after connection
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:08 +144 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:08 +144 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: automatic mode requests discovered peers and continues discovery after connection
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:08 +145 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:08 +145 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: simultaneous local automatic starts share one advertising and discovery operation
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:08 +146 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:08 +146 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: automatic reconnect refreshes discovery without restarting the other phone
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] ขาดการเชื่อมต่อกับ Rescue-A • กำลังรอเชื่อมต่อใหม่
+[RescueLink] Discovery stopped
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A-new)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 4567 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:08 +147 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:08 +147 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: automatic mode elects one caller and accepts the other phone
+[RescueLink] Advertising started as Rescue-Z
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:08 +148 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:08 +148 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: manual scan connects two advertisers without stopping at the first
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Found Rescue-C (C)
+[RescueLink] Connection requested: Rescue-C
+[RescueLink] Connection initiated: Rescue-C; code 5678 (POC auto-accept)
+[RescueLink] Connected to Rescue-C
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:08 +149 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:09 +149 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: ACK retry waits for backoff then sends without reconnect
+Message service: Relay ACK retry failed: Bad state: Link down
+01:09 +149 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: automatic caller falls back when the peer only advertises
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising started as Rescue-Z
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:09 +150 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:09 +150 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: peer found during another request is connected without waiting for a timer
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Found Rescue-C (C)
+[RescueLink] Connection requested: Rescue-C
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:09 +151 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:09 +152 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:09 +152 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: stale native advertiser is cleared before starting a fresh session
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:09 +153 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:09 +153 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: permission matrix covers Android 11, 12, 12L and 13+
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:09 +154 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:09 +154 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: permission display accepts exemptions but rejects disabled radio
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:09 +155 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:09 +155 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: failed native STOP still invalidates local endpoints
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] Stop endpoints failed: Bad state: Native cleanup failed
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] Stop endpoints failed: Bad state: Native cleanup failed
+01:09 +156 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:09 +156 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: permission denial prevents native advertising
+[RescueLink] Nearby Devices permission denied
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:09 +157 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:09 +157 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: false advertising and discovery results become errors
+[RescueLink] Advertising start failed: Bad state: Nearby returned false
+[RescueLink] Discovery start failed: Bad state: Nearby returned false
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:09 +158 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:09 +158 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: discovery deduplicates, filters service and removes lost endpoint
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Endpoint lost: Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:09 +159 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:09 +159 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: outgoing connection auto-accepts and supports UTF-8 in both directions
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Message queued for Rescue-A
+[RescueLink] Message received from Rescue-A
+[RescueLink] ขาดการเชื่อมต่อกับ Rescue-A • กำลังรอเชื่อมต่อใหม่
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:09 +160 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:09 +160 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: advertiser handles incoming peer not in discovery list
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Connection initiated: Rescue-B; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-B
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:09 +161 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:09 +161 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: reject and connection failure reset connecting state
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Rescue-A ยังไม่รับการเชื่อมต่อ กรุณาเปิดรับการเชื่อมต่อบนเครื่องนั้น
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection failed: Bad state: Nearby returned false
+[RescueLink] ยังเชื่อมต่อกับ Rescue-A ไม่สำเร็จ ตรวจว่าอีกเครื่องเปิดรับการเชื่อมต่อและเปิด Bluetooth/Wi-Fi แล้ว ระบบจะลองใหม่อัตโนมัติ
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:09 +162 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:09 +162 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: empty, disconnected, oversized and native send failures are handled
+[RescueLink] Enter a message before sending.
+[RescueLink] Connect to a nearby device before sending.
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Message exceeds the 32 KB byte payload limit.
+[RescueLink] Send to Rescue-A failed: Bad state: Radio lost
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:09 +163 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:09 +163 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: malformed UTF-8 and failed transfer produce errors
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Received invalid UTF-8 text; message ignored.
+[RescueLink] Payload 2 transfer failed/canceled for A.
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:09 +164 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:09 +164 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: STOP clears peers and ignores late callbacks
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:09 +165 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:09 +165 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: STOP during permission prompt cancels the pending start
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:09 +166 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:09 +166 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: background cleanup blocks new sessions until foreground resumes
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:09 +167 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:09 +167 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: unanswered connection times out and removes pending peer
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] อีกเครื่องยังไม่ตอบรับ กรุณาวางเครื่องใกล้กันและเปิดรับการเชื่อมต่อ ระบบจะลองใหม่อัตโนมัติ
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+01:09 +168 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_overlap_test.dart: home shows directory and map without overlapping cards
+01:10 +169 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: v7 migration preserves pending job, identity and history
+01:10 +170 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: rescue GPS reaches C through B and can be withdrawn without an SOS
+01:11 +171 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: rescue GPS reaches C through B and can be withdrawn without an SOS
+01:12 +172 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: rescue GPS reaches C through B and can be withdrawn without an SOS
+01:12 +173 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: rescue GPS reaches C through B and can be withdrawn without an SOS
+01:12 +174 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: rescue GPS reaches C through B and can be withdrawn without an SOS
+01:13 +175 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: rescue GPS reaches C through B and can be withdrawn without an SOS
+01:13 +176 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: rescue GPS reaches C through B and can be withdrawn without an SOS
+01:13 +177 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: rescue GPS reaches C through B and can be withdrawn without an SOS
+01:13 +178 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: rescue GPS reaches C through B and can be withdrawn without an SOS
+01:14 +179 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: rescue GPS reaches C through B and can be withdrawn without an SOS
+01:14 +180 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: rescue GPS reaches C through B and can be withdrawn without an SOS
+01:14 +181 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: rescue GPS reaches C through B and can be withdrawn without an SOS
+01:15 +182 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: rescue GPS reaches C through B and can be withdrawn without an SOS
+01:15 +183 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/notification_service_test.dart: successful read cancels the conversation notification
+01:15 +184 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: A discovers C through B without pairing and sends a chat with ACK
+01:16 +185 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: A discovers C through B without pairing and sends a chat with ACK
+01:16 +186 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: A discovers C through B without pairing and sends a chat with ACK
+01:17 +187 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/onboarding_screen_test.dart: three introduction pages lead to login on a small screen
+01:18 +188 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/onboarding_screen_test.dart: three introduction pages lead to login on a small screen
+01:18 +189 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/onboarding_screen_test.dart: three introduction pages lead to login on a small screen
+01:19 +190 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/peer_connection_label_test.dart: route is readable on a narrow card, dark=false
+01:19 +191 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/peer_connection_label_test.dart: route is readable on a narrow card, dark=false
+01:19 +192 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/peer_connection_label_test.dart: route is readable on a narrow card, dark=false
+01:20 +193 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: Rescue changes cross B and old cached entries cannot renew after restart
+01:20 +194 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: Rescue changes cross B and old cached entries cannot renew after restart
+01:21 +195 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/phase_4_widgets_test.dart: nearby excludes PresenceFilter.rescue and unreachable peers
+01:22 +196 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/phase_4_widgets_test.dart: nearby excludes PresenceFilter.rescue and unreachable peers
+01:22 +197 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/phase_4_widgets_test.dart: nearby excludes PresenceFilter.rescue and unreachable peers
+01:22 +198 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/phase_4_widgets_test.dart: nearby excludes PresenceFilter.rescue and unreachable peers
+01:22 +199 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/phase_4_widgets_test.dart: nearby excludes PresenceFilter.rescue and unreachable peers
+01:22 +200 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/phase_4_widgets_test.dart: nearby excludes PresenceFilter.rescue and unreachable peers
+01:22 +201 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/redesign_screens_test.dart: MemberScreen redesign renders properly with Guest (profile null)
+01:23 +202 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/redesign_screens_test.dart: MemberScreen redesign renders properly with Guest (profile null)
+01:23 +203 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/redesign_screens_test.dart: MemberScreen redesign renders properly with Guest (profile null)
+01:23 +204 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/redesign_screens_test.dart: MemberScreen redesign renders properly with Guest (profile null)
+01:23 +205 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/phase_4_widgets_test.dart: live directory hides stale people and opens reachable chat
+01:24 +206 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: large directories are split under the byte limit and all peers arrive
+01:24 +207 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: large directories are split under the byte limit and all peers arrive
+01:24 +208 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: large directories are split under the byte limit and all peers arrive
+01:24 +209 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: large directories are split under the byte limit and all peers arrive
+01:24 +210 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: large directories are split under the byte limit and all peers arrive
+01:24 +211 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: large directories are split under the byte limit and all peers arrive
+01:25 +212 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: large directories are split under the byte limit and all peers arrive
+01:26 +213 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/relay_map_widgets_test.dart: relay separates intermediary devices from radio hops
+01:26 +214 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/relay_map_widgets_test.dart: relay separates intermediary devices from radio hops
+01:26 +215 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/relay_map_widgets_test.dart: relay separates intermediary devices from radio hops
+01:26 +216 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/relay_map_widgets_test.dart: relay separates intermediary devices from radio hops
+01:26 +217 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/relay_map_widgets_test.dart: relay separates intermediary devices from radio hops
+01:26 +218 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/relay_map_widgets_test.dart: relay separates intermediary devices from radio hops
+01:26 +219 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: broadcast SOS updates/cancellation cross B once per revision and persist
+01:26 +220 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: broadcast SOS updates/cancellation cross B once per revision and persist
+01:26 +221 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: broadcast SOS updates/cancellation cross B once per revision and persist
+01:26 +222 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: broadcast SOS updates/cancellation cross B once per revision and persist
+01:27 +223 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: broadcast SOS updates/cancellation cross B once per revision and persist
+01:27 +224 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: broadcast SOS updates/cancellation cross B once per revision and persist
+01:29 +225 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: broadcast SOS updates/cancellation cross B once per revision and persist
+01:30 +226 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: broadcast SOS updates/cancellation cross B once per revision and persist
+01:30 +227 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_cancel_dialog_test.dart: standard reasons return immediately and back leaves SOS unchanged
+01:31 +228 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_cancel_dialog_test.dart: standard reasons return immediately and back leaves SOS unchanged
+01:31 +229 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_closed_form_test.dart: active SOS actions stay below scrolling content and confirm cancellation
+01:32 +230 ~3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_closed_form_test.dart: active SOS actions stay below scrolling content and confirm cancellation
+01:32 +230 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_closed_form_test.dart: active SOS actions stay below scrolling content and confirm cancellation
+01:32 +231 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_closed_form_test.dart: active SOS actions stay below scrolling content and confirm cancellation
+01:33 +232 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_closed_form_test.dart: active SOS actions stay below scrolling content and confirm cancellation
+01:34 +233 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: typed SOS categories survive relay, restart and cancellation
+01:35 +234 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: typed SOS categories survive relay, restart and cancellation
+01:35 +235 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_confirmation_dialog_test.dart: SOS review scrolls with large text and returns edit or confirm, dark=false
+01:35 +236 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_confirmation_dialog_test.dart: SOS review scrolls with large text and returns edit or confirm, dark=false
+01:36 +237 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_confirmation_dialog_test.dart: SOS review scrolls with large text and returns edit or confirm, dark=false
+01:36 +238 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_history_layout_test.dart: history fits narrow screens and large text in both themes
+01:37 +239 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_history_layout_test.dart: history fits narrow screens and large text in both themes
+01:38 +240 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_history_layout_test.dart: history fits narrow screens and large text in both themes
+01:38 +241 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_history_layout_test.dart: history fits narrow screens and large text in both themes
+01:38 +242 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_history_layout_test.dart: history fits narrow screens and large text in both themes
+01:39 +243 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: presence expiry does not cancel SOS; SOS expires after 24 hours
+01:39 +244 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_history_order_test.dart: active section precedes closed cases with dates and timestamps descending
+01:40 +245 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_history_order_test.dart: active section precedes closed cases with dates and timestamps descending
+01:40 +246 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_history_order_test.dart: active section precedes closed cases with dates and timestamps descending
+01:40 +247 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_history_order_test.dart: active section precedes closed cases with dates and timestamps descending
+01:40 +248 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_history_order_test.dart: active section precedes closed cases with dates and timestamps descending
+01:40 +249 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_history_order_test.dart: active section precedes closed cases with dates and timestamps descending
+01:40 +250 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_history_order_test.dart: active section precedes closed cases with dates and timestamps descending
+01:40 +251 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_history_order_test.dart: active section precedes closed cases with dates and timestamps descending
+01:40 +252 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_history_order_test.dart: active section precedes closed cases with dates and timestamps descending
+01:40 +253 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_history_order_test.dart: active section precedes closed cases with dates and timestamps descending
+01:40 +254 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_history_order_test.dart: active section precedes closed cases with dates and timestamps descending
+01:40 +255 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_history_order_test.dart: active section precedes closed cases with dates and timestamps descending
+01:40 +256 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_history_order_test.dart: active section precedes closed cases with dates and timestamps descending
+01:41 +257 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: new incident wins after rapid cancellation with an unchanged clock
+01:43 +258 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_redesign_test.dart: SOS mobile layout, large text and role navigation
+01:43 +259 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_redesign_test.dart: SOS mobile layout, large text and role navigation
+01:43 +260 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_redesign_test.dart: SOS mobile layout, large text and role navigation
+01:43 +261 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_redesign_test.dart: SOS mobile layout, large text and role navigation
+01:43 +262 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_redesign_test.dart: SOS mobile layout, large text and role navigation
+01:44 +263 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_redesign_test.dart: SOS mobile layout, large text and role navigation
+01:44 +264 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_redesign_test.dart: SOS mobile layout, large text and role navigation
+01:44 +265 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_redesign_test.dart: SOS mobile layout, large text and role navigation
+01:44 +266 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_redesign_test.dart: SOS mobile layout, large text and role navigation
+01:45 +267 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_redesign_test.dart: SOS mobile layout, large text and role navigation
+01:45 +268 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_redesign_test.dart: SOS mobile layout, large text and role navigation
+01:45 +269 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_redesign_test.dart: SOS mobile layout, large text and role navigation
+01:45 +270 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_redesign_test.dart: SOS mobile layout, large text and role navigation
+01:45 +271 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_redesign_test.dart: SOS mobile layout, large text and role navigation
+01:45 +272 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_redesign_test.dart: SOS mobile layout, large text and role navigation
+01:46 +273 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_screen_test.dart: cached coordinates are disclosed before confirmation and preserved on send
+01:46 +274 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_redesign_test.dart: active SOS shows receipt state, edit and cancel confirmation
+01:46 +275 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_redesign_test.dart: active SOS shows receipt state, edit and cancel confirmation
+01:46 +276 ~4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_screen_test.dart: SOS can broadcast without recipients but requires confirmation
+01:47 +276 ~5: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_screen_test.dart: SOS can broadcast without recipients but requires confirmation
+01:47 +276 ~6: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_screen_test.dart: SOS can broadcast without recipients but requires confirmation
+01:47 +277 ~6: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_ui_flow_test.dart: selection, reviewed multi-type payload and sticky send survive scrolling and keyboard
+01:47 +278 ~6: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_ui_flow_test.dart: selection, reviewed multi-type payload and sticky send survive scrolling and keyboard
+01:49 +279 ~6: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_ui_flow_test.dart: cloud sync is not receipt proof; ACK survives cloud status; cancellation has a block icon
+01:49 +280 ~6: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_ui_flow_test.dart: fullscreen map tap creates a manual pin and preserves it through JSON
+01:49 +281 ~6: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/sos_ui_flow_test.dart: SOS red meets AA for white labels
+01:49 +282 ~6: All tests passed!
