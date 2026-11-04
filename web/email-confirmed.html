@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <title>การยืนยันอีเมล | RescueLink</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: #f3f6f8; color: #102d43; font-family: Tahoma, Arial, sans-serif; line-height: 1.8; }
+    main { width: 100%; max-width: 560px; padding: 32px; background: white; border-radius: 20px; box-shadow: 0 12px 40px #102d4310; }
+    header { font-size: 24px; font-weight: bold; padding-bottom: 16px; border-bottom: 4px solid #ff6826; }
+    h1 { font-size: 25px; line-height: 1.5; margin: 28px 0 16px; }
+    p { margin: 0 0 16px; }
+    .note { color: #526575; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>RescueLink</header>
+    <section aria-live="polite">
+      <h1 id="heading">การยืนยันอีเมล</h1>
+      <p id="message">กรุณาเปิดหน้านี้ผ่านปุ่มยืนยันอีเมลในอีเมลสมัครสมาชิก RescueLink</p>
+      <p id="detail" class="note">เมื่อยืนยันสำเร็จ คุณสามารถกลับไปเข้าสู่ระบบในแอปด้วยอีเมลและรหัสผ่านที่สมัครไว้</p>
+    </section>
+    <noscript><p>กรุณาเปิดใช้งาน JavaScript เพื่อแสดงผลการยืนยัน หากคุณกดยืนยันจากอีเมลแล้ว สามารถลองเข้าสู่ระบบในแอปได้</p></noscript>
+  </main>
+  <script>
+    // Supabase verifies the email before redirecting here. Password login in
+    // the app is independent of the browser's PKCE authorization code.
+    const query = new URLSearchParams(window.location.search);
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    const hasError = ['error', 'error_code', 'error_description'].some(
+      key => query.has(key) || fragment.has(key)
+    );
+    const verified = Boolean(query.get('code') || fragment.get('access_token'));
+    const heading = document.getElementById('heading');
+    const message = document.getElementById('message');
+    const detail = document.getElementById('detail');
+    if (hasError) {
+      heading.textContent = 'ยังยืนยันอีเมลไม่สำเร็จ';
+      message.textContent = 'ลิงก์นี้อาจหมดอายุหรือถูกใช้แล้ว หากเคยยืนยันสำเร็จแล้ว สามารถกลับไปลองเข้าสู่ระบบในแอป RescueLink ได้เลย';
+      detail.textContent = 'หากยังเข้าสู่ระบบไม่ได้ ให้ขออีเมลยืนยันฉบับใหม่จากแอป แล้วกดยืนยันจากอีเมลฉบับล่าสุด';
+    } else if (verified) {
+      heading.textContent = 'ยืนยันอีเมลสำเร็จ';
+      message.textContent = 'กลับไปที่แอป RescueLink แล้วเข้าสู่ระบบด้วยอีเมลและรหัสผ่านที่คุณสมัครไว้ได้เลย';
+      detail.textContent = 'คุณสามารถเข้าสู่ระบบในแอปบนเครื่องที่ต้องการใช้งานได้ แม้จะเปิดอีเมลยืนยันจากอีกเครื่อง และปิดหน้านี้ได้เลย';
+    }
+    // Remove callback credentials from the address bar without storing them.
+    window.history.replaceState(null, '', window.location.pathname);
+  </script>
+</body>
+</html>
