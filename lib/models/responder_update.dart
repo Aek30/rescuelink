@@ -1,3 +1,5 @@
+import 'chat_location_message.dart';
+
 /// A responder's own status report sent through chat, not an assignment receipt.
 class ResponderUpdate {
   const ResponderUpdate(this.incidentId, this.stage);
@@ -38,11 +40,15 @@ class ResponderUpdate {
     return ResponderUpdate(match.group(1)!, stage);
   }
 
-  static String readableText(String raw) => parse(raw)?.displayText ?? raw;
+  static String readableText(String raw) =>
+      ChatLocationMessage.parse(raw) != null
+      ? 'แชร์ตำแหน่ง'
+      : parse(raw)?.displayText ?? raw;
 
   /// Strips machine protocol markers like `[SOS <uuid> / <stage>]` so only
   /// human-readable message content is presented to users in chat and previews.
   static String cleanDisplay(String raw) {
+    if (ChatLocationMessage.parse(raw) != null) return 'แชร์ตำแหน่ง';
     final parsed = parse(raw);
     if (parsed != null) return parsed.displayText;
     final markerRegex = RegExp(r'^\[SOS\s+[^\]\r\n]+\]\s*', multiLine: false);

@@ -116,6 +116,25 @@ class _LoginScreenState extends State<LoginScreen> {
         });
   }
 
+  Future<void> _continueAsGuest() async {
+    if (busy) return;
+    setState(() {
+      busy = true;
+      error = null;
+      notice = null;
+    });
+    try {
+      await auth.enterGuest();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(builder: (_) => const NearbyTestScreen()),
+        (_) => false,
+      );
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
   Widget _emailField() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return TextFormField(
@@ -553,6 +572,33 @@ class _LoginScreenState extends State<LoginScreen> {
                                 t('สมัครสมาชิก RescueLink', 'Create account'),
                                 style: const TextStyle(
                                   fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            // Guest button
+                            OutlinedButton.icon(
+                              key: const ValueKey('guest-button'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: textColor,
+                                side: BorderSide(
+                                  color: isDark
+                                      ? const Color(0xFF334155)
+                                      : const Color(0xFFCBD5E1),
+                                  width: 1.2,
+                                ),
+                                minimumSize: const Size.fromHeight(50),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(28),
+                                ),
+                              ),
+                              onPressed: busy ? null : _continueAsGuest,
+                              icon: const Icon(Icons.person_outline_rounded),
+                              label: Text(
+                                t('ใช้งานโดยไม่เข้าสู่ระบบ', 'Continue as guest'),
+                                style: const TextStyle(
+                                  fontSize: 15.5,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),

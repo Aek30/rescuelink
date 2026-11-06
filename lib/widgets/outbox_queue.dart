@@ -5,6 +5,7 @@ import '../models/media_model.dart';
 import '../models/responder_update.dart';
 import '../services/media_upload_service.dart';
 import '../models/sos_alert.dart';
+import '../models/sos_emergency_info.dart';
 import '../theme/rescue_theme.dart';
 
 /// Delivery receipts and cloud synchronization are distinct states.
@@ -46,7 +47,7 @@ class _OutboxQueueState extends State<OutboxQueue> {
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   );
 
-  static const _labels = ['รอการยืนยัน', 'ถึงเครื่องรับแล้ว', 'ซิงก์แล้ว'];
+  static const _labels = ['รอการยืนยัน', 'ถึงเครื่องรับแล้ว', 'สำรองแล้ว'];
   static const _icons = [
     Icons.schedule,
     Icons.check_circle_outline,
@@ -152,7 +153,7 @@ class _OutboxQueueState extends State<OutboxQueue> {
     if (m.type == MessageType.media) {
       final media = widget.mediaFiles[m.text];
       if (media == null) return 'ส่งรูป / สื่อ';
-      return media.isVideo ? 'ส่งวิดีโอ' : 'ส่งรูป';
+      return media.isVideo ? 'ส่งวิดีโอ' : 'ส่งรูปภาพ';
     }
     return _formatMessageText(m.text);
   }
@@ -169,12 +170,11 @@ class _OutboxQueueState extends State<OutboxQueue> {
 
     return switch (upload.state) {
       UploadState.uploading =>
-        percent != null ? 'กำลังส่ง $percent%' : 'กำลังส่ง…',
-      UploadState.verifying => 'กำลังตรวจสอบไฟล์…',
-      UploadState.ready => 'ส่งเสร็จแล้ว',
-      UploadState.failed => 'ส่งไม่สำเร็จ • จะลองใหม่อัตโนมัติ',
-      UploadState.queued =>
-        'อยู่ในคิว • ซิงก์อัตโนมัติเมื่อออนไลน์และเข้าสู่ระบบ',
+        percent != null ? 'กำลังสำรองไฟล์ $percent%' : 'กำลังสำรองไฟล์…',
+      UploadState.verifying => 'กำลังตรวจสอบไฟล์ที่สำรอง…',
+      UploadState.ready => 'สำรองไฟล์แล้ว',
+      UploadState.failed => 'สำรองไฟล์ไม่สำเร็จ • จะลองใหม่อัตโนมัติ',
+      UploadState.queued => 'รอสำรองข้อมูลเมื่อมีอินเทอร์เน็ตและเข้าสู่ระบบ',
     };
   }
 
@@ -184,10 +184,10 @@ class _OutboxQueueState extends State<OutboxQueue> {
             : 'ยังไม่ยืนยันการรับที่ปลายทาง')
       : m.type == MessageType.media
       ? '${switch (widget.mediaUploads[m.text]?.state) {
-          UploadState.uploading => 'กำลังซิงก์ไฟล์ขึ้น Cloud',
-          UploadState.verifying => 'กำลังตรวจไฟล์บน Cloud',
-          UploadState.failed => 'ซิงก์ไม่สำเร็จ • จะลองใหม่อัตโนมัติ',
-          _ => 'อยู่ในคิว • ซิงก์อัตโนมัติเมื่อออนไลน์และเข้าสู่ระบบ',
+          UploadState.uploading => 'กำลังสำรองไฟล์',
+          UploadState.verifying => 'กำลังตรวจสอบไฟล์ที่สำรอง',
+          UploadState.failed => 'สำรองไฟล์ไม่สำเร็จ • จะลองใหม่อัตโนมัติ',
+          _ => 'รอสำรองข้อมูลเมื่อมีอินเทอร์เน็ตและเข้าสู่ระบบ',
         }} • ${m.status == MessageStatus.delivered ? 'เครื่องรับยืนยันแล้ว' : 'รอเครื่องรับยืนยัน'}'
       : switch (m.status) {
           MessageStatus.pending => 'รอเชื่อมต่อเพื่อส่งข้อความ',
@@ -195,13 +195,15 @@ class _OutboxQueueState extends State<OutboxQueue> {
             'ยังไม่ยืนยันว่าถึงปลายทาง • จะลองส่งซ้ำเมื่อเชื่อมต่อ',
           MessageStatus.delivered => 'เครื่องรับยืนยันแล้ว',
           MessageStatus.synced =>
-            'ข้อมูลเก่าระบุซิงก์แล้ว • ยังไม่มีผล Cloud ยืนยัน',
+            'ยังยืนยันการสำรองข้อมูลไม่ได้ • รอเครื่องรับยืนยัน',
         };
 
   String _sosReadableDetails(SosAlert alert) {
     final lines = <String>[
       'ผู้แจ้ง: ${alert.name} • ${alert.people} คน',
       if (alert.details.trim().isNotEmpty) alert.details.trim(),
+      if (alert.emergencyInfo.isNotEmpty)
+        sosEmergencyInfoText(alert.emergencyInfo),
       alert.location != null ? 'แนบพิกัดตำแหน่งแล้ว' : 'ไม่ได้แนบพิกัด',
     ];
     return lines.join('\n');
@@ -232,7 +234,7 @@ class _OutboxQueueState extends State<OutboxQueue> {
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
         ),
         Text(
-          'ติดตามข้อความฉุกเฉินและการส่งต่อถึงเครื่องรับ',
+          'ติดตามการส่งข้อความ รูปภาพ และคำขอ SOS',
           style: TextStyle(color: RescueTheme.mutedFor(context), fontSize: 13),
         ),
         const SizedBox(height: 12),
@@ -295,7 +297,7 @@ class _OutboxQueueState extends State<OutboxQueue> {
           _filter == null
               ? 'ทั้งหมด • ${messages.length} ข้อความ'
               : _filter == 2
-              ? 'ซิงก์แล้ว (${messages.where((m) => _group(m) == 2).length}) • สำรองข้อมูลไปยัง Supabase Cloud สำเร็จ'
+              ? 'สำรองแล้ว • ${messages.where((m) => _group(m) == 2).length} ข้อความ'
               : '${_labels[_filter!]} • แตะตัวกรองอีกครั้งเพื่อดูทั้งหมด',
           style: TextStyle(
             fontSize: 11.5,
@@ -382,7 +384,7 @@ class _OutboxQueueState extends State<OutboxQueue> {
               ),
               const SizedBox(height: 5),
               Text(
-                'ระบบจะลองส่งอีกครั้งเมื่อเชื่อมต่อกับอุปกรณ์ใกล้เคียง\nสถานะ "ซิงก์แล้ว" หมายถึงจำนวนข้อความที่สำรองข้อมูลไปยัง Supabase Cloud สำเร็จจริง',
+                'ข้อความที่ค้างจะส่งใหม่เมื่อเชื่อมต่ออุปกรณ์ใกล้เคียง\nการสำรองข้อมูลแยกจากการยืนยันว่าผู้รับได้รับข้อความ',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 11.5,
@@ -575,13 +577,11 @@ class _OutboxQueueState extends State<OutboxQueue> {
                     ),
                     const SizedBox(height: 6),
                   ] else ...[
-                    if (widget.mediaFiles[m.text] case final media?) ...[
-                      Text(
-                        'ชื่อไฟล์: ${media.fileName}',
-                        style: const TextStyle(fontSize: 12.5),
-                      ),
-                      const SizedBox(height: 6),
-                    ],
+                    Text(
+                      _title(m, alert),
+                      style: const TextStyle(fontSize: 12.5),
+                    ),
+                    const SizedBox(height: 6),
                     if (uploadSummary != null) ...[
                       Text(
                         uploadSummary,

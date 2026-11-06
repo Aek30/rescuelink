@@ -22,7 +22,8 @@ abstract interface class ProfileVault {
   Future<void> remove(String owner);
 }
 
-/// Health data never goes into SQLite, Auth metadata/JWT, logs, or radio packets.
+/// Private profile data stays in the secure vault. Only fields explicitly
+/// selected by the owner may be copied into an SOS attachment.
 class SecureProfileVault implements ProfileVault {
   const SecureProfileVault(this.project);
   final String project;

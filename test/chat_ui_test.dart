@@ -263,8 +263,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.byIcon(Icons.schedule_rounded), findsOneWidget);
-      expect(find.byIcon(Icons.done_all_rounded), findsNothing);
+      expect(find.byIcon(Icons.done_all_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.schedule_rounded), findsNothing);
       expect(find.textContaining('Exception'), findsNothing);
       expect(find.text('raw exception'), findsNothing);
       expect(find.textContaining('secret-internal'), findsNothing);

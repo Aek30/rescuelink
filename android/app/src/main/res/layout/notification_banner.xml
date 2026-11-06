@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="horizontal" android:gravity="center_vertical"
+    android:paddingTop="4dp" android:paddingBottom="4dp">
+    <TextView android:id="@+id/notice_badge"
+        android:layout_width="44dp" android:layout_height="44dp"
+        android:gravity="center" android:background="@drawable/notification_badge"
+        android:textStyle="bold" android:textSize="15sp" android:textColor="#DC2638"
+        android:importantForAccessibility="no" />
+    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+        android:layout_weight="1" android:layout_marginStart="10dp"
+        android:orientation="vertical">
+        <TextView android:id="@+id/notice_title"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textSize="15sp" android:textStyle="bold"
+            android:textColor="@color/notice_text" android:maxLines="1" android:ellipsize="end" />
+        <TextView android:id="@+id/notice_body"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="3dp" android:textSize="13sp"
+            android:textColor="@color/notice_muted" android:maxLines="2" android:ellipsize="end" />
+    </LinearLayout>
+    <TextView android:id="@+id/notice_close"
+        android:layout_width="48dp" android:layout_height="48dp"
+        android:gravity="center" android:text="×" android:textSize="26sp"
+        android:textColor="@color/notice_muted" android:contentDescription="ปิดแจ้งเตือน"
+        android:focusable="true" android:clickable="true" />
+</LinearLayout>

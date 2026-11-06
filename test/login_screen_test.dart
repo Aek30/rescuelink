@@ -132,14 +132,16 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('login has no guest and fits small screens', (tester) async {
+  testWidgets('login supports guest option and fits small screens', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(320, 640);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
-    expect(find.textContaining('Guest'), findsNothing);
-    expect(find.textContaining('ผู้เยี่ยมชม'), findsNothing);
+    expect(find.byKey(const ValueKey('guest-button')), findsOneWidget);
+    expect(find.text('ใช้งานโดยไม่เข้าสู่ระบบ'), findsOneWidget);
     await tapVisible(tester, find.widgetWithText(FilledButton, 'เข้าสู่ระบบ'));
     expect(find.text('กรุณากรอกรหัสผ่าน'), findsOneWidget);
     expect(find.text('กรุณากรอกอีเมล'), findsOneWidget);

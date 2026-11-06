@@ -19,6 +19,53 @@ class MemoryPkceStorage extends GotrueAsyncStorage {
 
 void main() {
   test(
+    'duplicate obfuscated signup does not claim an email was sent',
+    () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final backend = SupabaseAuthBackend(
+        'http://127.0.0.1:${server.port}',
+        'local-key',
+        pkceStorage: MemoryPkceStorage(),
+      );
+      addTearDown(() async {
+        await backend.client.dispose();
+        await server.close(force: true);
+      });
+      final handled = server.first.then((request) async {
+        expect(request.uri.path, '/auth/v1/signup');
+        await request.drain<void>();
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(
+          jsonEncode({
+            'id': '00000000-0000-4000-8000-000000000001',
+            'aud': 'authenticated',
+            'email': 'member@example.com',
+            'created_at': '2026-10-03T00:00:00Z',
+            'identities': [],
+            'app_metadata': {},
+            'user_metadata': {},
+          }),
+        );
+        await request.response.close();
+      });
+      await expectLater(
+        backend.authenticate(
+          'member@example.com',
+          'Test@password1',
+          register: true,
+        ),
+        throwsA(
+          isA<AuthException>().having(
+            (e) => e.code,
+            'code',
+            'user_already_exists',
+          ),
+        ),
+      );
+      await handled;
+    },
+  );
+  test(
     'real SDK signup sends PKCE challenge and name before awaiting confirmation',
     () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);

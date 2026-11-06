@@ -5,7 +5,8 @@ import '../services/app_preferences.dart';
 import '../services/auth_service.dart';
 import '../models/incoming_notice.dart';
 import '../models/sos_alert.dart';
-import '../widgets/location_button.dart';
+import '../models/offline_map_data.dart';
+import '../widgets/in_app_message_banner.dart';
 import '../widgets/my_location_summary.dart';
 import 'dart:async';
 import 'settings_panel.dart';
@@ -30,9 +31,17 @@ import '../theme/rescue_theme.dart';
 import '../services/member_service.dart';
 
 class NearbyTestScreen extends StatefulWidget {
-  const NearbyTestScreen({super.key, this.nearbyService, this.messageService});
+  const NearbyTestScreen({
+    super.key,
+    this.nearbyService,
+    this.messageService,
+    this.locationService,
+    this.now,
+  });
   final NearbyService? nearbyService;
   final MessageService? messageService;
+  final SosLocationService? locationService;
+  final DateTime Function()? now;
 
   @override
   State<NearbyTestScreen> createState() => _NearbyTestScreenState();
@@ -45,6 +54,8 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
   late final TextEditingController _name;
   late final MessageService _messages;
   late final MediaService _media;
+  late final Future<void> _profileReady;
+  late final Future<void> _messagesReady;
 
   bool _busy = false;
   int _tab = 0;
@@ -54,13 +65,24 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
   bool _searchOnResume = true;
   bool _restartSearchAfterBusy = false;
   Timer? _noticeTimer;
+  Timer? _activityProgressTimer;
+  bool _showActivityProgress = false;
   String? _authenticatedOwner;
   bool _exitingExpiredAccount = false;
   final List<IncomingNotice> _notices = [];
   IncomingNotice? _shownNotice;
+  OverlayEntry? _messageBanner;
   SosLocation? _me;
   bool _loadingGps = false;
   String? _gpsError;
+  late final SosLocationService _locationService;
+  bool _locationReady = false;
+  late final Future<OfflineMapData> _offlineMap;
+  Timer? _mapProgressTimer;
+  bool _showMapProgress = false;
+  DateTime? _lastLocationAttempt;
+
+  DateTime get _locationNow => (widget.now ?? DateTime.now)();
 
   static const Color _primary = RescueTheme.orangeInk;
   static const Color _success = Color(0xFF2E9B6F);
@@ -71,13 +93,20 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
   @override
   void initState() {
     super.initState();
+    _offlineMap = OfflineMapData.load();
     _authenticatedOwner = AuthService.instance.session?.userId;
     AuthService.instance.addListener(_accountChanged);
+    AuthService.instance.beforeScopeChange = () async {
+      await _service.stopAll();
+    };
     _service = widget.nearbyService ?? NearbyService();
+    _service.addListener(_syncActivityProgress);
     _name = TextEditingController(text: _service.deviceName);
 
     final database =
         widget.messageService?.database ?? LocalDatabaseService.instance;
+    _locationService =
+        widget.locationService ?? SosLocationService(database: database);
 
     _media = MediaService(
       nearby: _service,
@@ -99,15 +128,17 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
           nearbyService: _service,
           database: database,
           mediaService: _media,
+          restoreRescueLocationAutomatically: false,
         );
 
     _me = _messages.rescueLocation;
+    _syncMapProgress();
     _messages.addListener(_rememberRescueLocation);
     _messages.onNotice = _receiveNotice;
     _messages.onNoticeCancelled = _cancelNotice;
     unawaited(_refreshNotificationPermission());
-    _messages
-        .initialize()
+    _messagesReady = _messages.initialize();
+    _messagesReady
         .then((_) async {
           if (!mounted) return;
           await _service.connectionSession.listenForNotifications(_openNotice);
@@ -116,7 +147,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
           debugPrint('Notification setup: $error');
         });
     AppPreferences.instance.addListener(_profileNameChanged);
-    AppPreferences.instance
+    _profileReady = AppPreferences.instance
         .load()
         .then((_) => _profileNameChanged())
         .catchError((Object _) {});
@@ -129,8 +160,9 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
     }
 
     WidgetsBinding.instance.addObserver(this);
+    _syncActivityProgress();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) unawaited(_run(_service.startNearby));
+      if (mounted) unawaited(_run(_startNearbyWithLocation));
     });
   }
 
@@ -154,23 +186,35 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
   }
 
   void _accountChanged() {
-    if (_authenticatedOwner == null ||
-        _exitingExpiredAccount ||
-        AuthService.instance.error == null ||
-        AuthService.instance.session?.userId == _authenticatedOwner) {
+    if (_exitingExpiredAccount) return;
+    final currentOwner = AuthService.instance.session?.userId;
+    if (AuthService.instance.error != null && _authenticatedOwner != null) {
+      _exitingExpiredAccount = true;
+      unawaited(() async {
+        try {
+          await _service.stopAll().timeout(const Duration(seconds: 5));
+        } catch (_) {}
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+          (_) => false,
+        );
+      }());
       return;
     }
-    _exitingExpiredAccount = true;
-    unawaited(() async {
-      try {
-        await _service.stopAll().timeout(const Duration(seconds: 5));
-      } catch (_) {}
-      if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
-        (_) => false,
-      );
-    }());
+    if (currentOwner != _authenticatedOwner) {
+      _exitingExpiredAccount = true;
+      unawaited(() async {
+        try {
+          await _service.stopAll().timeout(const Duration(seconds: 5));
+        } catch (_) {}
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute<void>(builder: (_) => const NearbyTestScreen()),
+          (_) => false,
+        );
+      }());
+    }
   }
 
   Future<void> _refreshNotificationPermission() async {
@@ -220,9 +264,15 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
       (pending) => pending.notificationId == notice.notificationId,
     );
     if (_shownNotice?.notificationId == notice.notificationId) {
-      _noticeTimer?.cancel();
-      ScaffoldMessenger.of(context).removeCurrentMaterialBanner();
-      _shownNotice = null;
+      _shownNotice = notice;
+      _messageBanner?.markNeedsBuild();
+      _restartNoticeTimer(notice);
+      return;
+    }
+    if (notice.sos != null &&
+        _shownNotice != null &&
+        _shownNotice!.sos == null) {
+      _clearShownNotice();
       _notices.insert(0, notice);
     } else {
       _notices.add(notice);
@@ -234,69 +284,73 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
     if (!mounted || _notices.isEmpty) return;
     final notice = _notices.removeAt(0);
     _shownNotice = notice;
-    ScaffoldMessenger.of(context).showMaterialBanner(
-      MaterialBanner(
-        padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
-        backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: (notice.sos == null ? RescueTheme.navy : kSosRed).withValues(
-              alpha: .10,
+    final banner = OverlayEntry(
+      builder: (overlayContext) => Positioned(
+        top: 0,
+        left: 12,
+        right: 12,
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: InAppMessageBanner(
+                  notice: _shownNotice ?? notice,
+                  onClose: _dismissNotice,
+                  onOpen: () {
+                    final currentNotice = _shownNotice ?? notice;
+                    _dismissNotice();
+                    _openNotice(currentNotice);
+                  },
+                ),
+              ),
             ),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(
-            notice.sos == null ? Icons.chat_bubble_outline : Icons.sos,
-            size: 22,
-            color: notice.sos == null
-                ? Theme.of(context).colorScheme.onSurface
-                : kSosRed,
           ),
         ),
-        content: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              notice.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              notice.preview,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 12, height: 1.4, color: _p.muted),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              _dismissNotice();
-              _openNotice(notice);
-            },
-            child: Text(notice.sos == null ? 'เปิดแชต' : 'ดู SOS'),
-          ),
-          IconButton(
-            onPressed: _dismissNotice,
-            tooltip: 'ปิด',
-            icon: const Icon(Icons.close_rounded, size: 20),
-          ),
-        ],
       ),
     );
-    _noticeTimer = Timer(const Duration(seconds: 10), _dismissNotice);
+    _messageBanner = banner;
+    Overlay.of(context, rootOverlay: true).insert(banner);
+    unawaited(
+      (notice.sos != null
+              ? _service.connectionSession.startSosFeedback()
+              : _service.connectionSession.playChatFeedback())
+          .catchError((Object e) {
+            debugPrint('Notice feedback: $e');
+          }),
+    );
+    _restartNoticeTimer(notice);
+  }
+
+  void _restartNoticeTimer(IncomingNotice notice) {
+    _noticeTimer?.cancel();
+    _noticeTimer = Timer(
+      Duration(seconds: notice.sos != null ? 10 : 5),
+      _dismissNotice,
+    );
+  }
+
+  void _clearShownNotice() {
+    _noticeTimer?.cancel();
+    _messageBanner?.remove();
+    _messageBanner?.dispose();
+    _messageBanner = null;
+    if (_shownNotice?.sos != null) {
+      unawaited(
+        _service.connectionSession.stopSosFeedback().catchError((Object e) {
+          debugPrint('Stop SOS feedback: $e');
+        }),
+      );
+    }
+    _shownNotice = null;
   }
 
   void _dismissNotice() {
-    _noticeTimer?.cancel();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).removeCurrentMaterialBanner();
-    _shownNotice = null;
+    _clearShownNotice();
     _showNextNotice();
   }
 
@@ -319,38 +373,12 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
       _openChat(notice.peerId);
       return;
     }
-    // Prefer current incident data over the notification's older snapshot.
-    final current = _messages.presence[notice.peerId]?.sos;
-    final alert = current?.incidentId == notice.sos!.incidentId
-        ? current!
-        : notice.sos!;
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                alert.summary,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              if (alert.location != null)
-                LocationButton(location: alert.location!),
-              FilledButton.icon(
-                onPressed: () {
-                  Navigator.pop(sheetContext);
-                  _openChat(notice.peerId);
-                },
-                icon: const Icon(Icons.chat),
-                label: const Text('แชตกับผู้ขอความช่วยเหลือ'),
-              ),
-            ],
-          ),
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => IncidentDetailScreen(
+          service: _messages,
+          peerId: notice.peerId,
+          initialAlert: notice.sos,
         ),
       ),
     );
@@ -362,9 +390,16 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _foreground = state == AppLifecycleState.resumed;
+    // Losing input focus (e.g. the notification shade) is not backgrounding.
+    if (state == AppLifecycleState.resumed) {
+      _foreground = true;
+    }
     if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached) {
+      _foreground = false;
+      _notices.clear();
+      _clearShownNotice();
       _service.setForeground(false);
     } else if (state == AppLifecycleState.resumed) {
       _service.setForeground(true);
@@ -373,10 +408,20 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
         if (_busy) {
           _restartSearchAfterBusy = true;
         } else {
-          unawaited(_run(_service.startNearby));
+          unawaited(_run(_startNearbyWithLocation));
         }
+      } else {
+        unawaited(_refreshLocationOnResume());
       }
     }
+  }
+
+  Future<void> _startNearbyWithLocation() async {
+    await _service.startNearby();
+    if (!mounted) return;
+    unawaited(
+      _locationReady ? _refreshLocationOnResume() : _initializeLocation(),
+    );
   }
 
   Future<void> _run(Future<void> Function() action) async {
@@ -385,8 +430,13 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
     setState(() {
       _busy = true;
     });
+    _syncActivityProgress();
 
     try {
+      // Every start path (including resume and the search button) must wait for
+      // the saved name and relay handlers, not only the first post-frame start.
+      await Future.wait([_profileReady, _messagesReady]);
+      if (!mounted) return;
       _service.setName(_name.text.trim());
 
       await action();
@@ -399,10 +449,11 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
         setState(() {
           _busy = false;
         });
+        _syncActivityProgress();
         if (_restartSearchAfterBusy) {
           _restartSearchAfterBusy = false;
           if (_foreground && _searchOnResume) {
-            unawaited(_run(_service.startNearby));
+            unawaited(_run(_startNearbyWithLocation));
           }
         }
       }
@@ -439,6 +490,30 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
     return statuses.values.every(_permissionIsReady);
   }
 
+  bool get _permissionsChecking =>
+      _service.isCheckingPermissions ||
+      (!_service.hasCheckedPermissions && !_permissionsReady);
+
+  // Fast startup checks stay invisible. A fixed-height progress strip avoids
+  // inserting/removing a card and shifting the Nearby content underneath it.
+  void _syncActivityProgress() {
+    if (!_busy && !_permissionsChecking) {
+      _activityProgressTimer?.cancel();
+      _activityProgressTimer = null;
+      if (_showActivityProgress && mounted) {
+        setState(() => _showActivityProgress = false);
+      }
+      return;
+    }
+    if (_activityProgressTimer != null || _showActivityProgress) return;
+    _activityProgressTimer = Timer(const Duration(milliseconds: 600), () {
+      _activityProgressTimer = null;
+      if (mounted && (_busy || _permissionsChecking)) {
+        setState(() => _showActivityProgress = true);
+      }
+    });
+  }
+
   String _permissionNameThai(String value) {
     final text = value.toLowerCase();
 
@@ -469,7 +544,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
     final value = status.toString().toLowerCase();
 
     if (value.contains('not required')) {
-      return 'ไม่จำเป็นสำหรับ Android รุ่นนี้';
+      return 'ไม่ต้องใช้เพื่อค้นหาอุปกรณ์ (Android 13 ขึ้นไป)';
     }
     if (value.contains('uses location')) return 'ใช้สิทธิ์ตำแหน่งแทน';
     if (value.contains('radio off')) return 'อนุญาตแล้ว แต่ยังไม่ได้เปิดบลูทูธ';
@@ -539,10 +614,20 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
 
   @override
   void dispose() {
+    AuthService.instance.beforeScopeChange = null;
     AppPreferences.instance.removeListener(_profileNameChanged);
     AuthService.instance.removeListener(_accountChanged);
     WidgetsBinding.instance.removeObserver(this);
     _noticeTimer?.cancel();
+    _messageBanner?.remove();
+    _messageBanner?.dispose();
+    _messageBanner = null;
+    unawaited(
+      _service.connectionSession.stopSosFeedback().catchError((Object _) {}),
+    );
+    _activityProgressTimer?.cancel();
+    _mapProgressTimer?.cancel();
+    _service.removeListener(_syncActivityProgress);
     _service.connectionSession.detachNotifications();
 
     _messages.removeListener(_rememberRescueLocation);
@@ -682,6 +767,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
       onConnection: _openConnectionSettings,
       onExit: () => _run(() async {
         await _service.stopAll();
+        await AppPreferences.instance.setGuestMode(false);
         if (AuthService.instance.signedIn) {
           try {
             await AuthService.instance.signOut();
@@ -714,35 +800,101 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
     if (mounted && location != null && location != _me) {
       setState(() => _me = location);
     }
+    _syncMapProgress();
+  }
+
+  bool get _waitingForLocation =>
+      !_locationReady || _loadingGps || _messages.rescueLocationLoading;
+
+  void _syncMapProgress() {
+    if (_me != null || !_waitingForLocation) {
+      _mapProgressTimer?.cancel();
+      _mapProgressTimer = null;
+      if (_showMapProgress && mounted) {
+        setState(() => _showMapProgress = false);
+      }
+      return;
+    }
+    if (_mapProgressTimer != null || _showMapProgress) return;
+    _mapProgressTimer = Timer(const Duration(milliseconds: 600), () {
+      _mapProgressTimer = null;
+      if (mounted && _me == null && _waitingForLocation) {
+        setState(() => _showMapProgress = true);
+      }
+    });
+  }
+
+  Future<void> _initializeLocation() async {
+    final saved = await _locationService.lastKnown();
+    if (!mounted) return;
+    if (_me == null && saved != null) setState(() => _me = saved);
+    _locationReady = true;
+    if (!await _locationService.hasPermission()) {
+      if (mounted) {
+        setState(
+          () => _gpsError = 'ยังไม่ได้อนุญาตตำแหน่ง กดอัปเดตตำแหน่งเพื่ออนุญาต',
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    if (_messages.rescueLocationLoading) {
+      // Restoring rescue mode already starts a fresh capture.
+      _lastLocationAttempt = _locationNow;
+      return;
+    }
+    if (_messages.rescueMode && _messages.rescueLocation != null) {
+      _lastLocationAttempt = _locationNow;
+      return;
+    }
+    await _locate();
+  }
+
+  Future<void> _refreshLocationOnResume() async {
+    if (!_locationReady || !_foreground) return;
+    if (!await _locationService.hasPermission() || !mounted) return;
+    final last = _lastLocationAttempt;
+    if (last != null &&
+        _locationNow.difference(last) < const Duration(minutes: 1)) {
+      return;
+    }
+    await _locate();
   }
 
   Future<void> _locate() async {
-    if (_loadingGps || _messages.rescueLocationLoading) return;
+    if (!mounted || _loadingGps || _messages.rescueLocationLoading) return;
+    _lastLocationAttempt = _locationNow;
     setState(() {
       _loadingGps = true;
       _gpsError = null;
     });
+    _syncMapProgress();
     try {
       if (_messages.rescueMode) {
         final fix = await _messages.updateRescueLocation();
         if (mounted && fix != null) setState(() => _me = fix);
+        if (mounted && fix == null) {
+          setState(() => _gpsError = _messages.rescueLocationError);
+        }
         return;
       }
-      final fix = await SosLocationService(
-        database: _messages.database,
-      ).capture();
+      final fix = await _locationService.capture();
       if (!mounted) return;
       setState(() => _me = fix);
       if (_messages.rescueMode) await _messages.shareRescueLocation(fix);
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         setState(
-          () => _gpsError =
-              'อ่านหรือแชร์ตำแหน่งไม่ได้ ตรวจสิทธิ์/GPS และโหมดกู้ภัย แล้วลองใหม่',
+          () => _gpsError = error is StateError
+              ? error.message
+              : 'อ่านตำแหน่งไม่ได้ ตรวจสิทธิ์/GPS แล้วลองใหม่',
         );
       }
     } finally {
-      if (mounted) setState(() => _loadingGps = false);
+      if (mounted) {
+        setState(() => _loadingGps = false);
+        _syncMapProgress();
+      }
     }
   }
 
@@ -795,13 +947,22 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (_busy) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(3),
-              child: const LinearProgressIndicator(minHeight: 3),
-            ),
-            const SizedBox(height: 10),
-          ],
+          SizedBox(
+            height: 3,
+            child: _showActivityProgress && (_busy || _permissionsChecking)
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: LinearProgressIndicator(
+                      key: const ValueKey('nearby-delayed-progress'),
+                      minHeight: 3,
+                      semanticsLabel: _permissionsChecking
+                          ? 'กำลังตรวจสอบสิทธิ์'
+                          : 'กำลังเตรียมการเชื่อมต่อ',
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
+          const SizedBox(height: 10),
           _buildPresenceSection(dark),
           const SizedBox(height: 12),
           _SectionCard(
@@ -836,51 +997,37 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                   ],
                 ),
                 const SizedBox(height: 12),
-                SizedBox(
-                  height: 280,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: BundledOfflineMap(
-                      key: const ValueKey('full-home-map'),
-                      focus: me,
-                      fullScreen: true,
-                      showControls: true,
-                      onLocateMe: locating ? null : () => _locate(),
-                      markers: [
-                        for (final e in points)
-                          OfflineMapMarker(
-                            id: e.id,
-                            label:
-                                '${_messages.peers[e.id] ?? 'ไม่ทราบชื่อ'} • แตะดูรายละเอียด',
-                            location: e.location!,
-                            color: _mapRoleColor(
-                              sos: e.state.sos?.isActiveAt(now) == true,
-                              rescue: e.state.rescue,
-                            ),
-                            onTap: () => _openIncidentDetail(e.id),
-                          ),
-                        if (me != null)
-                          OfflineMapMarker(
-                            id: 'self',
-                            label: 'ฉัน • พิกัดที่อ่านล่าสุด',
-                            location: me,
-                            color: _mapRoleColor(
-                              sos: _messages.mySos?.isActiveAt(now) == true,
-                              rescue: _messages.rescueMode,
-                              isMe: true,
-                            ),
-                            isMe: true,
-                          ),
-                      ],
+                _buildLocationMap(me, locating, dark, [
+                  for (final e in points)
+                    OfflineMapMarker(
+                      id: e.id,
+                      label:
+                          '${_messages.peers[e.id] ?? 'ไม่ทราบชื่อ'} • แตะดูรายละเอียด',
+                      location: e.location!,
+                      color: _mapRoleColor(
+                        sos: e.state.sos?.isActiveAt(now) == true,
+                        rescue: e.state.rescue,
+                      ),
+                      onTap: () => _openIncidentDetail(e.id),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                _buildColorLegend(dark),
+                  if (me != null)
+                    OfflineMapMarker(
+                      id: 'self',
+                      label: 'ฉัน • พิกัดที่อ่านล่าสุด',
+                      location: me,
+                      color: _mapRoleColor(
+                        sos: _messages.mySos?.isActiveAt(now) == true,
+                        rescue: _messages.rescueMode,
+                        isMe: true,
+                      ),
+                      isMe: true,
+                    ),
+                ]),
                 const SizedBox(height: 12),
                 SizedBox(
                   height: 48,
                   child: FilledButton.icon(
+                    key: const ValueKey('home-location-action'),
                     onPressed: locating ? null : () => _locate(),
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFFB94612),
@@ -903,6 +1050,9 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                     label: Text(
                       locating
                           ? 'กำลังอ่าน GPS…'
+                          : _gpsError != null ||
+                                _messages.rescueLocationError != null
+                          ? 'ลองอัปเดตตำแหน่งอีกครั้ง'
                           : me == null
                           ? 'อ่านตำแหน่งของฉัน'
                           : 'อัปเดตตำแหน่งของฉัน',
@@ -913,7 +1063,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                     ),
                   ),
                 ),
-                if (_gpsError != null) ...[
+                if ((_gpsError ?? _messages.rescueLocationError) != null) ...[
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -941,7 +1091,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            _gpsError!,
+                            (_gpsError ?? _messages.rescueLocationError)!,
                             style: TextStyle(
                               height: 1.4,
                               color: dark
@@ -966,6 +1116,124 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _locationPlaceholder(
+    String title,
+    String detail, {
+    bool loading = false,
+  }) {
+    return Container(
+      key: const ValueKey('home-location-placeholder'),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (loading)
+            const SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else
+            Icon(
+              title.isEmpty ? Icons.map_outlined : Icons.location_off_outlined,
+              size: 36,
+              color: _p.muted,
+            ),
+          if (title.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ],
+          if (detail.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              detail,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: _p.muted, height: 1.5),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocationMap(
+    SosLocation? location,
+    bool locating,
+    bool dark,
+    List<OfflineMapMarker> markers,
+  ) {
+    return FutureBuilder<OfflineMapData>(
+      future: _offlineMap,
+      builder: (context, snapshot) {
+        late final Widget surface;
+        var showMap = false;
+        if (location == null && _waitingForLocation) {
+          surface = _locationPlaceholder(
+            _showMapProgress ? 'กำลังค้นหาตำแหน่งของคุณ' : '',
+            _showMapProgress
+                ? 'แผนที่จะแสดงพร้อมหมุดเมื่ออ่านตำแหน่งสำเร็จ'
+                : '',
+            loading: _showMapProgress,
+          );
+        } else if (location == null) {
+          surface = _locationPlaceholder(
+            'ยังไม่มีตำแหน่งของคุณ',
+            'กดอ่านตำแหน่งของฉัน เพื่อแสดงหมุดบนแผนที่',
+          );
+        } else if (snapshot.hasError) {
+          surface = _locationPlaceholder(
+            'เปิดแผนที่ไม่ได้',
+            'ยังดูพิกัดที่อ่านได้ในรายละเอียดตำแหน่งด้านล่าง',
+          );
+        } else if (!snapshot.hasData) {
+          surface = _locationPlaceholder('', '');
+        } else if (!snapshot.requireData.contains(location)) {
+          surface = _locationPlaceholder(
+            'ตำแหน่งของคุณอยู่นอกพื้นที่แผนที่',
+            'แผนที่ออฟไลน์รองรับจังหวัดปทุมธานี\nยังดูและคัดลอกพิกัดของคุณได้ด้านล่าง',
+          );
+        } else {
+          showMap = true;
+          surface = BundledOfflineMap(
+            key: const ValueKey('full-home-map'),
+            focus: location,
+            fullScreen: true,
+            onLocateMe: locating ? null : () => _locate(),
+            markers: markers,
+          );
+        }
+        return Column(
+          children: [
+            SizedBox(
+              key: const ValueKey('home-map-viewport'),
+              height: 320,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: surface,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Visibility(
+              visible: showMap,
+              maintainState: true,
+              maintainAnimation: true,
+              maintainSize: true,
+              child: _buildColorLegend(dark),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -1080,7 +1348,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
       onSettings: _openConnectionSettings,
       onStart: () => _run(() async {
         _searchOnResume = true;
-        await _service.startNearby();
+        await _startNearbyWithLocation();
       }),
       onStop: () => _run(() async {
         _searchOnResume = false;
@@ -1091,11 +1359,11 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (_service.lastError != null) ...[
+        if (!_permissionsChecking && _service.lastError != null) ...[
           _buildErrorCard(),
           const SizedBox(height: 12),
         ],
-        if (!_permissionsReady) ...[
+        if (!_permissionsChecking && !_permissionsReady) ...[
           _buildPermissionCard(),
           const SizedBox(height: 12),
         ],
@@ -1220,7 +1488,24 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
     );
   }
 
+  Widget _buildPermissionChecking() => _SectionCard(
+    child: Row(
+      children: [
+        const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text('กำลังตรวจสอบสิทธิ์', style: TextStyle(color: _p.muted)),
+        ),
+      ],
+    ),
+  );
+
   Widget _buildPermissionCard() {
+    if (_permissionsChecking) return _buildPermissionChecking();
     final statuses = _service.permissions.statuses;
     final p = _p;
 
@@ -1255,7 +1540,7 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                   ? null
                   : () => _run(() async {
                       _searchOnResume = true;
-                      await _service.startNearby();
+                      await _startNearbyWithLocation();
                     }),
               icon: const Icon(Icons.security_rounded),
               label: Text(
@@ -1273,21 +1558,6 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
             ),
           ),
           const SizedBox(height: 6),
-          _PermissionRow(
-            name: 'การแจ้งเตือน',
-            value: _notificationsAllowed == null
-                ? 'ยังไม่ได้ตรวจสอบ'
-                : _notificationsAllowed!
-                ? 'อนุญาตแล้ว'
-                : 'ยังไม่อนุญาต',
-            ok: _notificationsAllowed == true,
-            action: _notificationsAllowed == true
-                ? null
-                : TextButton(
-                    onPressed: _requestNotificationPermission,
-                    child: const Text('ขอสิทธิ์ / เปิดตั้งค่า'),
-                  ),
-          ),
           ExpansionTile(
             tilePadding: EdgeInsets.zero,
             childrenPadding: EdgeInsets.zero,
@@ -1302,6 +1572,21 @@ class _NearbyTestScreenState extends State<NearbyTestScreen>
                   value: _permissionStatusThai(item.value),
                   ok: _permissionIsReady(item.value),
                 ),
+              _PermissionRow(
+                name: 'การแจ้งเตือน',
+                value: _notificationsAllowed == null
+                    ? 'ยังไม่ได้ตรวจสอบ'
+                    : _notificationsAllowed!
+                    ? 'อนุญาตแล้ว'
+                    : 'ยังไม่อนุญาต',
+                ok: _notificationsAllowed == true,
+                action: _notificationsAllowed == true
+                    ? null
+                    : TextButton(
+                        onPressed: _requestNotificationPermission,
+                        child: const Text('ขอสิทธิ์ / เปิดตั้งค่า'),
+                      ),
+              ),
               const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerLeft,

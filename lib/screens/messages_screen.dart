@@ -138,6 +138,13 @@ class _MessagesScreenState extends State<MessagesScreen> {
           ? RescueTheme.darkBorder
           : const Color(0xFFEAE2D8);
 
+      // Routine background sync must not shift the conversation list.
+      final showRestoreProgress =
+          restoring &&
+          restoreError == null &&
+          sync.lastSuccess == null &&
+          latest.isEmpty;
+
       return ColoredBox(
         color: screenBg,
         child: Column(
@@ -223,23 +230,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 ],
               ),
             ),
-            if (!s.ready || restoring) const LinearProgressIndicator(),
-            if (restoreError != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(child: Text(restoreError)),
-                    TextButton(
-                      onPressed: restoring ? null : sync!.sync,
-                      child: const Text('ลองซิงก์อีกครั้ง'),
-                    ),
-                  ],
-                ),
-              ),
+            if (!s.ready || showRestoreProgress)
+              const LinearProgressIndicator(),
             if (s.error != null)
               Container(
                 margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
@@ -272,17 +264,12 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 ),
               ),
             Expanded(
-              child:
-                  s.ready &&
-                      latest.isEmpty &&
-                      (restoring || restoreError != null)
-                  ? Center(
+              child: s.ready && latest.isEmpty && showRestoreProgress
+                  ? const Center(
                       child: Padding(
-                        padding: const EdgeInsets.all(24),
+                        padding: EdgeInsets.all(24),
                         child: Text(
-                          restoring
-                              ? 'กำลังกู้คืนประวัติแชทของบัญชีนี้…'
-                              : 'ยังโหลดประวัติแชทไม่ครบ กรุณาเชื่อมต่ออินเทอร์เน็ตแล้วลองซิงก์อีกครั้ง',
+                          'กำลังกู้คืนประวัติแชทของบัญชีนี้…',
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -391,10 +378,14 @@ class _MessagesScreenState extends State<MessagesScreen> {
                       ),
                     )
                   : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+                      padding: const EdgeInsets.only(top: 4, bottom: 20),
                       itemCount: ids.length,
-                      separatorBuilder: (context, index) =>
-                          const SizedBox(height: 8),
+                      separatorBuilder: (context, index) => Divider(
+                        height: 1,
+                        indent: 80,
+                        endIndent: 16,
+                        color: cardBorderColor,
+                      ),
                       itemBuilder: (context, index) {
                         final id = ids[index];
                         final lastMsg = latest[id]!;
@@ -439,265 +430,246 @@ class _MessagesScreenState extends State<MessagesScreen> {
                             ? 'เชื่อมต่ออยู่'
                             : 'ไม่ได้เชื่อมต่อ';
                         final relayVia = s.relayViaName(id);
-                        final itemBorderColor = isSos
-                            ? kSosRed.withValues(alpha: isDark ? .4 : .22)
-                            : cardBorderColor;
 
-                        return Container(
-                          decoration: BoxDecoration(
-                            color: cardBg,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: itemBorderColor),
-                          ),
-                          child: Material(
-                            color: Colors.transparent,
-                            borderRadius: BorderRadius.circular(18),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(18),
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute<void>(
-                                  builder: (_) =>
-                                      ChatScreen(service: s, peerId: id),
-                                ),
+                        return Material(
+                          color: cardBg,
+                          child: InkWell(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute<void>(
+                                builder: (_) =>
+                                    ChatScreen(service: s, peerId: id),
                               ),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 12,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Stack(
-                                      clipBehavior: Clip.none,
-                                      children: [
-                                        CircleAvatar(
-                                          radius: 24,
-                                          backgroundColor: roleBgColor,
-                                          child: Icon(
-                                            isSos
-                                                ? Icons.person_outline
-                                                : isRescue
-                                                ? Icons.shield_outlined
-                                                : (isConnected
-                                                      ? Icons.person
-                                                      : Icons.person_outline),
-                                            color: roleColor,
-                                          ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              child: Row(
+                                children: [
+                                  Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 26,
+                                        backgroundColor: roleBgColor,
+                                        child: Icon(
+                                          isSos
+                                              ? Icons.person_outline
+                                              : isRescue
+                                              ? Icons.shield_outlined
+                                              : (isConnected
+                                                    ? Icons.person
+                                                    : Icons.person_outline),
+                                          color: roleColor,
                                         ),
-                                        if (isConnected)
-                                          Positioned(
-                                            right: -1,
-                                            bottom: -1,
-                                            child: Semantics(
-                                              label: connectionLabel,
-                                              child: Container(
-                                                width: 13,
-                                                height: 13,
-                                                decoration: BoxDecoration(
-                                                  color: connectionColor,
-                                                  shape: BoxShape.circle,
-                                                  border: Border.all(
-                                                    color: cardBg,
-                                                    width: 2,
-                                                  ),
+                                      ),
+                                      if (isConnected)
+                                        Positioned(
+                                          right: -1,
+                                          bottom: -1,
+                                          child: Semantics(
+                                            label: connectionLabel,
+                                            child: Container(
+                                              width: 13,
+                                              height: 13,
+                                              decoration: BoxDecoration(
+                                                color: connectionColor,
+                                                shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: cardBg,
+                                                  width: 2,
                                                 ),
                                               ),
                                             ),
                                           ),
-                                      ],
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  name(id),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    fontWeight: FontWeight.w700,
-                                                    fontSize: 15,
-                                                    height: 1.3,
-                                                    color: isDark
-                                                        ? Colors.white
-                                                        : RescueTheme.navy,
-                                                  ),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                name(id),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 16,
+                                                  height: 1.3,
+                                                  color: isDark
+                                                      ? Colors.white
+                                                      : RescueTheme.navy,
                                                 ),
                                               ),
-                                              const SizedBox(width: 8),
-                                              if (waiting.contains(id)) ...[
-                                                Tooltip(
-                                                  message: 'มีข้อความรอส่ง',
-                                                  child: Icon(
-                                                    Icons.schedule,
-                                                    size: 13,
-                                                    color: unreadCount > 0
-                                                        ? RescueTheme.orangeInk
-                                                        : isDark
-                                                        ? RescueTheme
-                                                              .darkTextMuted
-                                                        : RescueTheme.muted,
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 4),
-                                              ],
-                                              Text(
-                                                _formatTime(
-                                                  lastMsg.displayTime,
-                                                ),
-                                                style: TextStyle(
-                                                  fontSize: 11.5,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            if (waiting.contains(id)) ...[
+                                              Tooltip(
+                                                message: 'มีข้อความรอส่ง',
+                                                child: Icon(
+                                                  Icons.schedule,
+                                                  size: 13,
                                                   color: unreadCount > 0
                                                       ? RescueTheme.orangeInk
                                                       : isDark
                                                       ? RescueTheme
                                                             .darkTextMuted
                                                       : RescueTheme.muted,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 4),
+                                            ],
+                                            Text(
+                                              _formatTime(lastMsg.displayTime),
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: unreadCount > 0
+                                                    ? RescueTheme.orangeInk
+                                                    : isDark
+                                                    ? RescueTheme.darkTextMuted
+                                                    : RescueTheme.muted,
+                                                fontWeight: unreadCount > 0
+                                                    ? FontWeight.w600
+                                                    : FontWeight.normal,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                _messagePreview(lastMsg, s),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  height: 1.4,
                                                   fontWeight: unreadCount > 0
                                                       ? FontWeight.w600
                                                       : FontWeight.normal,
+                                                  color: unreadCount > 0
+                                                      ? isDark
+                                                            ? Colors.white
+                                                            : RescueTheme.navy
+                                                      : isDark
+                                                      ? RescueTheme
+                                                            .darkTextMuted
+                                                      : RescueTheme.muted,
                                                 ),
                                               ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 6),
-                                          Row(
-                                            children: [
-                                              Expanded(
+                                            ),
+                                            if (unreadCount > 0) ...[
+                                              const SizedBox(width: 8),
+                                              Container(
+                                                constraints:
+                                                    const BoxConstraints(
+                                                      minWidth: 22,
+                                                      minHeight: 22,
+                                                    ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(
+                                                    0xFF067B42,
+                                                  ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                                alignment: Alignment.center,
                                                 child: Text(
-                                                  _messagePreview(lastMsg, s),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    fontSize: 13,
-                                                    height: 1.4,
-                                                    fontWeight: unreadCount > 0
-                                                        ? FontWeight.w600
-                                                        : FontWeight.normal,
-                                                    color: unreadCount > 0
-                                                        ? isDark
-                                                              ? Colors.white
-                                                              : RescueTheme.navy
-                                                        : isDark
-                                                        ? RescueTheme
-                                                              .darkTextMuted
-                                                        : RescueTheme.muted,
+                                                  '$unreadCount',
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w700,
                                                   ),
                                                 ),
                                               ),
-                                              if (unreadCount > 0) ...[
-                                                const SizedBox(width: 8),
+                                            ],
+                                          ],
+                                        ),
+                                        if (isSos ||
+                                            isRescue ||
+                                            !isConnected ||
+                                            (relayVia != null &&
+                                                relayVia.isNotEmpty)) ...[
+                                          const SizedBox(height: 7),
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 4,
+                                            crossAxisAlignment:
+                                                WrapCrossAlignment.center,
+                                            children: [
+                                              if (isSos || isRescue)
                                                 Container(
-                                                  constraints:
-                                                      const BoxConstraints(
-                                                        minWidth: 22,
-                                                        minHeight: 22,
-                                                      ),
                                                   padding:
                                                       const EdgeInsets.symmetric(
                                                         horizontal: 6,
                                                         vertical: 2,
                                                       ),
                                                   decoration: BoxDecoration(
-                                                    color:
-                                                        RescueTheme.orangeInk,
+                                                    color: roleBgColor,
                                                     borderRadius:
                                                         BorderRadius.circular(
-                                                          12,
+                                                          6,
                                                         ),
                                                   ),
-                                                  alignment: Alignment.center,
                                                   child: Text(
-                                                    '$unreadCount',
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
+                                                    roleLabel,
+                                                    style: TextStyle(
                                                       fontSize: 11,
                                                       fontWeight:
                                                           FontWeight.w700,
+                                                      color: roleColor,
                                                     ),
                                                   ),
                                                 ),
-                                              ],
+                                              if (!isConnected)
+                                                Text(
+                                                  connectionLabel,
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: isDark
+                                                        ? RescueTheme
+                                                              .darkTextMuted
+                                                        : RescueTheme.muted,
+                                                  ),
+                                                ),
+                                              if (relayVia != null &&
+                                                  relayVia.isNotEmpty)
+                                                Text(
+                                                  'ส่งผ่านเครื่อง $relayVia',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: isDark
+                                                        ? RescueTheme
+                                                              .darkTextMuted
+                                                        : RescueTheme.muted,
+                                                  ),
+                                                ),
                                             ],
                                           ),
-                                          if (isSos ||
-                                              isRescue ||
-                                              !isConnected ||
-                                              (relayVia != null &&
-                                                  relayVia.isNotEmpty)) ...[
-                                            const SizedBox(height: 7),
-                                            Wrap(
-                                              spacing: 8,
-                                              runSpacing: 4,
-                                              crossAxisAlignment:
-                                                  WrapCrossAlignment.center,
-                                              children: [
-                                                if (isSos || isRescue)
-                                                  Container(
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 6,
-                                                          vertical: 2,
-                                                        ),
-                                                    decoration: BoxDecoration(
-                                                      color: roleBgColor,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            6,
-                                                          ),
-                                                    ),
-                                                    child: Text(
-                                                      roleLabel,
-                                                      style: TextStyle(
-                                                        fontSize: 10.5,
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                        color: roleColor,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                if (!isConnected)
-                                                  Text(
-                                                    connectionLabel,
-                                                    style: TextStyle(
-                                                      fontSize: 11.5,
-                                                      color: isDark
-                                                          ? RescueTheme
-                                                                .darkTextMuted
-                                                          : RescueTheme.muted,
-                                                    ),
-                                                  ),
-                                                if (relayVia != null &&
-                                                    relayVia.isNotEmpty)
-                                                  Text(
-                                                    'ส่งผ่านเครื่อง $relayVia',
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: TextStyle(
-                                                      fontSize: 11.5,
-                                                      color: isDark
-                                                          ? RescueTheme
-                                                                .darkTextMuted
-                                                          : RescueTheme.muted,
-                                                    ),
-                                                  ),
-                                              ],
-                                            ),
-                                          ],
                                         ],
-                                      ),
+                                      ],
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),

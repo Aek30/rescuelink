@@ -50,83 +50,86 @@ class UiStore extends SosStore {
 }
 
 void main() {
-  testWidgets('history edit/delete and responsive SOS and Sync screens', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(390, 844);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    await (FontLoader(
-      'NotoSansThai',
-    )..addFont(rootBundle.load('assets/fonts/NotoSansThai.ttf'))).load();
-    await (FontLoader(
-      'MaterialIcons',
-    )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
-    final store = UiStore();
-    final boundary = GlobalKey();
-    Future<void> capture(String name) async {
-      if (!const bool.fromEnvironment('UX_CAPTURE')) return;
-      await tester.runAsync(() async {
-        final image =
-            await (boundary.currentContext!.findRenderObject()!
-                    as RenderRepaintBoundary)
-                .toImage(pixelRatio: 2);
-        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-        await File(
-          'docs/ui-audit/$name.png',
-        ).writeAsBytes(bytes!.buffer.asUint8List());
-        image.dispose();
-      });
-    }
+  testWidgets(
+    'history is read-only with confirmed deletion and responsive Sync screens',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await (FontLoader(
+        'NotoSansThai',
+      )..addFont(rootBundle.load('assets/fonts/NotoSansThai.ttf'))).load();
+      await (FontLoader(
+        'MaterialIcons',
+      )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+      final store = UiStore();
+      final boundary = GlobalKey();
+      Future<void> capture(String name) async {
+        if (!const bool.fromEnvironment('UX_CAPTURE')) return;
+        await tester.runAsync(() async {
+          final image =
+              await (boundary.currentContext!.findRenderObject()!
+                      as RenderRepaintBoundary)
+                  .toImage(pixelRatio: 2);
+          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+          await File(
+            'docs/ui-audit/$name.png',
+          ).writeAsBytes(bytes!.buffer.asUint8List());
+          image.dispose();
+        });
+      }
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: RescueTheme.light,
-        home: RepaintBoundary(
-          key: boundary,
-          child: MySosScreen(store: store),
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: RescueTheme.light,
+          home: RepaintBoundary(
+            key: boundary,
+            child: MySosScreen(store: store),
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
-    expect(find.text('ได้รับความช่วยเหลือแล้ว'), findsOneWidget);
-    await capture('phase3-history');
-    await tester.tap(find.byTooltip('แก้ไขเหตุ'));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byType(TextFormField).last,
-      'แก้ไขรายละเอียดแล้ว',
-    );
-    await tester.tap(find.text('บันทึก'));
-    await tester.pumpAndSettle();
-    expect(find.text('แก้ไขรายละเอียดแล้ว'), findsOneWidget);
-    await tester.tap(find.byTooltip('ลบเหตุ'));
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.descendant(of: find.byType(AlertDialog), matching: find.text('ลบ')),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('ยังไม่มีเหตุ SOS'), findsOneWidget);
-    final sync = SosSyncService(store, null);
-    addTearDown(sync.dispose);
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: RescueTheme.dark,
-        home: RepaintBoundary(
-          key: boundary,
-          child: SyncScreen(service: sync),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
-    await capture('phase3-sync');
-    for (final size in [const Size(320, 640), const Size(1100, 800)]) {
-      tester.view.physicalSize = size;
+      );
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-    }
-  });
+      expect(find.text('ได้รับความช่วยเหลือแล้ว'), findsOneWidget);
+      await capture('phase3-history');
+      expect(find.byTooltip('แก้ไขเหตุ'), findsNothing);
+      expect(find.text('แก้ไข'), findsNothing);
+      expect(find.byType(TextFormField), findsNothing);
+      await tester.tap(find.byTooltip('ลบเหตุ'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('ยกเลิก'));
+      await tester.pumpAndSettle();
+      expect(find.text('ได้รับความช่วยเหลือแล้ว'), findsOneWidget);
+      await tester.tap(find.byTooltip('ลบเหตุ'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('ลบ'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('ยังไม่มีเหตุ SOS'), findsOneWidget);
+      final sync = SosSyncService(store, null);
+      addTearDown(sync.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: RescueTheme.dark,
+          home: RepaintBoundary(
+            key: boundary,
+            child: SyncScreen(service: sync),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await capture('phase3-sync');
+      for (final size in [const Size(320, 640), const Size(1100, 800)]) {
+        tester.view.physicalSize = size;
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
 }

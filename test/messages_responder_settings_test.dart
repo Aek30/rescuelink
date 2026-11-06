@@ -11,6 +11,7 @@ import 'package:rescuelink/widgets/outbox_queue.dart';
 import 'package:rescuelink/services/app_preferences.dart';
 import 'package:rescuelink/services/local_database_service.dart';
 import 'package:rescuelink/services/message_service.dart';
+import 'package:rescuelink/services/sos_location_service.dart';
 import 'package:rescuelink/screens/responder_screen.dart';
 import 'package:rescuelink/screens/chat_screen.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -27,8 +28,18 @@ class OfflineMessages extends MessageService {
 }
 
 class TabTransport extends UiTransport {
+  TabTransport() {
+    permissions.statuses.updateAll((_, _) => 'Granted');
+  }
   @override
   Future<void> startNearby() async {}
+}
+
+class _NoLocation extends SosLocationService {
+  @override
+  Future<SosLocation?> lastKnown() async => null;
+  @override
+  Future<SosLocation> capture() async => throw StateError('GPS unavailable');
 }
 
 class TabMessages extends MessageService {
@@ -218,6 +229,7 @@ void main() {
           home: NearbyTestScreen(
             nearbyService: tabs.nearbyService,
             messageService: tabs,
+            locationService: _NoLocation(),
           ),
         ),
       );

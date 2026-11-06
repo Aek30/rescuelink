@@ -3,6 +3,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../models/message_model.dart';
 import '../models/sos_alert.dart';
+import '../models/sos_emergency_info.dart';
+import '../services/auth_service.dart';
+import '../services/emergency_profile_service.dart';
+import 'emergency_profile_screen.dart';
 import '../services/app_preferences.dart';
 import '../services/message_service.dart';
 import '../services/sos_location_service.dart';
@@ -16,9 +20,18 @@ import '../widgets/sos_cancel_dialog.dart';
 import 'my_sos_screen.dart';
 
 class SosScreen extends StatefulWidget {
-  const SosScreen({super.key, required this.service, this.mainTab = false});
+  const SosScreen({
+    super.key,
+    required this.service,
+    this.mainTab = false,
+    this.auth,
+    this.loadEmergencyProfile,
+  });
   final MessageService service;
   final bool mainTab;
+  final AuthService? auth;
+  final Future<Map<String, dynamic>?> Function(String owner)?
+  loadEmergencyProfile;
   @override
   State<SosScreen> createState() => _SosScreenState();
 }
@@ -27,7 +40,6 @@ class _SosScreenState extends State<SosScreen> {
   final _details = TextEditingController();
   final _detailsFocus = FocusNode();
   final _types = <EmergencyType>{};
-  final _recipients = <String>{};
   int _people = 1;
   bool _busy = false, _editing = false, _readingLocation = false;
   bool _locationRemoved = false;
@@ -39,6 +51,128 @@ class _SosScreenState extends State<SosScreen> {
   Timer? _ageTimer;
   Timer? _expiryTimer;
   String? _activeIncidentId;
+  AuthService get _auth => widget.auth ?? AuthService.instance;
+  Map<String, String> _emergencyOptions = {};
+  final _selectedEmergencyFields = <String>{};
+  bool _loadingEmergencyProfile = false;
+  String? _profileOwner;
+  int _profileGeneration = 0;
+
+  Future<void> _loadEmergencyProfile() async {
+    final generation = ++_profileGeneration;
+    final owner = _auth.session?.userId;
+    final changed = _profileOwner != owner;
+    _profileOwner = owner;
+    setState(() {
+      if (changed) _selectedEmergencyFields.clear();
+      _emergencyOptions = {};
+      _loadingEmergencyProfile = owner != null;
+    });
+    if (owner == null) return;
+    try {
+      Map<String, dynamic>? data;
+      if (widget.loadEmergencyProfile != null) {
+        data = await widget.loadEmergencyProfile!(owner);
+      } else if (_auth.backend case final SupabaseAuthBackend backend) {
+        final record = await backend.profiles.record(owner);
+        data = record != null
+            ? Map<String, dynamic>.from(record['data'])
+            : (await SupabaseEmergencyProfileRepository(_auth).read()).data;
+      }
+      if (!mounted ||
+          generation != _profileGeneration ||
+          _auth.session?.userId != owner) {
+        return;
+      }
+      setState(() {
+        _emergencyOptions = sosEmergencyOptions(data ?? {});
+        _selectedEmergencyFields.removeWhere(
+          (key) => !_emergencyOptions.containsKey(key),
+        );
+      });
+    } catch (_) {
+      if (mounted && generation == _profileGeneration) {
+        setState(() => _selectedEmergencyFields.clear());
+      }
+    } finally {
+      if (mounted && generation == _profileGeneration) {
+        setState(() => _loadingEmergencyProfile = false);
+      }
+    }
+  }
+
+  void _authChanged() {
+    if (_profileOwner != _auth.session?.userId) {
+      unawaited(_loadEmergencyProfile());
+    }
+  }
+
+  Widget _emergencyInfoPicker() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const SosStepHeader(
+        step: 4,
+        title: 'ข้อมูลฉุกเฉินที่ต้องการแนบ',
+        subtitle: 'ไม่บังคับ • เลือกเฉพาะข้อมูลที่ต้องการส่ง',
+      ),
+      const SizedBox(height: 12),
+      if (_loadingEmergencyProfile)
+        const Text('กำลังอ่านข้อมูลที่บันทึกไว้…')
+      else if (_emergencyOptions.isEmpty)
+        const Text(
+          'ยังไม่มีข้อมูลที่บันทึกไว้ สามารถส่ง SOS ได้โดยไม่แนบข้อมูลส่วนนี้',
+        )
+      else ...[
+        for (final group in sosEmergencyGroups.entries)
+          if (group.value.where(_emergencyOptions.containsKey).toList()
+              case final keys when keys.isNotEmpty)
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: Text(group.key),
+              subtitle: Text(
+                keys
+                    .map(
+                      (key) => key == 'emergency_contact'
+                          ? _emergencyOptions[key]!
+                          : '${sosEmergencyLabels[key]}: ${_emergencyOptions[key]}',
+                    )
+                    .join('\n'),
+              ),
+              value: keys.any(_selectedEmergencyFields.contains),
+              onChanged: _busy
+                  ? null
+                  : (selected) => setState(() {
+                      if (selected == true) {
+                        _selectedEmergencyFields.addAll(keys);
+                      } else {
+                        _selectedEmergencyFields.removeAll(keys);
+                      }
+                    }),
+            ),
+        const SizedBox(height: 8),
+        const Text(
+          'อุปกรณ์ที่ได้รับ SOS อาจเห็นข้อมูลที่คุณเลือกแนบ',
+          style: TextStyle(fontSize: 12),
+        ),
+      ],
+      TextButton.icon(
+        onPressed: _busy
+            ? null
+            : () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => const EmergencyProfileScreen(),
+                  ),
+                );
+                if (mounted) await _loadEmergencyProfile();
+              },
+        icon: const Icon(Icons.person_outline),
+        label: const Text('จัดการข้อมูลส่วนตัวและสุขภาพ'),
+      ),
+    ],
+  );
 
   String get _requesterName {
     final name =
@@ -55,6 +189,9 @@ class _SosScreenState extends State<SosScreen> {
   void initState() {
     super.initState();
     _locationService = SosLocationService(database: widget.service.database);
+    _profileOwner = _auth.session?.userId;
+    _auth.addListener(_authChanged);
+    unawaited(_loadEmergencyProfile());
     final alert = widget.service.mySos;
     if (alert != null && alert.isActiveAt(DateTime.now().toUtc())) {
       _activeIncidentId = alert.incidentId;
@@ -64,7 +201,7 @@ class _SosScreenState extends State<SosScreen> {
         ..addAll(alert.categories);
       _people = alert.people;
       _location = alert.location;
-      _recipients.addAll(widget.service.sosRecipients);
+      _selectedEmergencyFields.addAll(alert.emergencyInfo.keys);
     }
     _detailsFocus.addListener(_rebuild);
     widget.service.addListener(_syncIncident);
@@ -98,7 +235,7 @@ class _SosScreenState extends State<SosScreen> {
         _editing = false;
         _details.clear();
         _types.clear();
-        _recipients.clear();
+        _selectedEmergencyFields.clear();
         _people = 1;
         _location = null;
         _locationRemoved = false;
@@ -132,6 +269,7 @@ class _SosScreenState extends State<SosScreen> {
 
   @override
   void dispose() {
+    _auth.removeListener(_authChanged);
     _ageTimer?.cancel();
     _expiryTimer?.cancel();
     widget.service.removeListener(_syncIncident);
@@ -209,6 +347,20 @@ class _SosScreenState extends State<SosScreen> {
 
   Future<void> _send() async {
     FocusScope.of(context).unfocus();
+    final owner = _auth.session?.userId;
+    final reviewedEmergencyInfo = <String, String>{
+      if (owner != null && owner == _profileOwner)
+        for (final group in sosEmergencyGroups.values)
+          if (group.any(_selectedEmergencyFields.contains))
+            for (final key in group)
+              if (_emergencyOptions[key] case final String value) key: value,
+    };
+    if (!validSosEmergencyInfo(reviewedEmergencyInfo)) {
+      setState(
+        () => _error = 'ข้อมูลที่แนบยาวเกินไป กรุณาลดรายการข้อมูลที่เลือก',
+      );
+      return;
+    }
     // Snapshot the reviewed fix; an automatic GPS result cannot silently change it.
     var reviewedLocation = _locationRemoved ? null : _location;
     final confirmed = await showModalBottomSheet<bool>(
@@ -223,9 +375,7 @@ class _SosScreenState extends State<SosScreen> {
         details: _details.text.trim(),
         location: 'ส่งโดยไม่แนบพิกัด',
         sosLocation: reviewedLocation,
-        recipients: _recipients
-            .map((id) => widget.service.peers[id] ?? id)
-            .toList(),
+        emergencyInfo: reviewedEmergencyInfo,
         translate: (key) => key,
         onRefreshLocation: _locationRemoved
             ? null
@@ -237,6 +387,12 @@ class _SosScreenState extends State<SosScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
+    if (_auth.session?.userId != owner) {
+      setState(
+        () => _error = 'บัญชีเปลี่ยนแล้ว กรุณาตรวจสอบข้อมูลก่อนส่งอีกครั้ง',
+      );
+      return;
+    }
     await _run(() async {
       await widget.service.publishSos(
         name: _requesterName,
@@ -244,7 +400,13 @@ class _SosScreenState extends State<SosScreen> {
         category: _types.first,
         categories: _types.toList(),
         details: _details.text,
-        recipients: Set.of(_recipients),
+        emergencyInfo: reviewedEmergencyInfo,
+        // Preserve recipients for legacy active incidents so updates and
+        // cancellation still reach the same devices. New SOS uses broadcast.
+        recipients:
+            widget.service.mySos?.isActiveAt(DateTime.now().toUtc()) == true
+            ? widget.service.sosRecipients
+            : <String>{},
         location: reviewedLocation,
       );
       if (mounted) setState(() => _editing = false);
@@ -274,6 +436,7 @@ class _SosScreenState extends State<SosScreen> {
         category: alert.category,
         categories: alert.categories,
         details: details.substring(0, details.length.clamp(0, 1000)),
+        emergencyInfo: alert.emergencyInfo,
         recipients: widget.service.sosRecipients,
         location: alert.location,
         active: false,
@@ -380,10 +543,7 @@ class _SosScreenState extends State<SosScreen> {
   Widget _peoplePicker() => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const SosStepHeader(
-        step: 3,
-        title: 'จำนวนผู้ต้องการความช่วยเหลือ',
-      ),
+      const SosStepHeader(step: 3, title: 'จำนวนผู้ต้องการความช่วยเหลือ'),
       const SizedBox(height: 10),
       Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -533,13 +693,6 @@ class _SosScreenState extends State<SosScreen> {
                             .toSet(),
                       ),
                     if (formVisible) ...[
-                      const Padding(
-                        padding: EdgeInsets.only(bottom: 16),
-                        child: Text(
-                          'เหตุ • ตำแหน่ง • จำนวนคน',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                      ),
                       SosCard(child: _typePicker()),
                       SosCard(
                         child: Column(
@@ -588,6 +741,8 @@ class _SosScreenState extends State<SosScreen> {
                         ),
                       ),
                       SosCard(child: _peoplePicker()),
+                      if (_auth.signedIn)
+                        SosCard(child: _emergencyInfoPicker()),
                       SosCard(
                         child: TextField(
                           controller: _details,
@@ -615,49 +770,6 @@ class _SosScreenState extends State<SosScreen> {
                             alignLabelWithHint: true,
                             border: OutlineInputBorder(),
                           ),
-                        ),
-                      ),
-                      SosCard(
-                        child: ExpansionTile(
-                          tilePadding: EdgeInsets.zero,
-                          title: const Text(
-                            'ผู้รับเพิ่มเติม',
-                            style: TextStyle(fontSize: 14),
-                          ),
-                          trailing: Badge.count(
-                            count: _recipients.length,
-                            backgroundColor: RescueTheme.accentFor(context),
-                          ),
-                          subtitle: active
-                              ? const Text(
-                                  'ยกเลิก SOS ก่อนเปลี่ยนผู้รับ',
-                                  style: TextStyle(fontSize: 12),
-                                )
-                              : null,
-                          children: [
-                            if (service.peers.isEmpty)
-                              const Text(
-                                'คำขอจะประกาศเมื่อเชื่อมต่อเครื่องอื่น',
-                              ),
-                            for (final peer in service.peers.entries)
-                              CheckboxListTile(
-                                title: Text(peer.value),
-                                subtitle: Text(
-                                  service.connectionLabel(peer.key),
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                                value: _recipients.contains(peer.key),
-                                onChanged: _busy || active
-                                    ? null
-                                    : (value) => setState(() {
-                                        if (value == true) {
-                                          _recipients.add(peer.key);
-                                        } else {
-                                          _recipients.remove(peer.key);
-                                        }
-                                      }),
-                              ),
-                          ],
                         ),
                       ),
                     ],
@@ -745,15 +857,6 @@ class _SosScreenState extends State<SosScreen> {
                         ),
                       ],
                     ],
-                    if (formVisible && !active)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 4),
-                        child: Text(
-                          'ตรวจสอบอีกครั้งก่อนส่ง',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 12),
-                        ),
-                      ),
                   ],
                 ),
               ),

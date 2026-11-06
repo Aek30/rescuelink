@@ -1,0 +1,280 @@
+00:00 +0: loading D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart
+00:00 +0: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: active background session retains payload delivery when paused and STOP releases it
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: home search connects automatically and keeps scanning after connection
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: automatic mode requests discovered peers and continues discovery after connection
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: simultaneous local automatic starts share one advertising and discovery operation
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: automatic reconnect refreshes discovery without restarting the other phone
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] ขาดการเชื่อมต่อกับ Rescue-A • กำลังรอเชื่อมต่อใหม่
+[RescueLink] Discovery stopped
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A-new)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 4567 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +5: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: automatic mode elects one caller and accepts the other phone
+[RescueLink] Advertising started as Rescue-Z
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +6: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: manual scan connects two advertisers without stopping at the first
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Found Rescue-C (C)
+[RescueLink] Connection requested: Rescue-C
+[RescueLink] Connection initiated: Rescue-C; code 5678 (POC auto-accept)
+[RescueLink] Connected to Rescue-C
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +7: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: automatic caller falls back when the peer only advertises
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising started as Rescue-Z
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +8: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: peer found during another request is connected without waiting for a timer
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Found Rescue-C (C)
+[RescueLink] Connection requested: Rescue-C
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +9: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: stale native advertiser is cleared before starting a fresh session
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +10: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: permission matrix covers Android 11, 12, 12L and 13+
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +11: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: permission display accepts exemptions but rejects disabled radio
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +12: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: failed native STOP still invalidates local endpoints
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] หยุดการเชื่อมต่อไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] หยุดการเชื่อมต่อไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+00:00 +13: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: permission denial prevents native advertising
+[RescueLink] Nearby Devices permission denied
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +14: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: false advertising and discovery results become errors
+[RescueLink] เปิดรับการเชื่อมต่อไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +15: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: discovery deduplicates, filters service and removes lost endpoint
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Endpoint lost: Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +16: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: outgoing connection auto-accepts and supports UTF-8 in both directions
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Message queued for Rescue-A
+[RescueLink] Message received from Rescue-A
+[RescueLink] ขาดการเชื่อมต่อกับ Rescue-A • กำลังรอเชื่อมต่อใหม่
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +17: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: advertiser handles incoming peer not in discovery list
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Connection initiated: Rescue-B; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-B
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +18: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: reject and connection failure reset connecting state
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Rescue-A ยังไม่รับการเชื่อมต่อ กรุณาเปิดรับการเชื่อมต่อบนเครื่องนั้น
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection failed: Bad state: Nearby returned false
+[RescueLink] ยังเชื่อมต่อกับ Rescue-A ไม่สำเร็จ ตรวจว่าอีกเครื่องเปิดรับการเชื่อมต่อและเปิด Bluetooth/Wi-Fi แล้ว ระบบจะลองใหม่อัตโนมัติ
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +19: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: automatic peer retries keep the page stable and retain working links
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Found Rescue-B (B)
+[RescueLink] Connection requested: Rescue-B
+[RescueLink] Connection failed: Bad state: Nearby returned false
+[RescueLink] ยังเชื่อมต่อกับ Rescue-B ไม่สำเร็จ ตรวจว่าอีกเครื่องเปิดรับการเชื่อมต่อและเปิด Bluetooth/Wi-Fi แล้ว ระบบจะลองใหม่อัตโนมัติ
+[RescueLink] Connection requested: Rescue-B
+[RescueLink] Connection failed: Bad state: Nearby returned false
+[RescueLink] ยังเชื่อมต่อกับ Rescue-B ไม่สำเร็จ ตรวจว่าอีกเครื่องเปิดรับการเชื่อมต่อและเปิด Bluetooth/Wi-Fi แล้ว ระบบจะลองใหม่อัตโนมัติ
+[RescueLink] Connection requested: Rescue-B
+[RescueLink] Connection failed: Bad state: Nearby returned false
+[RescueLink] ยังเชื่อมต่อกับ Rescue-B ไม่สำเร็จ ตรวจว่าอีกเครื่องเปิดรับการเชื่อมต่อและเปิด Bluetooth/Wi-Fi แล้ว ระบบจะลองใหม่อัตโนมัติ
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +20: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: empty, disconnected, oversized and native send failures are handled
+[RescueLink] กรุณาพิมพ์ข้อความก่อนส่ง
+[RescueLink] กรุณาเชื่อมต่อกับอุปกรณ์ใกล้เคียงก่อนส่ง
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] ข้อความยาวเกินไป กรุณาแบ่งเป็นข้อความสั้นลง
+[RescueLink] ส่งข้อความไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +21: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: invalid text has a friendly error and transfer diagnostics stay in logs
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] อ่านข้อความที่ได้รับไม่ได้ กรุณาให้อีกเครื่องส่งใหม่
+[RescueLink] Payload 2 transfer failed/canceled for A.
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +22: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: STOP clears peers and ignores late callbacks
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +23: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: STOP during permission prompt cancels the pending start
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +24: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: background cleanup blocks new sessions until foreground resumes
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +25: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: unanswered connection times out and removes pending peer
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] อีกเครื่องยังไม่ตอบรับ กรุณาวางเครื่องใกล้กันและเปิดรับการเชื่อมต่อ ระบบจะลองใหม่อัตโนมัติ
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:03 +26: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: focus loss uses in-app sound without duplicate notifications; SOS starts/stops feedback
+00:05 +27: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: floating message banner does not shift content; expires, swipes and opens chat: dark=false
+00:06 +28: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: floating message banner does not shift content; expires, swipes and opens chat: dark=true
+00:06 +29: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: foreground SOS banner expires, opens details and cancels safely
+00:07 +30: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: permission checks do not flash or shift content: allowed=true slow=false
+00:07 +31: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: permission checks do not flash or shift content: allowed=true slow=true
+00:08 +32: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: permission checks do not flash or shift content: allowed=false slow=false
+[RescueLink] Permission denied
+00:08 +33: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: permission checks do not flash or shift content: allowed=false slow=true
+[RescueLink] Permission denied
+00:08 +34: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: resume during permission work retries once; explicit stop stays stopped
+00:09 +35: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: home changes priority using own mode, dark=false
+00:09 +36: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: home changes priority using own mode, dark=true
+00:09 +37: All tests passed!

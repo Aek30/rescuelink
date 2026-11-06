@@ -29,6 +29,7 @@
         android:label="RescueLink"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <receiver android:name=".DismissNoticeReceiver" android:exported="false" />
         <service android:name=".ConnectionService" android:exported="false" android:stopWithTask="true" android:foregroundServiceType="connectedDevice" />
         <activity
             android:name=".MainActivity"

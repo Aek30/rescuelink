@@ -43,6 +43,7 @@ class UiMessages extends MessageService {
   SosLocation? sentLocation;
   List<EmergencyType>? sentCategories;
   String? sentDetails;
+  Map<String, String>? sentEmergencyInfo;
   @override
   Future<void> publishSos({
     required String name,
@@ -53,11 +54,13 @@ class UiMessages extends MessageService {
     required Set<String> recipients,
     SosLocation? location,
     bool active = true,
+    Map<String, String> emergencyInfo = const {},
   }) async {
     sentTo = recipients;
     sentLocation = location;
     sentCategories = categories ?? [category];
     sentDetails = details;
+    sentEmergencyInfo = emergencyInfo;
   }
 }
 
@@ -97,34 +100,42 @@ void main() {
     },
   );
 
-  testWidgets(
-    'SOS can broadcast without recipients but requires confirmation',
-    (tester) async {
-      final service = UiMessages();
-      addTearDown(() {
-        service.dispose();
-        service.nearbyService.dispose();
-      });
-      await tester.pumpWidget(MaterialApp(home: SosScreen(service: service)));
-      await tester.tap(find.text('น้ำท่วม'));
-      await tester.pumpAndSettle();
-      final send = find.text('ส่ง SOS');
-      await tester.scrollUntilVisible(
-        send,
-        250,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.tap(send);
-      await tester.pumpAndSettle();
-      expect(service.sentTo, isNull);
-      expect(find.text('ยืนยันข้อมูล SOS'), findsOneWidget);
-      expect(service.sentTo, isNull);
-      await tester.tap(find.text('ยืนยันส่ง SOS'));
-      await tester.pumpAndSettle();
-      expect(service.sentTo, isEmpty);
-      expect(tester.takeException(), isNull);
-    },
-  );
+  testWidgets('SOS can broadcast without recipients but requires confirmation', (
+    tester,
+  ) async {
+    final service = UiMessages();
+    addTearDown(() {
+      service.dispose();
+      service.nearbyService.dispose();
+    });
+    await tester.pumpWidget(MaterialApp(home: SosScreen(service: service)));
+    await tester.tap(find.text('น้ำท่วม'));
+    await tester.pumpAndSettle();
+    expect(find.text('ผู้รับเพิ่มเติม'), findsNothing);
+    expect(find.byType(CheckboxListTile), findsNothing);
+    final send = find.text('ส่ง SOS');
+    await tester.scrollUntilVisible(
+      send,
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(send);
+    await tester.pumpAndSettle();
+    expect(service.sentTo, isNull);
+    expect(find.text('ยืนยันข้อมูล SOS'), findsOneWidget);
+    expect(find.text('ผู้รับเพิ่มเติม'), findsNothing);
+    expect(
+      find.text(
+        'SOS จะประกาศไปยังอุปกรณ์ที่เชื่อมต่อและส่งต่อผ่านเครื่องอื่น หากยังไม่เชื่อมต่อ จะเก็บไว้ส่งภายหลัง',
+      ),
+      findsOneWidget,
+    );
+    expect(service.sentTo, isNull);
+    await tester.tap(find.text('ยืนยันส่ง SOS'));
+    await tester.pumpAndSettle();
+    expect(service.sentTo, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('Rescue card displays SOS details and opens sender chat', (
     tester,

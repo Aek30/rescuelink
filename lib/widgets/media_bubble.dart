@@ -14,12 +14,6 @@ class MediaBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final item = media;
-    final label = item?.isVideo == true
-        ? 'ส่งวิดีโอ'
-        : item?.isImage == true
-        ? 'ส่งรูป'
-        : 'ส่งไฟล์';
-    final ink = isMine ? Colors.white : RescueTheme.mutedFor(context);
     final width = MediaQuery.sizeOf(context).width * .65;
     final available =
         item != null &&
@@ -60,8 +54,6 @@ class MediaBubble extends StatelessWidget {
                   : _placeholder(context),
             ),
           ),
-          const SizedBox(height: 4),
-          Text(label, style: TextStyle(fontSize: 12, color: ink)),
           if (item?.status == MediaStatus.sending ||
               item?.status == MediaStatus.receiving)
             Padding(

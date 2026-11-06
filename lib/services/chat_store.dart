@@ -184,6 +184,7 @@ class ChatStore {
       await _save(txn, id, jsonEncode(payload), row['version'] as int, delete);
     });
     database.cloudReceiptsChanged.value++;
+    database.syncRequested.value++;
   }
 
   static Future<void> _putRemote(
@@ -238,6 +239,7 @@ class ChatStore {
       }
     });
     database.cloudReceiptsChanged.value++;
+    database.syncRequested.value++;
   }
 
   Future<void> acknowledge(
@@ -287,8 +289,19 @@ class ChatStore {
   }
 
   Future<void> mergeRemote(List<Map<String, dynamic>> records) async {
+    var changed = false;
     await (await database.database).transaction((txn) async {
       for (final remote in records) {
+        final local = await txn.query(
+          'chat_records',
+          columns: ['version'],
+          where: 'id = ?',
+          whereArgs: [remote['id']],
+          limit: 1,
+        );
+        if (local.isNotEmpty && local.first['version'] == remote['version']) {
+          continue;
+        }
         final pending = await txn.query(
           'chat_queue',
           where: 'record_id = ?',
@@ -297,6 +310,7 @@ class ChatStore {
         );
         if (pending.isNotEmpty) continue;
         await _putRemote(txn, remote);
+        changed = true;
         if (remote['deleted'] != true) {
           await CloudSyncReceipts.record(
             txn,
@@ -306,6 +320,6 @@ class ChatStore {
         }
       }
     });
-    database.cloudReceiptsChanged.value++;
+    if (changed) database.cloudReceiptsChanged.value++;
   }
 }

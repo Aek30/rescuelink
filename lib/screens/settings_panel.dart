@@ -77,12 +77,13 @@ class SettingsPanel extends StatelessWidget {
                   (s) => s != null && s.isNotEmpty,
                   orElse: () => null,
                 ) ??
-            t("โปรไฟล์ของฉัน");
-        final memberEmail =
-            (session?.email.trim().isNotEmpty == true
-                ? session!.email.trim()
-                : syncedProfile?.email.trim()) ??
-            '';
+            (signedIn ? t("โปรไฟล์ของฉัน") : t("ผู้ใช้งานทั่วไป (Guest)"));
+        final memberEmail = signedIn
+            ? ((session?.email.trim().isNotEmpty == true
+                    ? session!.email.trim()
+                    : syncedProfile?.email.trim()) ??
+                '')
+            : t("ใช้งานโดยไม่เข้าสู่ระบบ");
 
         Future<void> save(String key, bool value) async {
           try {
@@ -538,6 +539,32 @@ class SettingsPanel extends StatelessWidget {
                     ]),
 
                     const SizedBox(height: 28),
+                    if (!signedIn) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          key: const ValueKey('settings-login-button'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: RescueTheme.orange,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          onPressed: () async {
+                            await beforeAccountExit?.call();
+                            onExit();
+                          },
+                          icon: const Icon(Icons.login_rounded, size: 20),
+                          label: Text(
+                            t("เข้าสู่ระบบ"),
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
@@ -548,9 +575,15 @@ class SettingsPanel extends StatelessWidget {
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(22),
                               ),
-                              title: Text(t("ออกจากระบบ?")),
+                              title: Text(
+                                signedIn
+                                    ? t("ออกจากระบบ?")
+                                    : t("กลับหน้าเข้าสู่ระบบ?"),
+                              ),
                               content: Text(
-                                t("ประวัติและคิวของบัญชีนี้จะเก็บไว้ในเครื่อง"),
+                                signedIn
+                                    ? t("ประวัติและคิวของบัญชีนี้จะเก็บไว้ในเครื่อง")
+                                    : t("คุณสามารถกลับมาใช้งานในเครื่องได้ตลอดเวลา"),
                               ),
                               actions: [
                                 TextButton(
@@ -562,7 +595,11 @@ class SettingsPanel extends StatelessWidget {
                                     backgroundColor: const Color(0xFFE04C4C),
                                   ),
                                   onPressed: () => Navigator.pop(dialog, true),
-                                  child: Text(t("ออกจากระบบ")),
+                                  child: Text(
+                                    signedIn
+                                        ? t("ออกจากระบบ")
+                                        : t("กลับหน้าเข้าสู่ระบบ"),
+                                  ),
                                 ),
                               ],
                             ),

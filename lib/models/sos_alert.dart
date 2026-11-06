@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'sos_emergency_info.dart';
 
 enum EmergencyType {
   medical('เจ็บป่วย / บาดเจ็บ'),
@@ -85,7 +86,12 @@ class SosAlert {
     required this.details,
     required this.updatedAt,
     this.location,
-  }) : categories = _normalize(categories ?? [category]) {
+    Map<String, String> emergencyInfo = const {},
+  }) : emergencyInfo = Map.unmodifiable({
+         for (final key in (emergencyInfo.keys.toList()..sort()))
+           key: emergencyInfo[key]!,
+       }),
+       categories = _normalize(categories ?? [category]) {
     if (incidentId.isEmpty ||
         incidentId.length > 128 ||
         revision < 1 ||
@@ -93,11 +99,13 @@ class SosAlert {
         name.length > 80 ||
         people < 1 ||
         people > 999 ||
-        details.length > 1000) {
+        details.length > 1000 ||
+        !validSosEmergencyInfo(emergencyInfo)) {
       throw const FormatException('Invalid SOS information');
     }
   }
   final String incidentId, name, details;
+  final Map<String, String> emergencyInfo;
   final int revision, people;
   final bool active;
   final List<EmergencyType> categories;
@@ -131,6 +139,7 @@ class SosAlert {
     'details': details,
     'updatedAt': updatedAt.toUtc().toIso8601String(),
     'location': location?.toMap(),
+    if (emergencyInfo.isNotEmpty) 'emergencyInfo': emergencyInfo,
   });
   factory SosAlert.fromJson(String source) {
     final map = jsonDecode(source) as Map<String, dynamic>;
@@ -148,6 +157,9 @@ class SosAlert {
           ?.map((e) => EmergencyType.values.byName(e as String))
           .toList(),
       details: map['details'] as String,
+      emergencyInfo: Map<String, String>.from(
+        map['emergencyInfo'] as Map? ?? const {},
+      ),
       updatedAt: DateTime.parse(map['updatedAt'] as String),
       location: map['location'] == null
           ? null
@@ -160,5 +172,6 @@ class SosAlert {
           : isExpired(DateTime.now().toUtc())
           ? 'SOS หมดอายุ'
           : 'SOS'} • $categoriesLabel'
-      '\n$name • $people คน\n$details\n${location?.summary ?? 'ไม่ได้แนบพิกัด'}';
+      '\n$name • $people คน\n$details\n${location?.summary ?? 'ไม่ได้แนบพิกัด'}'
+      '${emergencyInfo.isEmpty ? '' : '\n${sosEmergencyInfoText(emergencyInfo)}'}';
 }

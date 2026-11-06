@@ -24,7 +24,23 @@ class PresenceList extends StatelessWidget {
   final bool flat;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: service.nearbyService,
+    builder: (context, _) => _buildContent(context),
+  );
+
+  Widget _buildContent(BuildContext context) {
+    final nearby = service.nearbyService;
+    final connecting = nearby.discoveredDevices.any(
+      (device) => device.isConnecting,
+    );
+    final searching = nearby.isDiscovering || nearby.isAdvertising;
+    final stopped = !connecting && !searching;
+    final emptyMessage = connecting
+        ? 'กำลังเชื่อมต่อ…'
+        : searching
+        ? 'กำลังค้นหาคนรอบตัวคุณ…'
+        : 'หยุดค้นหาแล้ว';
     final now = DateTime.now().toUtc();
     final entries =
         service.presence.entries.where((entry) {
@@ -65,7 +81,10 @@ class PresenceList extends StatelessWidget {
       PresenceFilter.sos => 'คำขอ SOS ที่ยังใช้งานอยู่ • แตะดูรายละเอียด',
       PresenceFilter.rescue =>
         'รายชื่อผู้เปิดสถานะพร้อมช่วยเหลือ • แตะเพื่อส่งข้อความ',
-      PresenceFilter.all => 'ค้นพบและเชื่อมต่ออัตโนมัติ ไม่ต้องกดจับคู่',
+      PresenceFilter.all =>
+        stopped
+            ? 'เริ่มค้นหาอีกครั้งเพื่อเชื่อมต่อกับคนรอบตัวคุณ'
+            : 'ค้นพบและเชื่อมต่ออัตโนมัติ ไม่ต้องกดจับคู่',
     };
     final grouped = filter == PresenceFilter.all;
     final content = Column(
@@ -168,13 +187,21 @@ class PresenceList extends StatelessWidget {
                 CircleAvatar(
                   radius: 28,
                   backgroundColor: accent.withValues(alpha: .1),
-                  child: Icon(Icons.radar_rounded, color: accentInk, size: 30),
+                  child: Icon(
+                    stopped
+                        ? Icons.pause_circle_outline
+                        : connecting
+                        ? Icons.sync
+                        : Icons.radar_rounded,
+                    color: accentInk,
+                    size: 30,
+                  ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'กำลังเชื่อมต่อ...',
+                Text(
+                  emptyMessage,
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontWeight: FontWeight.w700),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ],
             ),

@@ -1,0 +1,68 @@
+00:00 +0: loading D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_profile_startup_test.dart
+test/nearby_profile_startup_test.dart:48:10: Error: Type 'SosLocation' not found.
+  Future<SosLocation?> lastKnown() async => null;
+         ^^^^^^^^^^^
+test/nearby_profile_startup_test.dart:50:10: Error: Type 'SosLocation' not found.
+  Future<SosLocation> capture() async => throw StateError('No GPS in test');
+         ^^^^^^^^^^^
+00:00 +0 -1: loading D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_profile_startup_test.dart [E]
+  Failed to load "D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_profile_startup_test.dart":
+  Compilation failed for testPath=D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_profile_startup_test.dart: test/nearby_profile_startup_test.dart:48:10: Error: Type 'SosLocation' not found.
+    Future<SosLocation?> lastKnown() async => null;
+           ^^^^^^^^^^^
+  test/nearby_profile_startup_test.dart:50:10: Error: Type 'SosLocation' not found.
+    Future<SosLocation> capture() async => throw StateError('No GPS in test');
+           ^^^^^^^^^^^
+  .
+  Error: The Dart compiler exited unexpectedly.
+  package:flutter_tools/src/base/common.dart 34:3  throwToolExit
+  package:flutter_tools/src/compile.dart 1024:11   DefaultResidentCompiler._compile.<fn>
+  dart:async/zone_root.dart 48:47                  _rootRunUnary
+  dart:async/zone.dart 816:35                      _CustomZone.runUnary
+  dart:async/future_impl.dart 948:45               Future._propagateToListeners.handleValueCallback
+  dart:async/future_impl.dart 977:13               Future._propagateToListeners
+  dart:async/future_impl.dart 862:9                Future._propagateToListeners
+  dart:async/future_impl.dart 720:5                Future._completeWithValue
+  dart:async/future_impl.dart 804:7                Future._asyncCompleteWithValue.<fn>
+  dart:async/zone_root.dart 35:13                  _rootRun
+  dart:async/zone.dart 810:35                      _CustomZone.run
+  dart:async/zone.dart 702:7                       _CustomZone.runGuarded
+  dart:async/zone.dart 743:23                      _CustomZone.bindCallbackGuarded.<fn>
+  dart:async/schedule_microtask.dart 40:35         _microtaskLoop
+  dart:async/schedule_microtask.dart 49:5          _startMicrotaskLoop
+  dart:isolate-patch/isolate_patch.dart 127:13     _runPendingImmediateCallback
+  dart:isolate-patch/isolate_patch.dart 193:5      _RawReceivePort._handleMessage
+  
+00:00 +0 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_screen_test.dart: nearby page renders and scrolls on a phone
+00:06 +1 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_screen_test.dart: nearby page renders and scrolls on a phone
+00:09 +2 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_screen_test.dart: nearby page renders and scrolls on a phone
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following assertion was thrown running a test:
+pumpAndSettle timed out
+
+When the exception was thrown, this was the stack:
+#0      WidgetTester.pumpAndSettle.<anonymous closure> (package:flutter_test/src/widget_tester.dart:717:11)
+<asynchronous suspension>
+#1      TestAsyncUtils.guard.<anonymous closure> (package:flutter_test/src/test_async_utils.dart:130:27)
+<asynchronous suspension>
+#2      main.<anonymous closure> (file:///D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_screen_test.dart:30:5)
+<asynchronous suspension>
+#3      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#4      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+The test description was:
+  nearby page renders and scrolls on a phone
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:23 +2 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_screen_test.dart: nearby page renders and scrolls on a phone [E]
+  Test failed. See exception logs above.
+  The test description was: nearby page renders and scrolls on a phone
+  
+00:23 +2 -2: Some tests failed.
+
+Failing tests:
+  D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_profile_startup_test.dart: loading D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_profile_startup_test.dart
+  D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_screen_test.dart: nearby page renders and scrolls on a phone

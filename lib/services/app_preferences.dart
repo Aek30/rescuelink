@@ -5,7 +5,7 @@ import '../l10n/app_strings.dart';
 class AppPreferences extends ChangeNotifier {
   static final instance = AppPreferences();
   bool dark = false, english = false, chatAlerts = true, sosAlerts = true;
-  bool systemTheme = false;
+  bool systemTheme = false, guestMode = false;
   String? displayName;
   ThemeMode get themeMode => systemTheme
       ? ThemeMode.system
@@ -19,6 +19,7 @@ class AppPreferences extends ChangeNotifier {
     english = false;
     chatAlerts = true;
     sosAlerts = true;
+    guestMode = false;
     notifyListeners();
   }
 
@@ -61,6 +62,7 @@ class AppPreferences extends ChangeNotifier {
     final nextChatAlerts = await db.getSetting('chatAlerts') != 'false';
     final nextSosAlerts = await db.getSetting('sosAlerts') != 'false';
     final nextSystem = await db.getSetting('systemTheme') == 'true';
+    final nextGuest = await db.getSetting('guestMode') == 'true';
     final nextName =
         await db.getSetting('profileNameDraft') ??
         await db.getSetting('profileDisplayName');
@@ -70,7 +72,16 @@ class AppPreferences extends ChangeNotifier {
     chatAlerts = nextChatAlerts;
     sosAlerts = nextSosAlerts;
     systemTheme = nextSystem;
+    guestMode = nextGuest;
     displayName = nextName;
+    notifyListeners();
+  }
+
+  Future<void> setGuestMode(bool value) async {
+    final db = LocalDatabaseService.instance;
+    await db.setSetting('guestMode', '$value');
+    if (!identical(db, LocalDatabaseService.instance)) return;
+    guestMode = value;
     notifyListeners();
   }
 

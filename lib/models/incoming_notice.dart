@@ -31,7 +31,9 @@ class IncomingNotice {
       'pending' => 'ขอรับเคส • รอคุณยืนยันผ่านแชต',
       'helping' => 'แจ้งว่ากำลังช่วยเหลือ • เปิดแชตเพื่อตรวจสอบ',
       'completed' => 'แจ้งว่าเสร็จสิ้น • เปิดแชตเพื่อตรวจสอบ',
-      _ => body.replaceAll(RegExp(r'\s+'), ' ').trim(),
+      _ => ResponderUpdate.cleanDisplay(
+        body,
+      ).replaceAll(RegExp(r'\s+'), ' ').trim(),
     };
     final characters = summary.runes.toList();
     return characters.length <= 100

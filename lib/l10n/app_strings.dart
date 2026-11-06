@@ -1,5 +1,8 @@
 /// English resources used by the existing AppPreferences localization.
 const appEnglish = <String, String>{
+  'การซิงก์': 'Sync',
+  'กำลังซิงก์ SOS และข้อความ…': 'Syncing SOS and messages…',
+  'ซิงก์ข้อมูลบางส่วนไม่สำเร็จ': 'Some data could not be synced',
   'ข้อความและสื่อ': 'Messages and media',
   'คำขอ SOS': 'SOS requests',
   'คำขอช่วยเหลือ SOS': 'SOS requests for help',

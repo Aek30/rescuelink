@@ -55,6 +55,7 @@ class ConnectionSession {
         'sosChannelName': t('คำขอช่วยเหลือ SOS'),
         'chatChannelName': t('ข้อความใหม่'),
         'actionLabel': t(notice.sos == null ? 'เปิดแชต' : 'ดู SOS'),
+        'closeLabel': t('ปิด'),
         'publicTitle': t('ข้อความใหม่'),
       });
     } on PlatformException {
@@ -67,6 +68,21 @@ class ConnectionSession {
   Future<void> cancelNotice(String id) async {
     if (kIsWeb || !Platform.isAndroid) return;
     await channel.invokeMethod<void>('cancel', {'id': id});
+  }
+
+  Future<void> startSosFeedback() async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    await channel.invokeMethod<void>('startSosFeedback');
+  }
+
+  Future<void> playChatFeedback() async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    await channel.invokeMethod<void>('playChatFeedback');
+  }
+
+  Future<void> stopSosFeedback() async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    await channel.invokeMethod<void>('stopSosFeedback');
   }
 
   static Future<void> openDateSettings() async {

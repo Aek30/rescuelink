@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'dart:io';
-import 'package:crypto/crypto.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -16,6 +16,7 @@ import 'nearby_service.dart';
 import 'auth_service.dart';
 import 'media_upload_service.dart';
 import 'video_preview_cache.dart';
+import 'media_file_preparation.dart';
 
 /// จัดการวงจรชีวิตของสื่อทั้งหมด:
 /// เลือกไฟล์ → คัดลอกถาวร → คำนวณ checksum → ส่ง/รับผ่าน NearbyService → ตรวจสอบ → ACK
@@ -27,7 +28,15 @@ class MediaService extends ChangeNotifier {
     this.directoryProvider,
     this.ackTimeout = const Duration(seconds: 30),
     this.getRelayPathForPeer,
-  });
+    ImagePicker? imagePicker,
+    Future<String?> Function(String inputPath, String outputPath)?
+    videoCompressor,
+  }) : _imagePicker = imagePicker ?? ImagePicker(),
+       _videoCompressor = videoCompressor;
+  final ImagePicker _imagePicker;
+  final Future<String?> Function(String inputPath, String outputPath)?
+  _videoCompressor;
+  static const _videoChannel = MethodChannel('com.rmutt.rescuelink/video');
 
   final NearbyService nearby;
   final LocalDatabaseService database;
@@ -54,6 +63,23 @@ class MediaService extends ChangeNotifier {
   final Set<int> _completedPayloads = {};
   final Map<int, String> _payloadEndpoints = {};
   final Set<String> _starting = {};
+  final Map<String, String> _outboundSlots = {};
+
+  bool _reserveTransfer(String mediaId, String endpoint) {
+    if (_outboundSlots.length >= 2 ||
+        _outboundSlots.containsKey(mediaId) ||
+        _outboundSlots.containsValue(endpoint)) {
+      return false;
+    }
+    _outboundSlots[mediaId] = endpoint;
+    return true;
+  }
+
+  void _releaseTransfer(String mediaId) {
+    _outboundSlots.remove(mediaId);
+    _activeSending.remove(mediaId);
+  }
+
   final Set<String> _verifying = {};
   final Map<String, Timer> _ackTimers = {};
 
@@ -162,6 +188,7 @@ class MediaService extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _progressTimer?.cancel();
     uploads.removeListener(_notify);
     uploads.dispose();
     for (final timer in _ackTimers.values) {
@@ -175,6 +202,16 @@ class MediaService extends ChangeNotifier {
   }
 
   String? _lastLoggedError;
+  Timer? _progressTimer;
+
+  void _notifyProgress() {
+    if (_disposed || _progressTimer != null) return;
+    _progressTimer = Timer(const Duration(milliseconds: 150), () {
+      _progressTimer = null;
+      _notify();
+    });
+  }
+
   void _notify() {
     if (error != null && error != _lastLoggedError) {
       debugPrint('Media service: $error');
@@ -196,16 +233,53 @@ class MediaService extends ChangeNotifier {
     required String senderName,
     required String receiverId,
   }) async {
-    final myId = _myId;
-    if (myId == null || _disposed) throw StateError('MediaService not ready');
-
-    // 1. เลือกไฟล์
-    final pickedFile = await FilePicker.pickFile(type: FileType.media);
+    if (_myId == null || _disposed) throw StateError('MediaService not ready');
+    final pickedFile = await _imagePicker.pickMedia(
+      maxWidth: 1920,
+      maxHeight: 1920,
+      imageQuality: 85,
+      requestFullMetadata: false,
+    );
     if (pickedFile == null) {
       return null;
     }
-    final sourcePath = pickedFile.path;
-    if (sourcePath == null) throw StateError('Cannot access file path');
+    return sendFile(
+      sourcePath: pickedFile.path,
+      fileName: pickedFile.name,
+      senderName: senderName,
+      receiverId: receiverId,
+    );
+  }
+
+  Future<MediaFile?> captureAndSend({
+    required String senderName,
+    required String receiverId,
+    required Future<bool> Function(String path) confirm,
+  }) async {
+    if (_myId == null || _disposed) throw StateError('MediaService not ready');
+    final photo = await _imagePicker.pickImage(
+      source: ImageSource.camera,
+      maxWidth: 1920,
+      imageQuality: 85,
+      requestFullMetadata: false,
+    );
+    if (photo == null || _disposed || !await confirm(photo.path)) return null;
+    return sendFile(
+      sourcePath: photo.path,
+      fileName: photo.name,
+      senderName: senderName,
+      receiverId: receiverId,
+    );
+  }
+
+  Future<MediaFile> sendFile({
+    required String sourcePath,
+    required String fileName,
+    required String senderName,
+    required String receiverId,
+  }) async {
+    final myId = _myId;
+    if (myId == null || _disposed) throw StateError('MediaService not ready');
 
     final sourceFile = File(sourcePath);
     if (!await sourceFile.exists()) {
@@ -215,53 +289,90 @@ class MediaService extends ChangeNotifier {
     final requestedRoute = getRelayPathForPeer?.call(receiverId);
     final useRelay = requestedRoute != null && requestedRoute.length > 2;
 
-    // 2. จำกัดสื่อที่ส่งผ่านเครื่องกลางไว้ที่ 5 MB ในรุ่นแรก
-    final fileSize = await sourceFile.length();
-    final maxSize = useRelay ? 5 * 1024 * 1024 : 50 * 1024 * 1024;
-    if (fileSize <= 0 || fileSize > maxSize) {
-      throw ArgumentError(
-        useRelay
-            ? 'ไฟล์ที่ส่งผ่านเครื่องกลางต้องไม่เกิน 5 MB'
-            : 'ไฟล์ต้องไม่เกิน 50 MB',
-      );
-    }
-
-    // 3. ตรวจ MIME type จาก extension
-    final ext = p
-        .extension(pickedFile.name)
-        .replaceFirst('.', '')
-        .toLowerCase();
-    final mimeType = _mimeFromExtension(ext);
+    // 2. ตรวจ MIME type จาก extension ก่อน เพื่อบีบอัดวิดีโอให้เล็กลงก่อนตรวจขนาด
+    var effectiveName = fileName;
+    var ext = p.extension(effectiveName).replaceFirst('.', '').toLowerCase();
+    var mimeType = _mimeFromExtension(ext);
     if (!mimeType.startsWith('image/') && !mimeType.startsWith('video/')) {
       throw ArgumentError('ไม่รองรับไฟล์ชนิดนี้');
     }
 
-    // 4. คำนวณ checksum SHA-256 สำหรับตรวจความครบถ้วนฝั่งผู้รับ
-    final checksum = (await sha256.bind(sourceFile.openRead()).first)
-        .toString();
-
-    // 5. คัดลอกไฟล์ไปยังพื้นที่ถาวรของแอป (ไม่อาศัย temp/URI ชั่วคราว)
     final dir = await _mediaDir;
     final mediaId = _uuid.v4();
     final messageId = _uuid.v4();
-    final safeName = pickedFile.name.replaceAll(RegExp(r'[^\w\.\-]'), '_');
-    final destPath = p.join(dir.path, '${mediaId}_$safeName');
-    await sourceFile.copy(destPath);
+    var effectiveSourcePath = sourcePath;
+    File? tempCompressedFile;
+    if (mimeType.startsWith('video/')) {
+      final rawSize = await sourceFile.length();
+      if (rawSize > 0) {
+        final tempOut = p.join(dir.path, 'tmp_compress_$mediaId.mp4');
+        try {
+          final compressedPath = _videoCompressor != null
+              ? await _videoCompressor(sourcePath, tempOut)
+              : await _videoChannel.invokeMethod<String>('compress', {
+                  'inputPath': sourcePath,
+                  'outputPath': tempOut,
+                });
+          if (compressedPath != null) {
+            final compressedFile = File(compressedPath);
+            if (await compressedFile.exists()) {
+              final compressedSize = await compressedFile.length();
+              if (compressedSize > 0 && compressedSize < rawSize) {
+                tempCompressedFile = compressedFile;
+                effectiveSourcePath = compressedFile.path;
+                effectiveName = '${p.basenameWithoutExtension(fileName)}.mp4';
+                ext = 'mp4';
+                mimeType = 'video/mp4';
+              } else {
+                await compressedFile.delete();
+              }
+            }
+          }
+        } catch (_) {
+          final f = File(tempOut);
+          if (await f.exists()) await f.delete();
+        }
+      }
+    }
 
-    // 6. สร้าง MediaFile และ MessageModel (เก็บใน DB พร้อมกัน)
-    final media = MediaFile(
-      mediaId: mediaId,
-      messageId: messageId,
-      senderId: myId,
-      senderName: senderName,
-      receiverId: receiverId,
-      fileName: pickedFile.name,
-      mimeType: mimeType,
-      fileSize: fileSize,
-      checksum: checksum,
-      localPath: destPath,
-      createdAt: DateTime.now().toUtc(),
-    );
+    try {
+      // 3. จำกัดสื่อที่ส่งผ่านเครื่องกลางไว้ที่ 5 MB และส่งตรง 50 MB (ตรวจหลังบีบอัดแล้ว)
+      final fileSize = await File(effectiveSourcePath).length();
+      final maxSize = useRelay ? 5 * 1024 * 1024 : 50 * 1024 * 1024;
+      if (fileSize <= 0 || fileSize > maxSize) {
+        throw ArgumentError(
+          useRelay
+              ? 'ไฟล์ที่ส่งผ่านเครื่องกลางต้องไม่เกิน 5 MB'
+              : 'ไฟล์ต้องไม่เกิน 50 MB',
+        );
+      }
+
+      // Copy and hash in one streaming pass, away from the UI isolate.
+      final safeName = effectiveName.replaceAll(RegExp(r'[^\w\.\-]'), '_');
+      final destPath = p.join(dir.path, '${mediaId}_$safeName');
+      final prepared = await prepareMediaFile(effectiveSourcePath, destPath);
+      if (prepared.size != fileSize) {
+        await File(destPath).delete();
+        throw StateError(
+          'ไฟล์มีการเปลี่ยนแปลงระหว่างเตรียมส่ง กรุณาเลือกใหม่',
+        );
+      }
+      final checksum = prepared.checksum;
+
+      // 6. สร้าง MediaFile และ MessageModel (เก็บใน DB พร้อมกัน)
+      final media = MediaFile(
+        mediaId: mediaId,
+        messageId: messageId,
+        senderId: myId,
+        senderName: senderName,
+        receiverId: receiverId,
+        fileName: effectiveName,
+        mimeType: mimeType,
+        fileSize: fileSize,
+        checksum: checksum,
+        localPath: destPath,
+        createdAt: DateTime.now().toUtc(),
+      );
 
     final message = MessageModel(
       id: messageId,
@@ -296,7 +407,14 @@ class MediaService extends ChangeNotifier {
       );
     }
 
-    return media;
+      return media;
+    } finally {
+      if (tempCompressedFile != null && await tempCompressedFile.exists()) {
+        try {
+          await tempCompressedFile.delete();
+        } catch (_) {}
+      }
+    }
   }
 
   /// เรียกโดย MessageService.retry() สำหรับแต่ละ peer ที่เชื่อมต่ออยู่
@@ -334,28 +452,74 @@ class MediaService extends ChangeNotifier {
     }
   }
 
+  bool _drainingQueue = false;
+  bool _drainRequested = false;
+
+  Future<void> _sendQueuedMedia() async {
+    _drainRequested = true;
+    if (_drainingQueue || _disposed) return;
+    _drainingQueue = true;
+    try {
+      do {
+        _drainRequested = false;
+        final queued =
+            _cache.values
+                .where(
+                  (m) =>
+                      m.senderId == _myId && m.status == MediaStatus.localReady,
+                )
+                .toList()
+              ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        for (final media in queued) {
+          if (_disposed) return;
+          if (_cache[media.mediaId]?.status != MediaStatus.localReady) continue;
+          final route = getRelayPathForPeer?.call(media.receiverId);
+          final firstHop = route != null && route.length > 2
+              ? route[1]
+              : media.receiverId;
+          final endpoint = getEndpointForPeer(firstHop);
+          if (endpoint != null) {
+            await _sendMedia(
+              media,
+              endpoint,
+              relayPath: firstHop == media.receiverId ? null : route,
+            );
+          }
+        }
+      } while (_drainRequested && !_disposed);
+    } finally {
+      _drainingQueue = false;
+    }
+  }
+
   Future<void> _sendMedia(
     MediaFile media,
     String endpointId, {
     List<String>? relayPath,
   }) async {
-    if (_disposed || !_starting.add(media.mediaId)) return;
-
-    // ตรวจว่าไฟล์ยังอยู่ในเครื่อง
-    final sourceFile = File(media.localPath);
-    if (!await sourceFile.exists()) {
-      _updateCache(
-        media.copyWith(
-          status: MediaStatus.failed,
-          errorMessage: 'ไม่พบไฟล์ในเครื่อง',
-        ),
-      );
-      await database.updateMediaFile(_cache[media.mediaId]!);
-      _starting.remove(media.mediaId);
+    if (_disposed ||
+        _starting.contains(media.mediaId) ||
+        !_reserveTransfer(media.mediaId, endpointId)) {
       return;
     }
+    _starting.add(media.mediaId);
 
     try {
+      // ตรวจว่าไฟล์ยังอยู่ในเครื่อง
+      final sourceFile = File(media.localPath);
+      if (!await sourceFile.exists()) {
+        _updateCache(
+          media.copyWith(
+            status: MediaStatus.failed,
+            errorMessage: 'ไม่พบไฟล์ในเครื่อง',
+          ),
+        );
+        await database.updateMediaFile(_cache[media.mediaId]!);
+        _starting.remove(media.mediaId);
+        _releaseTransfer(media.mediaId);
+        return;
+      }
+
       // ตั้งสถานะ sending
       final sending = media.copyWith(
         status: MediaStatus.sending,
@@ -396,7 +560,7 @@ class MediaService extends ChangeNotifier {
 
       debugPrint('[Media] Sent init: ${media.mediaId} payloadId=$payloadId');
     } catch (e) {
-      _activeSending.remove(media.mediaId);
+      _releaseTransfer(media.mediaId);
       final current = _cache[media.mediaId];
       if (current != null) {
         _updateCache(
@@ -433,6 +597,7 @@ class MediaService extends ChangeNotifier {
         _activeSending.containsKey(media.mediaId)) {
       return false;
     }
+    if (!_reserveTransfer(media.mediaId, endpointId)) return false;
     try {
       final payloadId = await nearby.sendFile(endpointId, media.localPath);
       _activeSending[media.mediaId] = payloadId;
@@ -456,7 +621,7 @@ class MediaService extends ChangeNotifier {
       );
       return true;
     } catch (e) {
-      _activeSending.remove(media.mediaId);
+      _releaseTransfer(media.mediaId);
       error = 'Relay media send failed: $e';
       _notify();
       return false;
@@ -479,7 +644,7 @@ class MediaService extends ChangeNotifier {
         .where((m) => m.messageId == messageId)
         .firstOrNull;
     if (media == null || media.senderId == _myId) return;
-    _activeSending.remove(media.mediaId);
+    _releaseTransfer(media.mediaId);
     final local = File(media.localPath);
     if (await local.exists()) await local.delete();
     await (await database.database).delete(
@@ -497,7 +662,7 @@ class MediaService extends ChangeNotifier {
         .firstOrNull;
     if (media == null || media.senderId != _myId) return;
     _ackTimers.remove(media.mediaId)?.cancel();
-    _activeSending.remove(media.mediaId);
+    _releaseTransfer(media.mediaId);
     final delivered = media.copyWith(
       status: MediaStatus.delivered,
       bytesTransferred: media.fileSize,
@@ -505,12 +670,16 @@ class MediaService extends ChangeNotifier {
     );
     _updateCache(delivered);
     await database.updateMediaFile(delivered);
+    await database.updateMessageStatus(
+      media.messageId,
+      MessageStatus.delivered,
+    );
     await onMessagesChanged?.call();
   }
 
   Future<void> _pauseExpired(String id) async {
     if (_disposed) return;
-    _activeSending.remove(id);
+    _releaseTransfer(id);
     _ackTimers.remove(id)?.cancel();
     final current = _cache[id];
     if (current == null || current.status != MediaStatus.sending) return;
@@ -537,6 +706,13 @@ class MediaService extends ChangeNotifier {
   }
 
   Future<void> pauseDisconnected() async {
+    final connected = nearby.connectedDevices.map((d) => d.endpointId).toSet();
+    for (final entry in _outboundSlots.entries.toList()) {
+      if (_cache[entry.key]?.senderId != _myId &&
+          !connected.contains(entry.value)) {
+        _releaseTransfer(entry.key);
+      }
+    }
     for (final media in _cache.values.toList()) {
       if (media.senderId == _myId &&
           media.status == MediaStatus.sending &&
@@ -576,7 +752,7 @@ class MediaService extends ChangeNotifier {
       if (m != null) {
         // อัพเดต cache โดยไม่เขียน DB ทุก chunk (ลด I/O)
         _cache[m.mediaId] = m.copyWith(bytesTransferred: bytesTransferred);
-        _notify();
+        _notifyProgress();
       }
       return;
     }
@@ -587,7 +763,7 @@ class MediaService extends ChangeNotifier {
       final m = _cache[mediaId];
       if (m != null) {
         _cache[mediaId] = m.copyWith(bytesTransferred: bytesTransferred);
-        _notify();
+        _notifyProgress();
       }
     }
   }
@@ -598,7 +774,8 @@ class MediaService extends ChangeNotifier {
         .where((e) => e.value == payloadId)
         .firstOrNull;
     if (senderEntry != null) {
-      _activeSending.remove(senderEntry.key);
+      _releaseTransfer(senderEntry.key);
+      unawaited(_sendQueuedMedia());
       final senderMedia = _cache[senderEntry.key];
       if (senderMedia != null && senderMedia.senderId != _myId) {
         // Intermediary waits for the end-to-end ACK in MessageService. The
@@ -670,8 +847,7 @@ class MediaService extends ChangeNotifier {
 
       // ตรวจ checksum SHA-256
       final savedFile = File(destPath);
-      final actualChecksum = (await sha256.bind(savedFile.openRead()).first)
-          .toString();
+      final actualChecksum = await checksumMediaFile(destPath);
 
       if (actualChecksum != media.checksum) {
         await File(destPath).delete();
@@ -785,7 +961,7 @@ class MediaService extends ChangeNotifier {
         .where((e) => e.value == payloadId)
         .firstOrNull;
     if (senderEntry != null) {
-      _activeSending.remove(senderEntry.key);
+      _releaseTransfer(senderEntry.key);
       final m = _cache[senderEntry.key];
       _ackTimers.remove(senderEntry.key)?.cancel();
       if (m != null) {
@@ -928,7 +1104,7 @@ class MediaService extends ChangeNotifier {
         return;
       }
       _ackTimers.remove(ack.mediaId)?.cancel();
-      _activeSending.remove(ack.mediaId);
+      _releaseTransfer(ack.mediaId);
 
       if (ack.success) {
         // ผู้รับยืนยัน checksum ผ่าน → ถือว่าส่งสำเร็จ 100%
@@ -957,6 +1133,7 @@ class MediaService extends ChangeNotifier {
         await database.updateMediaFile(_cache[ack.mediaId]!);
       }
 
+      unawaited(_sendQueuedMedia());
       debugPrint('[Media] ACK for ${ack.mediaId}: success=${ack.success}');
     } catch (e) {
       debugPrint('[Media] handleMediaAck error: $e');

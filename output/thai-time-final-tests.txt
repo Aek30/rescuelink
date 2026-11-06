@@ -1,0 +1,8 @@
+00:00 +0: loading D:/3-1/project_keeratiburt/miniProject/rescuelink/test/thai_time_test.dart
+00:00 +0: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/thai_time_test.dart: screenshot UTC timestamp displays as Thailand time
+00:00 +1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/thai_time_test.dart: timezone offsets describe the same instant and are not added twice
+00:00 +2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/thai_time_test.dart: Bangkok conversion rolls into the next day and year
+00:00 +3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/combined_sync_screen_test.dart: sync summary shows explicit Bangkok time on a narrow phone
+00:02 +4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/combined_sync_screen_test.dart: one button syncs SOS and messages; chat failure=false
+00:03 +5: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/combined_sync_screen_test.dart: one button syncs SOS and messages; chat failure=true
+00:03 +6: All tests passed!

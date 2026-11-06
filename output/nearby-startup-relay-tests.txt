@@ -1,0 +1,67 @@
+00:00 +0: loading D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_profile_startup_test.dart
+00:00 +0: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_profile_startup_test.dart: startup waits for saved Thai profile and relay initialization
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following StateError was thrown running a test:
+Bad state: databaseFactory not initialized
+databaseFactory is only initialized when using sqflite. When using `sqflite_common_ffi`
+You must call `databaseFactory = databaseFactoryFfi;` before using global openDatabase API
+
+When the exception was thrown, this was the stack:
+#0      databaseFactory.<anonymous closure> (package:sqflite_common/src/sqflite_database_factory.dart:32:7)
+#1      databaseFactory (package:sqflite_common/src/sqflite_database_factory.dart:36:6)
+#2      new LocalDatabaseService (package:rescuelink/services/local_database_service.dart:17:30)
+#3      LocalDatabaseService.instance (package:rescuelink/services/local_database_service.dart:20:42)
+#4      LocalDatabaseService.instance (package:rescuelink/services/local_database_service.dart)
+#5      main.<anonymous closure> (file:///D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_profile_startup_test.dart:59:51)
+#6      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:29)
+<asynchronous suspension>
+#7      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+The test description was:
+  startup waits for saved Thai profile and relay initialization
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:02 +0 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: A to B to C and ACK preserve origin; duplicates and restart do not add chat rows
+00:02 +0 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_profile_startup_test.dart: startup waits for saved Thai profile and relay initialization [E]
+  Test failed. See exception logs above.
+  The test description was: startup waits for saved Thai profile and relay initialization
+  
+00:02 +1 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: A to B to C to D delivers once and ACK returns through both relays
+00:03 +2 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: looped path, wrong last hop, unsupported type and excessive hops are rejected
+Message service: Receive failed: FormatException: Invalid relay envelope
+Message service: Receive failed: FormatException: Unexpected character (at character 1)
+ช่วยด้วย 🌍
+^
+
+Message service: Receive failed: FormatException: Invalid relay envelope
+00:05 +3 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: version 1 storage upgrades without losing identity or history
+00:06 +4 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: hop limit allows final delivery but no further forwarding
+00:07 +5 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: failed native send remains queued and retries without reconnect after backoff
+Message service: Relay failed (queued): Bad state: Link down
+00:10 +6 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: B queues with no C link and sends after restart and reconnect
+00:11 +7 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: successful native send without reception stays pending and retries
+00:16 +8 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: C queues ACK before send and recovers it after restart
+Message service: Relay ACK retry failed: Bad state: Link down
+00:21 +9 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: B caches receipt and recovers pending return ACK after restart
+Message service: Relay ACK retry failed: Bad state: Link down
+00:24 +10 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: lost return ACK is replayed from durable receipt on origin retry
+00:28 +11 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: unrelated ACK sender and invalid routes cannot mark delivered
+Message service: Receive failed: FormatException: Invalid relay ACK route
+00:29 +12 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: claim and queue insertion roll back together on storage failure
+Message service: Receive failed: SqfliteFfiException(sqlite_error: 1811, , SqliteException(1811): while executing statement, test queue storage failure, constraint failed (code 1811)
+  Causing statement: INSERT INTO relay_queue (packet_id, payload, dest_peer, attempts, created_at) VALUES (?, ?, ?, ?, ?), parameters: c8b26cb6-5147-4249-ad4d-ecb0d8dc7ddb, {"id":"c8b26cb6-5147-4249-ad4d-ecb0d8dc7ddb","senderId":"491232e4-7c05-4732-a57f-e5cb061250d9","senderName":"Rescue-d9ac82","receiverId":"43c5cf36-db31-4b86-84f3-474050a2b0b2","text":"ช่วยด้วย 🌍","timestamp":"2026-11-04T05:10:24.170860Z","type":"message","status":"pending","ackFor":null,"relayVersion":1,"relayPath":["491232e4-7c05-4732-a57f-e5cb061250d9","639fd03c-867f-4442-a00d-210e9f6e57d9"]}, 43c5cf36-db31-4b86-84f3-474050a2b0b2, 0, 2026-11-04T05:10:24.301185Z}) DatabaseException(SqliteException(1811): while executing statement, test queue storage failure, constraint failed (code 1811)
+  Causing statement: INSERT INTO relay_queue (packet_id, payload, dest_peer, attempts, created_at) VALUES (?, ?, ?, ?, ?), parameters: c8b26cb6-5147-4249-ad4d-ecb0d8dc7ddb, {"id":"c8b26cb6-5147-4249-ad4d-ecb0d8dc7ddb","senderId":"491232e4-7c05-4732-a57f-e5cb061250d9","senderName":"Rescue-d9ac82","receiverId":"43c5cf36-db31-4b86-84f3-474050a2b0b2","text":"ช่วยด้วย 🌍","timestamp":"2026-11-04T05:10:24.170860Z","type":"message","status":"pending","ackFor":null,"relayVersion":1,"relayPath":["491232e4-7c05-4732-a57f-e5cb061250d9","639fd03c-867f-4442-a00d-210e9f6e57d9"]}, 43c5cf36-db31-4b86-84f3-474050a2b0b2, 0, 2026-11-04T05:10:24.301185Z) sql 'INSERT INTO relay_queue (packet_id, payload, dest_peer, attempts, created_at) VALUES (?, ?, ?, ?, ?)' args [c8b26cb6-5147-4249-ad4d-ecb0d8dc7ddb, {"id":"c8b26cb6-5147-4249-ad4d-ecb0d8dc7ddb","send..., 43c5cf36-db31-4b86-84f3-474050a2b0b2, 0, 2026-11-04T05:10:24.301185Z] {details: {database: {path: C:\Users\Asus\AppData\Local\Temp\relay-test-1ed7f1a0\1.db, id: 46, readOnly: false, singleInstance: true}}}
+00:30 +13 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: same ID with changed content is rejected without changing queued job
+Message service: Receive failed: FormatException: Conflicting relay packet ID
+00:36 +14 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: legacy seen-only entries can recover instead of losing a retried packet
+00:38 +15 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: retry continues beyond five attempts rather than abandoning work
+00:39 +16 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: ACK retry waits for backoff then sends without reconnect
+Message service: Relay ACK retry failed: Bad state: Link down
+00:40 +17 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: v7 migration preserves pending job, identity and history
+00:41 +18 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: v7 pending full-path ACK is upgraded without dropping it
+00:43 +19 -1: Some tests failed.
+
+Failing tests:
+  D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_profile_startup_test.dart: startup waits for saved Thai profile and relay initialization

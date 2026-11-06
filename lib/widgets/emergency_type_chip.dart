@@ -69,36 +69,31 @@ class SosStepHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final accent = RescueTheme.accentFor(context);
-    final badgeFg = dark ? RescueTheme.darkBackground : Colors.white;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Container(
-          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-          padding: const EdgeInsets.all(6),
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          padding: const EdgeInsets.all(9),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: accent,
+            color: dark ? accent.withValues(alpha: .12) : RescueTheme.peach,
             shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: accent.withValues(alpha: .24),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            border: Border.all(
+              color: accent.withValues(alpha: dark ? .32 : .18),
+            ),
           ),
           child: Text(
             '$step',
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 17,
               fontWeight: FontWeight.w800,
               height: 1,
-              color: badgeFg,
+              color: accent,
             ),
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -107,18 +102,22 @@ class SosStepHeader extends StatelessWidget {
               Text(
                 title,
                 style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  height: 1.4,
                 ),
               ),
-              if (subtitle != null)
+              if (subtitle != null) ...[
+                const SizedBox(height: 3),
                 Text(
                   subtitle!,
                   style: TextStyle(
                     fontSize: 12,
+                    height: 1.5,
                     color: RescueTheme.mutedFor(context),
                   ),
                 ),
+              ],
             ],
           ),
         ),

@@ -49,6 +49,9 @@ class TestNearby extends Fake implements Nearby {
   int stopped = 0;
   int discoveryStops = 0;
   final List<String> requested = [];
+  final List<String> requestNames = [];
+  final List<String> rejected = [];
+  String? advertisedName, discoveryName;
   Completer<bool>? pendingRequest;
   Uint8List? sent;
 
@@ -62,10 +65,11 @@ class TestNearby extends Fake implements Nearby {
     String serviceId = '',
   }) async {
     advertiseCalls++;
+    advertisedName = name;
     if (nativeAdvertising) throw StateError('Already advertising');
     nativeAdvertising = advertiseOk;
-    expect(strategy, Strategy.P2P_CLUSTER);
-    expect(serviceId, 'com.rmutt.rescuelink');
+    expectSync(strategy, Strategy.P2P_CLUSTER);
+    expectSync(serviceId, 'com.rmutt.rescuelink');
     initiated = onConnectionInitiated;
     result = onConnectionResult;
     disconnected = onDisconnected;
@@ -81,8 +85,9 @@ class TestNearby extends Fake implements Nearby {
     String serviceId = '',
   }) async {
     discoveryCalls++;
-    expect(strategy, Strategy.P2P_CLUSTER);
-    expect(serviceId, 'com.rmutt.rescuelink');
+    discoveryName = name;
+    expectSync(strategy, Strategy.P2P_CLUSTER);
+    expectSync(serviceId, 'com.rmutt.rescuelink');
     found = onEndpointFound;
     lost = onEndpointLost;
     return discoveryOk;
@@ -97,6 +102,7 @@ class TestNearby extends Fake implements Nearby {
     required OnDisconnected onDisconnected,
   }) async {
     requested.add(id);
+    requestNames.add(name);
     initiated = onConnectionInitiated;
     result = onConnectionResult;
     disconnected = onDisconnected;
@@ -139,6 +145,15 @@ class TestNearby extends Fake implements Nearby {
 
   @override
   Future<void> disconnectFromEndpoint(String id) async {}
+
+  @override
+  Future<bool> rejectConnection(String id) async {
+    rejected.add(id);
+    return true;
+  }
+
+  @override
+  Future<int> sendFilePayload(String id, String path) async => 42;
 }
 
 void main() {
@@ -318,8 +333,8 @@ void main() {
     native.found('A', 'Rescue-A', NearbyService.serviceId);
     await tester.pump();
     expect(native.requested, isEmpty);
-    now = now.add(const Duration(seconds: 4));
-    await tester.pump(const Duration(seconds: 4));
+    now = now.add(NearbyService.callerFallbackDelay);
+    await tester.pump(const Duration(seconds: 2));
     expect(native.requested, ['A']);
     native.initiated('A', ConnectionInfo('Rescue-A', '1234', false));
     await tester.pump();
@@ -329,7 +344,7 @@ void main() {
   });
 
   test(
-    'peer found during another request is connected without waiting for a timer',
+    'next peer waits for CONNECTED then starts without waiting for a timer',
     () async {
       await service.startAutomatic();
       native.pendingRequest = Completer<bool>();
@@ -338,6 +353,9 @@ void main() {
       expect(native.requested, ['A']);
       native.found('C', 'Rescue-C', NearbyService.serviceId);
       native.pendingRequest!.complete(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(native.requested, ['A']);
+      native.result('A', Status.CONNECTED);
       await Future<void>.delayed(Duration.zero);
       expect(native.requested, ['A', 'C']);
     },
@@ -407,10 +425,10 @@ void main() {
     native.discoveryOk = false;
     await service.startAdvertising();
     expect(service.isAdvertising, isFalse);
-    expect(service.lastError, contains('Advertising start failed'));
+    expect(service.lastError, contains('เปิดรับการเชื่อมต่อไม่สำเร็จ'));
     await service.startDiscovery();
     expect(service.isDiscovering, isFalse);
-    expect(service.lastError, contains('Discovery start failed'));
+    expect(service.lastError, contains('ค้นหาอุปกรณ์ไม่สำเร็จ'));
   });
 
   test(
@@ -464,11 +482,33 @@ void main() {
     native.result('A', Status.REJECTED);
     expect(service.lastError, contains('ยังไม่รับการเชื่อมต่อ'));
     expect(service.discoveredDevices.single.isConnecting, isFalse);
+    await Future<void>.delayed(Duration.zero); // Wait for native cleanup.
     native.requestOk = false;
     await service.requestConnection('A');
     expect(service.lastError, contains('ยังเชื่อมต่อ'));
     expect(service.discoveredDevices.single.isConnecting, isFalse);
   });
+
+  test(
+    'automatic peer retries keep the page stable and retain working links',
+    () async {
+      await connect();
+      native.found('B', 'Rescue-B', NearbyService.serviceId);
+      service.autoConnect = true;
+      native.requestOk = false;
+      final discoveryStops = native.discoveryStops;
+      for (var attempt = 0; attempt < 3; attempt++) {
+        await service.requestConnection('B');
+        expect(service.lastError, isNull);
+        expect(service.connectedDevices.single.endpointId, 'A');
+        expect(native.discoveryStops, discoveryStops);
+      }
+      expect(
+        service.logs.any((entry) => entry.contains('ยังเชื่อมต่อ')),
+        isTrue,
+      );
+    },
+  );
 
   test(
     'empty, disconnected, oversized and native send failures are handled',
@@ -480,33 +520,41 @@ void main() {
       native.sendFails = true;
       expect(await service.sendTextMessage('hello'), isFalse);
       expect(service.messages, isEmpty);
-      expect(service.lastError, contains('Send to Rescue-A failed'));
+      expect(service.lastError, contains('ส่งข้อความไม่สำเร็จ'));
     },
   );
 
-  test('malformed UTF-8 and failed transfer produce errors', () async {
-    await connect();
-    native.received(
-      'A',
-      Payload(
-        id: 2,
-        type: PayloadType.BYTES,
-        bytes: Uint8List.fromList([0xFF]),
-      ),
-    );
-    expect(service.receivedMessages, isEmpty);
-    expect(service.lastError, contains('invalid UTF-8'));
-    native.transfer!(
-      'A',
-      PayloadTransferUpdate(
-        id: 2,
-        bytesTransferred: 0,
-        totalBytes: 1,
-        status: PayloadStatus.FAILURE,
-      ),
-    );
-    expect(service.lastError, contains('failed/canceled'));
-  });
+  test(
+    'invalid text has a friendly error and transfer diagnostics stay in logs',
+    () async {
+      await connect();
+      native.received(
+        'A',
+        Payload(
+          id: 2,
+          type: PayloadType.BYTES,
+          bytes: Uint8List.fromList([0xFF]),
+        ),
+      );
+      expect(service.receivedMessages, isEmpty);
+      expect(service.lastError, contains('อ่านข้อความที่ได้รับไม่ได้'));
+      final previousError = service.lastError;
+      native.transfer!(
+        'A',
+        PayloadTransferUpdate(
+          id: 2,
+          bytesTransferred: 0,
+          totalBytes: 1,
+          status: PayloadStatus.FAILURE,
+        ),
+      );
+      expect(service.lastError, previousError);
+      expect(
+        service.logs.any((entry) => entry.contains('failed/canceled')),
+        isTrue,
+      );
+    },
+  );
 
   test('STOP clears peers and ignores late callbacks', () async {
     await connect();
@@ -546,7 +594,7 @@ void main() {
     await service.startDiscovery();
     native.found('A', 'Rescue-A', NearbyService.serviceId);
     await service.requestConnection('A');
-    await tester.pump(const Duration(seconds: 31));
+    await tester.pump(NearbyService.connectionTimeout);
     expect(service.discoveredDevices, isEmpty);
     expect(service.lastError, contains('ยังไม่ตอบรับ'));
   });

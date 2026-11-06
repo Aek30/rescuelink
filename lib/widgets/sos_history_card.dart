@@ -3,6 +3,7 @@ import '../services/sos_store.dart';
 import '../theme/rescue_theme.dart';
 import 'emergency_type_chip.dart';
 import 'incident_status_chip.dart';
+import 'sos_emergency_info_summary.dart';
 
 String sosHistoryDisplayName(String value) {
   final name = value.trim();
@@ -31,17 +32,23 @@ class SosHistoryCard extends StatelessWidget {
     super.key,
     required this.record,
     required this.active,
-    this.onEdit,
     this.onDelete,
   });
   final SosRecord record;
   final bool active;
-  final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
     final alert = record.alert;
+    final details = alert.active
+        ? alert.details
+        : alert.details
+              .replaceFirstMapped(
+                RegExp(r'^\[ยกเลิก:\s*([^\]]*)\]\s*'),
+                (match) => 'ยกเลิก: ${match[1]}\n',
+              )
+              .trim();
     final expired = alert.isExpired(DateTime.now().toUtc());
     final dark = Theme.of(context).brightness == Brightness.dark;
     final muted = RescueTheme.mutedFor(context);
@@ -128,7 +135,7 @@ class SosHistoryCard extends StatelessWidget {
               style: const TextStyle(fontSize: 13),
             ),
           ),
-          if (alert.details.isNotEmpty) ...[
+          if (details.isNotEmpty) ...[
             SizedBox(height: active ? 16 : 10),
             const Divider(height: 1),
             SizedBox(height: active ? 16 : 10),
@@ -138,10 +145,11 @@ class SosHistoryCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             SelectableText(
-              alert.details,
+              details,
               style: const TextStyle(fontSize: 14, height: 1.6),
             ),
           ],
+          SosEmergencyInfoSummary(info: alert.emergencyInfo),
           SizedBox(height: active ? 16 : 10),
           Container(
             width: double.infinity,
@@ -193,24 +201,11 @@ class SosHistoryCard extends StatelessWidget {
             const SizedBox(height: 6),
             Align(
               alignment: Alignment.centerRight,
-              child: Wrap(
-                spacing: 16,
-                children: [
-                  Tooltip(
-                    message: 'แก้ไขเหตุ',
-                    child: TextButton.icon(
-                      onPressed: onEdit,
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      label: const Text('แก้ไข'),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'ลบเหตุ',
-                    onPressed: onDelete,
-                    icon: const Icon(Icons.delete_outline_rounded, size: 18),
-                    style: IconButton.styleFrom(foregroundColor: muted),
-                  ),
-                ],
+              child: IconButton(
+                tooltip: 'ลบเหตุ',
+                onPressed: onDelete,
+                icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                style: IconButton.styleFrom(foregroundColor: muted),
               ),
             ),
           ],

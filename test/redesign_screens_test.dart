@@ -66,38 +66,39 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('renders extremely long name without overflow and with ellipsis', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(320, 568);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+    testWidgets(
+      'renders extremely long name without overflow and with ellipsis',
+      (tester) async {
+        tester.view.physicalSize = const Size(320, 568);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
 
-      const veryLongName =
-          'นายทดสอบชื่อและนามสกุลยาวมากๆเพื่อตรวจสอบการตัดบรรทัดและการแสดงผลแบบEllipsisที่ไม่ล้นหน้าจอ';
-      final repo = StubMemberRepo(
-        const MemberProfile(
-          id: 'very-long-id-1234567890-abcdef',
-          email: 'very_long_email_address_for_testing_overflow@example.com',
-          name: veryLongName,
-        ),
-      );
+        const veryLongName =
+            'นายทดสอบชื่อและนามสกุลยาวมากๆเพื่อตรวจสอบการตัดบรรทัดและการแสดงผลแบบEllipsisที่ไม่ล้นหน้าจอ';
+        final repo = StubMemberRepo(
+          const MemberProfile(
+            id: 'very-long-id-1234567890-abcdef',
+            email: 'very_long_email_address_for_testing_overflow@example.com',
+            name: veryLongName,
+          ),
+        );
 
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: RescueTheme.light,
-          home: MemberScreen(repository: repo),
-        ),
-      );
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: RescueTheme.light,
+            home: MemberScreen(repository: repo),
+          ),
+        );
+        await tester.pumpAndSettle();
 
-      final headerNameFinder = find.byWidgetPredicate(
-        (w) => w is Text && w.data == veryLongName && w.maxLines == 1,
-      );
-      expect(headerNameFinder, findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
+        final headerNameFinder = find.byWidgetPredicate(
+          (w) => w is Text && w.data == veryLongName && w.maxLines == 1,
+        );
+        expect(headerNameFinder, findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets('supports dark theme seamlessly', (tester) async {
       const name = 'สมชาย ผู้กล้าหาญ';
@@ -158,10 +159,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('การซิงก์ข้อมูล'), findsOneWidget);
-      expect(find.text('ทุกอย่างซิงก์แล้ว'), findsOneWidget);
+      expect(find.text('การซิงก์'), findsOneWidget);
+      expect(find.text('ข้อมูลอยู่ในเครื่อง'), findsOneWidget);
       expect(find.text('ไม่มีรายการค้างอยู่'), findsOneWidget);
-      expect(find.text('บันทึกในเครื่อง'), findsOneWidget);
+      expect(find.text('บันทึกในเครื่อง'), findsWidgets);
       expect(tester.takeException(), isNull);
 
       // Dark mode check

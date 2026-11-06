@@ -1,0 +1,5 @@
+00:00 +0: loading D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_profile_startup_test.dart
+00:00 +0: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_profile_startup_test.dart: startup waits for saved Thai profile and relay initialization
+00:02 +1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_screen_test.dart: nearby page renders and scrolls on a phone
+[RescueLink] This POC requires a physical Android phone.
+00:02 +2: All tests passed!

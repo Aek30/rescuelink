@@ -46,6 +46,19 @@ class SosLocationService {
   static const channel = MethodChannel('com.rmutt.rescuelink/location');
   static Future<bool> _permission() async =>
       (await Permission.locationWhenInUse.request()).isGranted;
+  // Automatic map reads never open another permission dialog after the batch.
+  Future<bool> hasPermission() async {
+    try {
+      return await Permission.locationWhenInUse.isGranted;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
+    } on UnsupportedError {
+      return false;
+    }
+  }
+
   static const timeoutMessage =
       'ยังจับสัญญาณตำแหน่งไม่ได้ กรุณาออกไปบริเวณโล่ง เปิดตำแหน่งแบบแม่นยำ ปิดโหมดประหยัดพลังงาน แล้วลองอีกครั้ง หรือส่ง SOS โดยไม่แนบพิกัด';
 
@@ -89,7 +102,8 @@ class SosLocationService {
         'canceled' =>
           'หยุดอ่านตำแหน่งแล้ว กรุณาเปิดหน้านี้ค้างไว้ระหว่างอ่าน GPS',
         'busy' => 'กำลังอ่านตำแหน่ง กรุณารอสักครู่',
-        _ => 'อ่านตำแหน่งไม่ได้ กรุณาตรวจการตั้งค่าตำแหน่งแล้วลองใหม่ หรือส่งโดยไม่แนบพิกัด',
+        _ =>
+          'อ่านตำแหน่งไม่ได้ กรุณาตรวจการตั้งค่าตำแหน่งแล้วลองใหม่ หรือส่งโดยไม่แนบพิกัด',
       });
     } on FormatException {
       throw StateError(

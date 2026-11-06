@@ -1,0 +1,722 @@
+00:00 +0: loading D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart
+00:00 +0: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: active background session retains payload delivery when paused and STOP releases it
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: home search connects automatically and keeps scanning after connection
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: automatic mode requests discovered peers and continues discovery after connection
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: simultaneous local automatic starts share one advertising and discovery operation
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: automatic reconnect refreshes discovery without restarting the other phone
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] ขาดการเชื่อมต่อกับ Rescue-A • กำลังรอเชื่อมต่อใหม่
+[RescueLink] Discovery stopped
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A-new)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 4567 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +5: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: automatic mode elects one caller and accepts the other phone
+[RescueLink] Advertising started as Rescue-Z
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +6: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: manual scan connects two advertisers without stopping at the first
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Found Rescue-C (C)
+[RescueLink] Connection requested: Rescue-C
+[RescueLink] Connection initiated: Rescue-C; code 5678 (POC auto-accept)
+[RescueLink] Connected to Rescue-C
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +7: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: automatic caller falls back when the peer only advertises
+00:00 +7: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: four nearby peers connect one handshake at a time
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Found Rescue-B (B)
+[RescueLink] Found Rescue-C (C)
+[RescueLink] Found Rescue-D (D)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Connection requested: Rescue-B
+[RescueLink] Connection initiated: Rescue-B; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-B
+[RescueLink] Connection requested: Rescue-C
+[RescueLink] Connection initiated: Rescue-C; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-C
+[RescueLink] Connection requested: Rescue-D
+[RescueLink] Connection initiated: Rescue-D; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-D
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +8: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: automatic caller falls back when the peer only advertises
+00:00 +8: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: identical Thai names elect exactly one initial caller and stay readable
+[RescueLink] Advertising started as ผู้ช่วยเหลือ
+[RescueLink] Discovery started
+[RescueLink] Advertising started as ผู้ช่วยเหลือ
+[RescueLink] Discovery started
+[RescueLink] Found RL2:7f9098c7-7f75-4fdd-af7c-44f8336ebeeb:ผู้ช่วยเหลือ (other)
+[RescueLink] Found RL2:2fedee7c-8f3d-4c24-a0e6-dbeb10cb446d:ผู้ช่วยเหลือ (local)
+[RescueLink] Connection requested: ผู้ช่วยเหลือ
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +9: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: automatic caller falls back when the peer only advertises
+00:00 +9: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: profile updates do not change election or outgoing wire identity
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising started as Rescue-Z
+[RescueLink] Discovery started
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +10: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: automatic caller falls back when the peer only advertises
+00:00 +10: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: incoming peer waits while another handshake is active
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+00:00 +10 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: automatic caller falls back when the peer only advertises
+00:00 +10 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: incoming peer waits while another handshake is active [E]
+  Expected: ['B']
+    Actual: []
+     Which: at location [0] is [] which shorter than expected
+  
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 473:18  expect
+  test\nearby_mesh_connection_test.dart 109:5         main.<fn>
+  
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +10 -1: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: automatic caller falls back when the peer only advertises
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising started as Rescue-Z
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Discovery stopped
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] อีกเครื่องยังไม่ตอบรับ กรุณาวางเครื่องใกล้กันและเปิดรับการเชื่อมต่อ ระบบจะลองใหม่อัตโนมัติ
+[RescueLink] Discovery stopped
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] Discovery stopped
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] Discovery stopped
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: an object with length of <1>
+  Actual: []
+   Which: has length of <0>
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart:342:5)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart line 342
+The test description was:
+  automatic caller falls back when the peer only advertises
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:00 +10 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: idle refresh keeps existing links and discovers a third node
+00:00 +10 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: automatic caller falls back when the peer only advertises [E]
+  Test failed. See exception logs above.
+  The test description was: automatic caller falls back when the peer only advertises
+  
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +10 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: next peer waits for CONNECTED then starts without waiting for a timer
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Found Rescue-C (C)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Connection requested: Rescue-C
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +11 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: idle refresh keeps existing links and discovers a third node
+00:00 +11 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: stale native advertiser is cleared before starting a fresh session
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +12 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: idle refresh keeps existing links and discovers a third node
+00:00 +12 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: permission matrix covers Android 11, 12, 12L and 13+
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +13 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: idle refresh keeps existing links and discovers a third node
+00:00 +13 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: permission display accepts exemptions but rejects disabled radio
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +14 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: idle refresh keeps existing links and discovers a third node
+00:00 +14 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: failed native STOP still invalidates local endpoints
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] หยุดการเชื่อมต่อไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] หยุดการเชื่อมต่อไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+00:00 +15 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: idle refresh keeps existing links and discovers a third node
+00:00 +15 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: permission denial prevents native advertising
+[RescueLink] Nearby Devices permission denied
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +16 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: idle refresh keeps existing links and discovers a third node
+00:00 +16 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: false advertising and discovery results become errors
+[RescueLink] เปิดรับการเชื่อมต่อไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +17 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: idle refresh keeps existing links and discovers a third node
+00:00 +17 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: discovery deduplicates, filters service and removes lost endpoint
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Endpoint lost: Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +18 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: idle refresh keeps existing links and discovers a third node
+00:00 +18 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: outgoing connection auto-accepts and supports UTF-8 in both directions
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Message queued for Rescue-A
+[RescueLink] Message received from Rescue-A
+[RescueLink] ขาดการเชื่อมต่อกับ Rescue-A • กำลังรอเชื่อมต่อใหม่
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +19 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: idle refresh keeps existing links and discovers a third node
+00:00 +19 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: advertiser handles incoming peer not in discovery list
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Connection initiated: Rescue-B; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-B
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +20 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: idle refresh keeps existing links and discovers a third node
+00:00 +20 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: reject and connection failure reset connecting state
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Rescue-A ยังไม่รับการเชื่อมต่อ กรุณาเปิดรับการเชื่อมต่อบนเครื่องนั้น
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection failed: Bad state: Nearby returned false
+[RescueLink] ยังเชื่อมต่อกับ Rescue-A ไม่สำเร็จ ตรวจว่าอีกเครื่องเปิดรับการเชื่อมต่อและเปิด Bluetooth/Wi-Fi แล้ว ระบบจะลองใหม่อัตโนมัติ
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +21 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: idle refresh keeps existing links and discovers a third node
+00:00 +21 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: automatic peer retries keep the page stable and retain working links
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Found Rescue-B (B)
+[RescueLink] Connection requested: Rescue-B
+[RescueLink] Connection failed: Bad state: Nearby returned false
+[RescueLink] ยังเชื่อมต่อกับ Rescue-B ไม่สำเร็จ ตรวจว่าอีกเครื่องเปิดรับการเชื่อมต่อและเปิด Bluetooth/Wi-Fi แล้ว ระบบจะลองใหม่อัตโนมัติ
+[RescueLink] Connection requested: Rescue-B
+[RescueLink] Connection failed: Bad state: Nearby returned false
+[RescueLink] ยังเชื่อมต่อกับ Rescue-B ไม่สำเร็จ ตรวจว่าอีกเครื่องเปิดรับการเชื่อมต่อและเปิด Bluetooth/Wi-Fi แล้ว ระบบจะลองใหม่อัตโนมัติ
+[RescueLink] Connection requested: Rescue-B
+[RescueLink] Connection failed: Bad state: Nearby returned false
+[RescueLink] ยังเชื่อมต่อกับ Rescue-B ไม่สำเร็จ ตรวจว่าอีกเครื่องเปิดรับการเชื่อมต่อและเปิด Bluetooth/Wi-Fi แล้ว ระบบจะลองใหม่อัตโนมัติ
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +22 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: idle refresh keeps existing links and discovers a third node
+00:00 +22 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: empty, disconnected, oversized and native send failures are handled
+[RescueLink] กรุณาพิมพ์ข้อความก่อนส่ง
+[RescueLink] กรุณาเชื่อมต่อกับอุปกรณ์ใกล้เคียงก่อนส่ง
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] ข้อความยาวเกินไป กรุณาแบ่งเป็นข้อความสั้นลง
+[RescueLink] ส่งข้อความไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +23 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: idle refresh keeps existing links and discovers a third node
+00:00 +23 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: invalid text has a friendly error and transfer diagnostics stay in logs
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] อ่านข้อความที่ได้รับไม่ได้ กรุณาให้อีกเครื่องส่งใหม่
+[RescueLink] Payload 2 transfer failed/canceled for A.
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +24 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: idle refresh keeps existing links and discovers a third node
+00:00 +24 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: STOP clears peers and ignores late callbacks
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +25 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: idle refresh keeps existing links and discovers a third node
+00:00 +25 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: STOP during permission prompt cancels the pending start
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:00 +26 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: idle refresh keeps existing links and discovers a third node
+00:00 +26 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: background cleanup blocks new sessions until foreground resumes
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:01 +27 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: idle refresh keeps existing links and discovers a third node
+00:01 +27 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_service_test.dart: unanswered connection times out and removes pending peer
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] อีกเครื่องยังไม่ตอบรับ กรุณาวางเครื่องใกล้กันและเปิดรับการเชื่อมต่อ ระบบจะลองใหม่อัตโนมัติ
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:01 +28 -2: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: idle refresh keeps existing links and discovers a third node
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connected to Rescue-A
+[RescueLink] Discovery stopped
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] Discovery stopped
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] Discovery stopped
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] Discovery stopped
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] Discovery stopped
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] Discovery stopped
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] Found Rescue-C (C)
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] Discovery stopped
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] Connection requested: Rescue-C
+[RescueLink] Connected to Rescue-C
+[RescueLink] Discovery started
+Pending timers:
+Timer (duration: 0:00:02.000000, periodic: true), created:
+#0      new FakeTimer._ (package:fake_async/fake_async.dart:342:62)
+#1      FakeAsync._createTimer (package:fake_async/fake_async.dart:260:29)
+#2      FakeAsync.run.<anonymous closure> (package:fake_async/fake_async.dart:187:15)
+#5      NearbyService._startAutomatic (package:rescuelink/services/nearby_service.dart:173:24)
+<asynchronous suspension>
+<asynchronous suspension>
+#7      NearbyService.startNearby.<anonymous closure> (package:rescuelink/services/nearby_service.dart:156:5)
+<asynchronous suspension>
+<asynchronous suspension>
+#9      main.<anonymous closure> (file:///D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart:121:5)
+<asynchronous suspension>
+#10     testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#11     TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 5 frames from dart:async and package:stack_trace)
+
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following assertion was thrown running a test:
+A Timer is still pending even after the widget tree was disposed.
+'package:flutter_test/src/binding.dart':
+Failed assertion: line 2543 pos 12: '!timersPending'
+
+When the exception was thrown, this was the stack:
+#2      AutomatedTestWidgetsFlutterBinding._verifyInvariants (package:flutter_test/src/binding.dart:2543:12)
+#3      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1974:7)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 3 frames from class _AssertionError and package:stack_trace)
+
+The test description was:
+  idle refresh keeps existing links and discovers a third node
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:01 +28 -3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: idle refresh keeps existing links and discovers a third node [E]
+  Test failed. See exception logs above.
+  The test description was: idle refresh keeps existing links and discovers a third node
+  
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:01 +28 -3: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: refresh waits for file transfer completion
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Connection initiated: Rescue-A; code 1234 (POC auto-accept)
+[RescueLink] Connected to Rescue-A
+[RescueLink] Payload 42 file transfer successful
+[RescueLink] Discovery stopped
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+Pending timers:
+Timer (duration: 0:00:02.000000, periodic: true), created:
+#0      new FakeTimer._ (package:fake_async/fake_async.dart:342:62)
+#1      FakeAsync._createTimer (package:fake_async/fake_async.dart:260:29)
+#2      FakeAsync.run.<anonymous closure> (package:fake_async/fake_async.dart:187:15)
+#5      NearbyService._startAutomatic (package:rescuelink/services/nearby_service.dart:173:24)
+<asynchronous suspension>
+<asynchronous suspension>
+#7      NearbyService.startNearby.<anonymous closure> (package:rescuelink/services/nearby_service.dart:156:5)
+<asynchronous suspension>
+<asynchronous suspension>
+#9      main.<anonymous closure> (file:///D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart:138:5)
+<asynchronous suspension>
+#10     testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#11     TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 5 frames from dart:async and package:stack_trace)
+
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following assertion was thrown running a test:
+A Timer is still pending even after the widget tree was disposed.
+'package:flutter_test/src/binding.dart':
+Failed assertion: line 2543 pos 12: '!timersPending'
+
+When the exception was thrown, this was the stack:
+#2      AutomatedTestWidgetsFlutterBinding._verifyInvariants (package:flutter_test/src/binding.dart:2543:12)
+#3      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1974:7)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 3 frames from class _AssertionError and package:stack_trace)
+
+The test description was:
+  refresh waits for file transfer completion
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:01 +28 -4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: refresh waits for file transfer completion [E]
+  Test failed. See exception logs above.
+  The test description was: refresh waits for file transfer completion
+  
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:01 +28 -4: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: stuck native request times out and releases the next peer
+[RescueLink] Advertising started as Rescue-0
+[RescueLink] Discovery started
+[RescueLink] Found Rescue-A (A)
+[RescueLink] Connection requested: Rescue-A
+[RescueLink] Found Rescue-B (B)
+[RescueLink] อีกเครื่องยังไม่ตอบรับ กรุณาวางเครื่องใกล้กันและเปิดรับการเชื่อมต่อ ระบบจะลองใหม่อัตโนมัติ
+[RescueLink] Discovery stopped
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] Discovery stopped
+[RescueLink] ค้นหาอุปกรณ์ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง
+[RescueLink] Connection requested: Rescue-B
+[RescueLink] Connected to Rescue-B
+[RescueLink] Discovery started
+Pending timers:
+Timer (duration: 0:00:02.000000, periodic: true), created:
+#0      new FakeTimer._ (package:fake_async/fake_async.dart:342:62)
+#1      FakeAsync._createTimer (package:fake_async/fake_async.dart:260:29)
+#2      FakeAsync.run.<anonymous closure> (package:fake_async/fake_async.dart:187:15)
+#5      NearbyService._startAutomatic (package:rescuelink/services/nearby_service.dart:173:24)
+<asynchronous suspension>
+<asynchronous suspension>
+#7      NearbyService.startNearby.<anonymous closure> (package:rescuelink/services/nearby_service.dart:156:5)
+<asynchronous suspension>
+<asynchronous suspension>
+#9      main.<anonymous closure> (file:///D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart:168:5)
+<asynchronous suspension>
+#10     testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#11     TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 5 frames from dart:async and package:stack_trace)
+
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following assertion was thrown running a test:
+A Timer is still pending even after the widget tree was disposed.
+'package:flutter_test/src/binding.dart':
+Failed assertion: line 2543 pos 12: '!timersPending'
+
+When the exception was thrown, this was the stack:
+#2      AutomatedTestWidgetsFlutterBinding._verifyInvariants (package:flutter_test/src/binding.dart:2543:12)
+#3      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1974:7)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 3 frames from class _AssertionError and package:stack_trace)
+
+The test description was:
+  stuck native request times out and releases the next peer
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:01 +28 -5: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_mesh_connection_test.dart: stuck native request times out and releases the next peer [E]
+  Test failed. See exception logs above.
+  The test description was: stuck native request times out and releases the next peer
+  
+[RescueLink] Advertising stopped
+[RescueLink] Discovery stopped
+[RescueLink] All endpoints stopped
+00:02 +28 -5: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: focus loss uses in-app sound without duplicate notifications; SOS starts/stops feedback
+00:04 +28 -6: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: focus loss uses in-app sound without duplicate notifications; SOS starts/stops feedback
+00:04 +28 -6: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: A to B to C and ACK preserve origin; duplicates and restart do not add chat rows [E]
+  Invalid argument(s): Unknown peer
+  package:rescuelink/services/message_service.dart 917:41  MessageService.sendTextMessage
+  test\multi_hop_test.dart 115:20                          main.send
+  test\multi_hop_test.dart 125:25                          main.<fn>
+  
+00:04 +28 -7: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: focus loss uses in-app sound without duplicate notifications; SOS starts/stops feedback
+00:04 +28 -7: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: looped path, wrong last hop, unsupported type and excessive hops are rejected [E]
+  Invalid argument(s): Unknown peer
+  package:rescuelink/services/message_service.dart 917:41  MessageService.sendTextMessage
+  test\multi_hop_test.dart 115:20                          main.send
+  test\multi_hop_test.dart 172:25                          main.<fn>
+  
+00:05 +29 -7: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: rescue GPS reaches C through B and can be withdrawn without an SOS
+00:06 +30 -7: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: rescue GPS reaches C through B and can be withdrawn without an SOS
+00:06 +31 -7: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: floating message banner does not shift content; expires, swipes and opens chat: dark=false
+00:06 +32 -7: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: hop limit allows final delivery but no further forwarding
+00:07 +33 -7: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: A discovers C through B without pairing and sends a chat with ACK
+00:07 +34 -7: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: A discovers C through B without pairing and sends a chat with ACK
+00:07 +34 -8: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: A discovers C through B without pairing and sends a chat with ACK
+00:07 +34 -8: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: failed native send remains queued and retries without reconnect after backoff [E]
+  Invalid argument(s): Unknown peer
+  package:rescuelink/services/message_service.dart 917:41  MessageService.sendTextMessage
+  test\multi_hop_test.dart 115:20                          main.send
+  test\multi_hop_test.dart 260:25                          main.<fn>
+  
+00:08 +35 -8: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: A discovers C through B without pairing and sends a chat with ACK
+00:08 +35 -9: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: A discovers C through B without pairing and sends a chat with ACK
+00:08 +35 -9: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: B queues with no C link and sends after restart and reconnect [E]
+  Invalid argument(s): Unknown peer
+  package:rescuelink/services/message_service.dart 917:41  MessageService.sendTextMessage
+  test\multi_hop_test.dart 115:20                          main.send
+  test\multi_hop_test.dart 286:25                          main.<fn>
+  
+00:08 +36 -9: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: permission checks do not flash or shift content: allowed=true slow=false
+00:08 +37 -9: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: successful native send without reception stays pending and retries
+00:09 +38 -9: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: successful native send without reception stays pending and retries
+00:09 +38 -10: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: direct links agree on both ends and outrank newer relay advertisements
+00:09 +38 -10: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: successful native send without reception stays pending and retries [E]
+  Invalid argument(s): Unknown peer
+  package:rescuelink/services/message_service.dart 917:41  MessageService.sendTextMessage
+  test\multi_hop_test.dart 115:20                          main.send
+  test\multi_hop_test.dart 307:25                          main.<fn>
+  
+00:09 +38 -10: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: permission checks do not flash or shift content: allowed=false slow=false
+[RescueLink] Permission denied
+00:09 +39 -10: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: direct links agree on both ends and outrank newer relay advertisements
+00:10 +39 -10: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: permission checks do not flash or shift content: allowed=false slow=true
+[RescueLink] Permission denied
+00:10 +40 -10: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: direct links agree on both ends and outrank newer relay advertisements
+00:10 +40 -11: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: direct links agree on both ends and outrank newer relay advertisements
+00:10 +40 -11: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: C queues ACK before send and recovers it after restart [E]
+  Invalid argument(s): Unknown peer
+  package:rescuelink/services/message_service.dart 917:41  MessageService.sendTextMessage
+  test\multi_hop_test.dart 115:20                          main.send
+  test\multi_hop_test.dart 323:23                          main.<fn>
+  
+00:10 +41 -11: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: resume during permission work retries once; explicit stop stays stopped
+00:10 +41 -12: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/nearby_modes_test.dart: resume during permission work retries once; explicit stop stays stopped
+00:10 +41 -12: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: B caches receipt and recovers pending return ACK after restart [E]
+  Invalid argument(s): Unknown peer
+  package:rescuelink/services/message_service.dart 917:41  MessageService.sendTextMessage
+  test\multi_hop_test.dart 115:20                          main.send
+  test\multi_hop_test.dart 342:25                          main.<fn>
+  
+00:10 +42 -12: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: Rescue changes cross B and old cached entries cannot renew after restart
+00:11 +43 -12: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: Rescue changes cross B and old cached entries cannot renew after restart
+00:11 +43 -13: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: Rescue changes cross B and old cached entries cannot renew after restart
+00:11 +43 -13: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: lost return ACK is replayed from durable receipt on origin retry [E]
+  Invalid argument(s): Unknown peer
+  package:rescuelink/services/message_service.dart 917:41  MessageService.sendTextMessage
+  test\multi_hop_test.dart 115:20                          main.send
+  test\multi_hop_test.dart 366:25                          main.<fn>
+  
+00:12 +44 -13: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: Rescue changes cross B and old cached entries cannot renew after restart
+00:12 +44 -14: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: Rescue changes cross B and old cached entries cannot renew after restart
+00:12 +44 -14: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: unrelated ACK sender and invalid routes cannot mark delivered [E]
+  Invalid argument(s): Unknown peer
+  package:rescuelink/services/message_service.dart 917:41  MessageService.sendTextMessage
+  test\multi_hop_test.dart 115:20                          main.send
+  test\multi_hop_test.dart 386:13                          main.<fn>
+  
+00:12 +45 -14: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: claim and queue insertion roll back together on storage failure
+00:12 +45 -15: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: stale age and a missing first hop do not advertise reachable users
+00:12 +45 -15: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: claim and queue insertion roll back together on storage failure [E]
+  Invalid argument(s): Unknown peer
+  package:rescuelink/services/message_service.dart 917:41  MessageService.sendTextMessage
+  test\multi_hop_test.dart 115:20                          main.send
+  test\multi_hop_test.dart 422:25                          main.<fn>
+  
+00:13 +45 -16: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: stale age and a missing first hop do not advertise reachable users
+00:13 +45 -16: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: same ID with changed content is rejected without changing queued job [E]
+  Invalid argument(s): Unknown peer
+  package:rescuelink/services/message_service.dart 917:41  MessageService.sendTextMessage
+  test\multi_hop_test.dart 115:20                          main.send
+  test\multi_hop_test.dart 442:25                          main.<fn>
+  
+00:13 +46 -16: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: legacy seen-only entries can recover instead of losing a retried packet
+00:13 +46 -17: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: looped, spoofed and invalid-age entries do not hide a valid entry
+00:13 +46 -17: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: legacy seen-only entries can recover instead of losing a retried packet [E]
+  Invalid argument(s): Unknown peer
+  package:rescuelink/services/message_service.dart 917:41  MessageService.sendTextMessage
+  test\multi_hop_test.dart 115:20                          main.send
+  test\multi_hop_test.dart 460:25                          main.<fn>
+  
+00:14 +47 -17: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: retry continues beyond five attempts rather than abandoning work
+00:14 +47 -18: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: large directories are split under the byte limit and all peers arrive
+00:14 +47 -18: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: retry continues beyond five attempts rather than abandoning work [E]
+  Invalid argument(s): Unknown peer
+  package:rescuelink/services/message_service.dart 917:41  MessageService.sendTextMessage
+  test\multi_hop_test.dart 115:20                          main.send
+  test\multi_hop_test.dart 471:25                          main.<fn>
+  
+00:15 +47 -19: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: large directories are split under the byte limit and all peers arrive
+00:15 +47 -19: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: ACK retry waits for backoff then sends without reconnect [E]
+  Invalid argument(s): Unknown peer
+  package:rescuelink/services/message_service.dart 917:41  MessageService.sendTextMessage
+  test\multi_hop_test.dart 115:20                          main.send
+  test\multi_hop_test.dart 482:23                          main.<fn>
+  
+00:15 +47 -20: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: large directories are split under the byte limit and all peers arrive
+00:15 +47 -20: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: v7 migration preserves pending job, identity and history [E]
+  Invalid argument(s): Unknown peer
+  package:rescuelink/services/message_service.dart 917:41  MessageService.sendTextMessage
+  test\multi_hop_test.dart 115:20                          main.send
+  test\multi_hop_test.dart 498:23                          main.<fn>
+  
+00:16 +47 -21: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: large directories are split under the byte limit and all peers arrive
+00:16 +47 -21: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: v7 pending full-path ACK is upgraded without dropping it [E]
+  Invalid argument(s): Unknown peer
+  package:rescuelink/services/message_service.dart 917:41  MessageService.sendTextMessage
+  test\multi_hop_test.dart 115:20                          main.send
+  test\multi_hop_test.dart 535:11                          main.<fn>
+  
+00:17 +48 -21: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: broadcast SOS updates/cancellation cross B once per revision and persist
+00:20 +49 -21: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: targeted SOS reaches remote user and receives an end-to-end ACK
+00:21 +50 -21: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: typed SOS categories survive relay, restart and cancellation
+00:23 +51 -21: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: offline relay keeps latest cancellation across restart and rejects old open
+00:25 +52 -21: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: presence expiry does not cancel SOS; SOS expires after 24 hours
+00:26 +53 -21: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: new incident wins after rapid cancellation with an unchanged clock
+00:28 +54 -21: D:/3-1/project_keeratiburt/miniProject/rescuelink/test/network_presence_sos_test.dart: expired active SOS is removed from the intermediary forward queue
+00:29 +55 -21: Some tests failed.
+
+Failing tests:
+  D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: A to B to C and ACK preserve origin; duplicates and restart do not add chat rows
+  D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: ACK retry waits for backoff then sends without reconnect
+  D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: B caches receipt and recovers pending return ACK after restart
+  D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart: B queues with no C link and sends after restart and reconnect
+  ... and 17 more

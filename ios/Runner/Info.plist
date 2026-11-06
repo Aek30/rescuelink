@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>ใช้กล้องถ่ายรูปที่คุณเลือกส่งในแชท</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>เลือกรูปภาพหรือวิดีโอที่คุณต้องการส่งในแชท</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

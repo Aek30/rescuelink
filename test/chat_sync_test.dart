@@ -18,7 +18,8 @@ class MemoryChatCloud implements ChatCloud {
     if (receipts.containsKey(operation)) return receipts[operation]!;
     final id = op['record_id'] as String;
     final old = records[id];
-    if ((old?['version'] ?? 0) != op['base_version'] || old?['deleted'] == true) {
+    if ((old?['version'] ?? 0) != op['base_version'] ||
+        old?['deleted'] == true) {
       return {'outcome': 'conflict', 'record': old};
     }
     final record = <String, dynamic>{
@@ -74,6 +75,27 @@ void main() {
     await db.close();
     await dir.delete(recursive: true);
   });
+
+  test(
+    'failed sync remains visible during retries and clears only on success',
+    () async {
+      cloud.offline = true;
+      await sync.sync();
+      final failure = sync.error;
+      expect(failure, isNotNull);
+      final retry = sync.sync();
+      expect(sync.busy, isTrue);
+      expect(sync.error, failure);
+      await retry;
+      expect(sync.error, failure);
+      cloud.offline = false;
+      final recovery = sync.sync();
+      expect(sync.error, failure);
+      await recovery;
+      expect(sync.error, isNull);
+      expect(sync.lastSuccess, isNotNull);
+    },
+  );
 
   test(
     'offline messages and edits survive restart and sync once online',

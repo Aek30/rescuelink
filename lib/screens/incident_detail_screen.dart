@@ -6,6 +6,7 @@ import '../services/message_service.dart';
 import '../theme/rescue_theme.dart';
 import '../widgets/bundled_offline_map.dart';
 import '../widgets/emergency_type_chip.dart';
+import '../widgets/sos_emergency_info_summary.dart';
 import '../widgets/incident_status_chip.dart';
 import 'chat_screen.dart';
 
@@ -14,9 +15,11 @@ class IncidentDetailScreen extends StatefulWidget {
     super.key,
     required this.service,
     required this.peerId,
+    this.initialAlert,
   });
   final MessageService service;
   final String peerId;
+  final SosAlert? initialAlert;
   @override
   State<IncidentDetailScreen> createState() => _IncidentDetailScreenState();
 }
@@ -356,7 +359,15 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
         builder: (context, _) {
           final service = widget.service;
           final presence = service.presence[widget.peerId];
-          final alert = presence?.sos;
+          final initial = widget.initialAlert;
+          final latest = initial == null
+              ? presence?.sos
+              : service.sosForIncident(widget.peerId, initial.incidentId);
+          final alert =
+              initial != null &&
+                  (latest == null || latest.revision < initial.revision)
+              ? initial
+              : latest;
           final now = DateTime.now().toUtc();
           final active = alert?.isActiveAt(now) == true;
           final location = alert != null
@@ -556,6 +567,11 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
                         ),
                       ],
                     ),
+                  ),
+                if (alert != null && alert.emergencyInfo.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: SosEmergencyInfoSummary(info: alert.emergencyInfo),
                   ),
                 if (location != null) ...[
                   _map(location, active, stale),

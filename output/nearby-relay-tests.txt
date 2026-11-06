@@ -1,0 +1,35 @@
+00:00 +0: loading D:/3-1/project_keeratiburt/miniProject/rescuelink/test/multi_hop_test.dart
+00:00 +0: A to B to C and ACK preserve origin; duplicates and restart do not add chat rows
+00:00 +1: looped path, wrong last hop, unsupported type and excessive hops are rejected
+Message service: Receive failed: FormatException: Invalid relay envelope
+Message service: Receive failed: FormatException: Unexpected character (at character 1)
+ช่วยด้วย 🌍
+^
+
+Message service: Receive failed: FormatException: Invalid relay envelope
+00:01 +2: version 1 storage upgrades without losing identity or history
+00:01 +3: hop limit allows final delivery but no further forwarding
+00:02 +4: failed native send remains queued and retries without reconnect after backoff
+Message service: Relay failed (queued): Bad state: Link down
+00:02 +5: B queues with no C link and sends after restart and reconnect
+00:03 +6: successful native send without reception stays pending and retries
+00:03 +7: C queues ACK before send and recovers it after restart
+Message service: Relay ACK retry failed: Bad state: Link down
+00:04 +8: B caches receipt and recovers pending return ACK after restart
+Message service: Relay ACK retry failed: Bad state: Link down
+00:04 +9: lost return ACK is replayed from durable receipt on origin retry
+00:05 +10: unrelated ACK sender and invalid routes cannot mark delivered
+Message service: Receive failed: FormatException: Invalid relay ACK route
+00:05 +11: claim and queue insertion roll back together on storage failure
+Message service: Receive failed: SqfliteFfiException(sqlite_error: 1811, , SqliteException(1811): while executing statement, test queue storage failure, constraint failed (code 1811)
+  Causing statement: INSERT INTO relay_queue (packet_id, payload, dest_peer, attempts, created_at) VALUES (?, ?, ?, ?, ?), parameters: 5ae9d86b-987f-4c2e-a931-645bb511132e, {"id":"5ae9d86b-987f-4c2e-a931-645bb511132e","senderId":"a31034d5-7ee0-4f14-a3bd-10bdb45e132b","senderName":"Rescue-f11e47","receiverId":"5cff4d74-bd73-463a-836f-220531af054a","text":"ช่วยด้วย 🌍","timestamp":"2026-11-04T05:07:33.026841Z","type":"message","status":"pending","ackFor":null,"relayVersion":1,"relayPath":["a31034d5-7ee0-4f14-a3bd-10bdb45e132b","f9913007-3ecf-4aac-a1e5-d68d919a40ef"]}, 5cff4d74-bd73-463a-836f-220531af054a, 0, 2026-11-04T05:07:33.084884Z}) DatabaseException(SqliteException(1811): while executing statement, test queue storage failure, constraint failed (code 1811)
+  Causing statement: INSERT INTO relay_queue (packet_id, payload, dest_peer, attempts, created_at) VALUES (?, ?, ?, ?, ?), parameters: 5ae9d86b-987f-4c2e-a931-645bb511132e, {"id":"5ae9d86b-987f-4c2e-a931-645bb511132e","senderId":"a31034d5-7ee0-4f14-a3bd-10bdb45e132b","senderName":"Rescue-f11e47","receiverId":"5cff4d74-bd73-463a-836f-220531af054a","text":"ช่วยด้วย 🌍","timestamp":"2026-11-04T05:07:33.026841Z","type":"message","status":"pending","ackFor":null,"relayVersion":1,"relayPath":["a31034d5-7ee0-4f14-a3bd-10bdb45e132b","f9913007-3ecf-4aac-a1e5-d68d919a40ef"]}, 5cff4d74-bd73-463a-836f-220531af054a, 0, 2026-11-04T05:07:33.084884Z) sql 'INSERT INTO relay_queue (packet_id, payload, dest_peer, attempts, created_at) VALUES (?, ?, ?, ?, ?)' args [5ae9d86b-987f-4c2e-a931-645bb511132e, {"id":"5ae9d86b-987f-4c2e-a931-645bb511132e","send..., 5cff4d74-bd73-463a-836f-220531af054a, 0, 2026-11-04T05:07:33.084884Z] {details: {database: {path: C:\Users\Asus\AppData\Local\Temp\relay-test-15736b07\1.db, id: 42, readOnly: false, singleInstance: true}}}
+00:05 +12: same ID with changed content is rejected without changing queued job
+Message service: Receive failed: FormatException: Conflicting relay packet ID
+00:06 +13: legacy seen-only entries can recover instead of losing a retried packet
+00:06 +14: retry continues beyond five attempts rather than abandoning work
+00:06 +15: ACK retry waits for backoff then sends without reconnect
+Message service: Relay ACK retry failed: Bad state: Link down
+00:07 +16: v7 migration preserves pending job, identity and history
+00:08 +17: v7 pending full-path ACK is upgraded without dropping it
+00:09 +18: All tests passed!

@@ -51,14 +51,73 @@ class BundledOfflineMap extends StatefulWidget {
 }
 
 class _BundledOfflineMapState extends State<BundledOfflineMap> {
+  /// Minimum zoom for the first view so roads are readable, not a tiny island.
+  static const _defaultZoom = 1.5;
   final _controller = TransformationController();
   final _data = OfflineMapData.load();
   bool _compactPositioned = false;
+  bool _userMoved = false;
 
   @override
   void didUpdateWidget(covariant BundledOfflineMap oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.focus != widget.focus) _compactPositioned = false;
+    if (oldWidget.focus != widget.focus) {
+      _compactPositioned = false;
+    } else if (widget.focus == null &&
+        !_userMoved &&
+        oldWidget.markers.isEmpty &&
+        widget.markers.isNotEmpty) {
+      // Nearby people appeared before the user touched the map: frame them.
+      _compactPositioned = false;
+    }
+  }
+
+  /// Chooses the first camera: own location, else nearby markers, else the
+  /// province centre - always at least large enough to cover the whole card.
+  void _positionInitial(
+    OfflineMapData data,
+    Size size,
+    Size mapSize,
+    Offset Function(SosLocation) project,
+  ) {
+    final cover = math.max(
+      size.width / mapSize.width,
+      size.height / mapSize.height,
+    );
+    final base = math.max(cover, _defaultZoom);
+    final focus = widget.focus;
+    late final double scale;
+    late final Offset target;
+    if (focus != null && data.contains(focus)) {
+      scale = math.max(32.0, base);
+      target = project(focus);
+    } else {
+      final points = [
+        for (final m in widget.markers)
+          if (data.contains(m.location)) project(m.location),
+      ];
+      if (points.isEmpty) {
+        scale = base;
+        target = size.center(Offset.zero);
+      } else {
+        var minX = points.first.dx, maxX = minX;
+        var minY = points.first.dy, maxY = minY;
+        for (final p in points) {
+          minX = math.min(minX, p.dx);
+          maxX = math.max(maxX, p.dx);
+          minY = math.min(minY, p.dy);
+          maxY = math.max(maxY, p.dy);
+        }
+        target = Offset((minX + maxX) / 2, (minY + maxY) / 2);
+        // Keep every marker inside ~60% of the card, never beyond street level.
+        final w = math.max(maxX - minX, 1.0), h = math.max(maxY - minY, 1.0);
+        scale = math
+            .min(size.width * .6 / w, size.height * .6 / h)
+            .clamp(base, 32.0)
+            .toDouble();
+      }
+    }
+    _zoom(scale / _controller.value.getMaxScaleOnAxis(), size, target: target);
   }
 
   @override
@@ -122,18 +181,9 @@ class _BundledOfflineMapState extends State<BundledOfflineMap> {
 
         if (!_compactPositioned) {
           _compactPositioned = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            final focus = widget.focus;
-            _zoom(
-              (focus != null && data.contains(focus) ? 32.0 : 1.0) /
-                  _controller.value.getMaxScaleOnAxis(),
-              size,
-              target: focus != null && data.contains(focus)
-                  ? project(focus)
-                  : size.center(Offset.zero),
-            );
-          });
+          // Set the camera before the first paint, avoiding a province-wide
+          // frame flashing briefly before the map centres on the GPS fix.
+          _positionInitial(data, size, mapSize, project);
         }
 
         return GestureDetector(
@@ -170,6 +220,7 @@ class _BundledOfflineMapState extends State<BundledOfflineMap> {
               children: [
                 InteractiveViewer(
                   transformationController: _controller,
+                  onInteractionStart: (_) => _userMoved = true,
                   minScale: 1,
                   maxScale: 256,
                   boundaryMargin: const EdgeInsets.all(200),
@@ -317,7 +368,10 @@ class _BundledOfflineMapState extends State<BundledOfflineMap> {
                                   borderRadius: const BorderRadius.vertical(
                                     top: Radius.circular(13),
                                   ),
-                                  onTap: () => _zoom(1.7, size),
+                                  onTap: () {
+                                    _userMoved = true;
+                                    _zoom(1.7, size);
+                                  },
                                   child: SizedBox(
                                     width: 48,
                                     height: 48,
@@ -346,9 +400,14 @@ class _BundledOfflineMapState extends State<BundledOfflineMap> {
                                   borderRadius: const BorderRadius.vertical(
                                     bottom: Radius.circular(13),
                                   ),
-                                  onTap: () => _zoom(1 / 1.7, size),
-                                  onLongPress: () =>
-                                      _controller.value = Matrix4.identity(),
+                                  onTap: () {
+                                    _userMoved = true;
+                                    _zoom(1 / 1.7, size);
+                                  },
+                                  onLongPress: () {
+                                    _userMoved = true;
+                                    _controller.value = Matrix4.identity();
+                                  },
                                   child: SizedBox(
                                     width: 48,
                                     height: 48,
@@ -565,10 +624,12 @@ class _BundledOfflineMapState extends State<BundledOfflineMap> {
   );
 }
 
+/// Province fitted edge-to-edge (no inner margin); the initial camera then
+/// zooms to cover the card so no empty letterbox bands remain.
 Size _fit(OfflineMapData data, Size size) {
   final scale = math.min(
-    (size.width - 24) / data.widthMeters,
-    (size.height - 24) / data.heightMeters,
+    size.width / data.widthMeters,
+    size.height / data.heightMeters,
   );
   return Size(data.widthMeters * scale, data.heightMeters * scale);
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'auth_service.dart';
+import 'auto_sync_trigger.dart';
 import 'local_database_service.dart';
 import 'sos_store.dart';
 
@@ -79,7 +80,6 @@ class SosSyncService extends ChangeNotifier {
   Future<void> sync() async {
     if (busy || _stopped) return;
     busy = true;
-    error = null;
     _notify();
     try {
       await refreshStatus();
@@ -115,6 +115,7 @@ class SosSyncService extends ChangeNotifier {
         'sosLastSync',
         lastSuccess!.toUtc().toIso8601String(),
       );
+      error = null;
     } catch (_) {
       error =
           'ซิงก์ไม่สำเร็จ ข้อมูลยังอยู่ในเครื่อง ตรวจสอบอินเทอร์เน็ตหรือเข้าสู่ระบบใหม่';
@@ -139,37 +140,66 @@ class SosSyncService extends ChangeNotifier {
 class SosSyncCoordinator extends ChangeNotifier with WidgetsBindingObserver {
   static final instance = SosSyncCoordinator();
   SosSyncService? current;
-  Timer? _timer;
+  bool _started = false;
+  bool _syncAfterCurrent = false;
+  late final _automatic = AutoSyncTrigger(sync: _syncAutomatically);
+
+  Future<void> _syncAutomatically() async {
+    final service = current;
+    if (service == null) return;
+    if (service.busy) {
+      _syncAfterCurrent = true;
+      return;
+    }
+    _syncAfterCurrent = false;
+    await service.sync();
+  }
+
+  void _serviceChanged() {
+    notifyListeners();
+    if (_syncAfterCurrent && current?.busy == false) _automatic.requestSync();
+  }
+
   String? _owner;
   void start() {
-    if (_timer != null) return;
+    if (_started) return;
+    _started = true;
     WidgetsBinding.instance.addObserver(this);
     AuthService.instance.addListener(_scopeChanged);
     _scopeChanged();
-    _timer = Timer.periodic(
-      const Duration(seconds: 15),
-      (_) => unawaited(current?.sync()),
-    );
+    _automatic.start();
+  }
+
+  void _localChanged() {
+    _syncAfterCurrent = true;
+    _automatic.requestSync();
   }
 
   void _scopeChanged() {
     final owner = AuthService.instance.session?.userId;
     final db = LocalDatabaseService.instance;
     if (_owner == owner && identical(current?.store.database, db)) return;
-    current?.removeListener(notifyListeners);
+    current?.store.database.syncRequested.removeListener(_localChanged);
+    current?.removeListener(_serviceChanged);
     current?.dispose();
     _owner = owner;
     current = SosSyncService(
       SosStore(db),
       owner == null ? null : SupabaseSosCloud(AuthService.instance, owner),
     );
-    current!.addListener(notifyListeners);
+    current!.addListener(_serviceChanged);
+    db.syncRequested.addListener(_localChanged);
     notifyListeners();
-    unawaited(current!.sync());
+    unawaited(
+      current!.refreshStatus().catchError((Object error) {
+        debugPrint('Local sync status: $error');
+      }),
+    );
+    _automatic.requestSync();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) unawaited(current?.sync());
+    if (state == AppLifecycleState.resumed) unawaited(_automatic.refresh());
   }
 }

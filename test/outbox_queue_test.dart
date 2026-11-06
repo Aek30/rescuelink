@@ -6,7 +6,7 @@ import 'package:rescuelink/services/media_upload_service.dart';
 import 'package:rescuelink/widgets/outbox_queue.dart';
 
 void main() {
-  testWidgets('media appears in queue by filename and cloud confirmation', (
+  testWidgets('media queue shows image label without filename in details', (
     tester,
   ) async {
     final media = MediaFile(
@@ -48,18 +48,19 @@ void main() {
       ),
     );
     await show();
-    expect(find.text('ส่งรูป'), findsOneWidget);
+    expect(find.text('ส่งรูปภาพ'), findsOneWidget);
     expect(find.text('รอการยืนยัน (1)'), findsOneWidget);
-    await tester.tap(find.text('ส่งรูป'));
+    await tester.tap(find.text('ส่งรูปภาพ'));
     await tester.pumpAndSettle();
-    expect(find.text('ชื่อไฟล์: photo.png'), findsOneWidget);
+    expect(find.text('ส่งรูปภาพ'), findsNWidgets(2));
+    expect(find.textContaining(media.fileName), findsNothing);
     expect(
-      find.text('อยู่ในคิว • ซิงก์อัตโนมัติเมื่อออนไลน์และเข้าสู่ระบบ'),
+      find.text('รอสำรองข้อมูลเมื่อมีอินเทอร์เน็ตและเข้าสู่ระบบ'),
       findsOneWidget,
     );
     upload.state = UploadState.ready;
     await show();
-    expect(find.text('ซิงก์แล้ว (1)'), findsOneWidget);
+    expect(find.text('สำรองแล้ว (1)'), findsOneWidget);
     expect(find.textContaining('ยังไม่ยืนยันการรับที่ปลายทาง'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -99,12 +100,17 @@ void main() {
     );
     expect(find.text('รอการยืนยัน (2)'), findsOneWidget);
     expect(find.text('ถึงเครื่องรับแล้ว (1)'), findsOneWidget);
-    expect(find.text('ซิงก์แล้ว (1)'), findsOneWidget);
+    expect(find.text('สำรองแล้ว (1)'), findsOneWidget);
     expect(tester.takeException(), isNull);
-    await tester.tap(find.text('ซิงก์แล้ว (1)'));
+    await tester.tap(find.text('สำรองแล้ว (1)'));
     await tester.pumpAndSettle();
     expect(find.text('message-sent'), findsOneWidget);
     expect(find.text('message-synced'), findsNothing);
+    expect(find.text('สำรองแล้ว • 1 ข้อความ'), findsOneWidget);
+    expect(
+      find.textContaining(RegExp(r'Supabase|Cloud', caseSensitive: false)),
+      findsNothing,
+    );
     await tester.tap(find.text('message-sent'));
     await tester.pumpAndSettle();
     expect(find.textContaining('ยังไม่ยืนยันการรับที่ปลายทาง'), findsOneWidget);

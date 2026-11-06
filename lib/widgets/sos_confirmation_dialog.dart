@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/sos_alert.dart';
 import '../theme/rescue_theme.dart';
 import 'emergency_type_chip.dart';
+import 'sos_emergency_info_summary.dart';
 
 /// Kept under its original name for callers; presented as a modal bottom sheet.
 class SosConfirmationDialog extends StatefulWidget {
@@ -12,18 +13,18 @@ class SosConfirmationDialog extends StatefulWidget {
     required this.category,
     required this.details,
     required this.location,
-    required this.recipients,
     required this.translate,
     this.categories = const [],
     this.sosLocation,
     this.onRefreshLocation,
+    this.emergencyInfo = const {},
   });
   final String name, people, category, details, location;
-  final List<String> recipients;
   final String Function(String) translate;
   final List<EmergencyType> categories;
   final SosLocation? sosLocation;
   final Future<SosLocation?> Function()? onRefreshLocation;
+  final Map<String, String> emergencyInfo;
   @override
   State<SosConfirmationDialog> createState() => _SosConfirmationDialogState();
 }
@@ -136,11 +137,16 @@ class _SosConfirmationDialogState extends State<SosConfirmationDialog> {
                       ),
                       if (widget.details.trim().isNotEmpty)
                         row('รายละเอียดเพิ่มเติม', Text(widget.details)),
-                      if (widget.recipients.isNotEmpty)
-                        row(
-                          'ผู้รับเพิ่มเติม',
-                          Text(widget.recipients.join(', ')),
+                      if (widget.emergencyInfo.isNotEmpty) ...[
+                        SosEmergencyInfoSummary(info: widget.emergencyInfo),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Text(
+                            'อุปกรณ์ที่ได้รับ SOS อาจเห็นข้อมูลที่คุณเลือกแนบ',
+                            style: TextStyle(fontSize: 12),
+                          ),
                         ),
+                      ],
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -156,7 +162,7 @@ class _SosConfirmationDialogState extends State<SosConfirmationDialog> {
                             SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'ประกาศไปยังเครื่องที่เชื่อมต่อและส่งต่อผ่านเครื่องอื่น ถ้าออฟไลน์จะเก็บไว้ส่งทีหลัง',
+                                'SOS จะประกาศไปยังอุปกรณ์ที่เชื่อมต่อและส่งต่อผ่านเครื่องอื่น หากยังไม่เชื่อมต่อ จะเก็บไว้ส่งภายหลัง',
                                 style: TextStyle(fontSize: 12),
                               ),
                             ),

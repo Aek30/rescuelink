@@ -55,11 +55,7 @@ class LocationButton extends StatelessWidget {
                 'เลื่อน/กางนิ้วเพื่อซูม • ไม่มีระบบนำทางตามถนน\n\n'
                 'แผนที่ถนนออฟไลน์ครอบคลุมจังหวัดปทุมธานี\n'
                 'นอกพื้นที่นี้ยังอ่านและคัดลอกพิกัดได้ การเปิดแอปแผนที่ภายนอกต้องมีเน็ตหรือข้อมูลพื้นที่ที่ดาวน์โหลดไว้ (ต้องมีเน็ตหรือแผนที่ที่ดาวน์โหลดไว้)',
-                style: TextStyle(
-                  fontSize: 13.5,
-                  height: 1.55,
-                  color: muted,
-                ),
+                style: TextStyle(fontSize: 13.5, height: 1.55, color: muted),
               ),
               const SizedBox(height: 16),
               Align(
@@ -172,8 +168,12 @@ class LocationButton extends StatelessWidget {
             runSpacing: 6,
             children: [
               _LocationMetaChip(
-                icon: Icons.my_location_rounded,
-                label: '±${location.accuracy.toStringAsFixed(0)} ม.',
+                icon: location.manuallySelected
+                    ? Icons.push_pin_outlined
+                    : Icons.my_location_rounded,
+                label: location.manuallySelected
+                    ? 'ปักหมุดเอง'
+                    : '±${location.accuracy.toStringAsFixed(0)} ม.',
                 color: muted,
                 backgroundColor: muted.withValues(alpha: .10),
               ),

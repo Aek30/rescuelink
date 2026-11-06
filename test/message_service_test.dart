@@ -13,6 +13,17 @@ import 'package:rescuelink/services/nearby_service.dart';
 
 class NativeStub extends Fake implements Nearby {}
 
+class CountingDatabase extends LocalDatabaseService {
+  CountingDatabase(String path)
+    : super(factory: databaseFactoryFfi, path: path);
+  int historyReads = 0;
+  @override
+  Future<List<MessageModel>> getMessages() {
+    historyReads++;
+    return super.getMessages();
+  }
+}
+
 class Transport extends NearbyService {
   Transport() : super(nearby: NativeStub());
   final devices = <NearbyDevice>[];
@@ -42,7 +53,7 @@ class Transport extends NearbyService {
 void main() {
   sqfliteFfiInit();
   late Directory directory;
-  late LocalDatabaseService db;
+  late CountingDatabase db;
   late Transport transport;
   late MessageService service;
   MessageModel packet(
@@ -73,10 +84,7 @@ void main() {
 
   setUp(() async {
     directory = await Directory.systemTemp.createTemp('rescuelink-test-');
-    db = LocalDatabaseService(
-      factory: databaseFactoryFfi,
-      path: '${directory.path}/test.db',
-    );
+    db = CountingDatabase('${directory.path}/test.db');
     transport = Transport();
     service = MessageService(nearbyService: transport, database: db);
     await service.initialize();
@@ -94,6 +102,36 @@ void main() {
     details: 'ชั้นสอง',
     recipients: {'peer'},
     location: location,
+  );
+
+  test(
+    'idle retries and repeated introductions do not reload chat history',
+    () async {
+      await connect();
+      final reads = db.historyReads;
+      await receive(packet(MessageType.deviceInfo));
+      await service.retry();
+      await service.retry();
+      expect(db.historyReads, reads);
+    },
+  );
+
+  test(
+    'received message is durable and acknowledged before history reload',
+    () async {
+      await connect();
+      final reads = db.historyReads;
+      var acknowledged = false;
+      transport.onSend = (outgoing) async {
+        if (outgoing.type != MessageType.ack) return;
+        expect(await db.getMessage(outgoing.ackFor!), isNotNull);
+        expect(db.historyReads, reads);
+        acknowledged = true;
+      };
+      await receive(packet(MessageType.message, id: 'fast-ack'));
+      expect(acknowledged, isTrue);
+      expect(service.messages.any((m) => m.id == 'fast-ack'), isTrue);
+    },
   );
 
   test(
@@ -611,10 +649,7 @@ void main() {
       expect(service.messages.single.status, MessageStatus.pending);
       service.dispose();
       await db.close();
-      db = LocalDatabaseService(
-        factory: databaseFactoryFfi,
-        path: '${directory.path}/test.db',
-      );
+      db = CountingDatabase('${directory.path}/test.db');
       service = MessageService(nearbyService: transport, database: db);
       await service.initialize();
       expect(service.myId, myId);

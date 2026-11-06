@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
+import '../models/chat_location_message.dart';
+import '../services/sos_location_service.dart';
+import '../widgets/chat_location_bubble.dart';
+import 'chat_location_picker_screen.dart';
 import '../services/media_service.dart';
 import '../services/auth_service.dart';
 import '../services/message_service.dart';
@@ -19,10 +24,12 @@ class ChatScreen extends StatefulWidget {
     required this.service,
     required this.peerId,
     this.mediaService,
+    this.locationService,
   });
   final MessageService service;
   final String peerId;
   final MediaService? mediaService;
+  final SosLocationService? locationService;
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
@@ -92,6 +99,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   /// เปิด file picker และส่งสื่อผ่าน MediaService
   Future<void> _sendMedia() async {
+    if (_sending) return;
     final ms = _media;
     final svc = widget.service;
     if (ms == null || !svc.ready) return;
@@ -114,6 +122,203 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _takePhoto() async {
+    final media = _media;
+    if (_sending || media == null || !widget.service.ready) return;
+    _focusNode.unfocus();
+    setState(() => _sending = true);
+    try {
+      await media.captureAndSend(
+        senderName: widget.service.nearbyService.deviceName,
+        receiverId: widget.peerId,
+        confirm: (path) async {
+          if (!mounted) return false;
+          return await showModalBottomSheet<bool>(
+                context: context,
+                isScrollControlled: true,
+                showDragHandle: true,
+                builder: (context) => SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          'ตรวจรูปก่อนส่ง',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight:
+                                  MediaQuery.sizeOf(context).height * .55,
+                            ),
+                            child: Image.file(
+                              File(path),
+                              fit: BoxFit.contain,
+                              cacheWidth: 1080,
+                              errorBuilder: (_, _, _) => const Padding(
+                                padding: EdgeInsets.all(32),
+                                child: Text('เปิดรูปตัวอย่างไม่ได้'),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: () => Navigator.pop(context, true),
+                          icon: const Icon(Icons.send_rounded),
+                          label: const Text('ส่งรูปนี้'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('ยกเลิก'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ) ??
+              false;
+        },
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'ถ่ายรูปหรือส่งรูปไม่สำเร็จ กรุณาตรวจสิทธิ์กล้องแล้วลองใหม่',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _sendLocation() async {
+    if (_sending || !widget.service.ready) return;
+    _focusNode.unfocus();
+    setState(() => _sending = true);
+    try {
+      final location = await Navigator.push<SosLocation>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatLocationPickerScreen(
+            locationService:
+                widget.locationService ??
+                SosLocationService(database: widget.service.database),
+          ),
+        ),
+      );
+      if (!mounted || location == null) return;
+      await widget.service.sendTextMessage(
+        receiverId: widget.peerId,
+        text: ChatLocationMessage.encode(location),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ส่งตำแหน่งไม่สำเร็จ กรุณาลองใหม่')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _showAttachments() async {
+    if (_sending || !widget.service.ready) return;
+    _focusNode.unfocus();
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        Widget option(
+          String value,
+          IconData icon,
+          String label,
+          Color color, {
+          bool enabled = true,
+        }) => Expanded(
+          child: InkWell(
+            onTap: enabled ? () => Navigator.pop(context, value) : null,
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 58,
+                    height: 58,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: .12),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Icon(
+                      icon,
+                      size: 28,
+                      color: enabled ? color : Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    label,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'แนบในแชท',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    option(
+                      'gallery',
+                      Icons.photo_library_outlined,
+                      'แกลเลอรี',
+                      RescueTheme.orangeInk,
+                      enabled: _media != null,
+                    ),
+                    option(
+                      'location',
+                      Icons.location_on_outlined,
+                      'ตำแหน่ง',
+                      const Color(0xFF167A65),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (!mounted) return;
+    if (choice == 'gallery') await _sendMedia();
+    if (choice == 'location') await _sendLocation();
+  }
+
   Future<void> _mediaAction(Future<void> Function() action) async {
     try {
       await action();
@@ -134,21 +339,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ? ChatDeliveryState.delivered
           : ChatDeliveryState.pending;
     }
-    if (media == null) return ChatDeliveryState.pending;
+    if (media == null) {
+      return message.status == MessageStatus.delivered ||
+              message.status == MessageStatus.synced
+          ? ChatDeliveryState.delivered
+          : ChatDeliveryState.pending;
+    }
     if ((media.status == MediaStatus.failed ||
             media.status == MediaStatus.paused) &&
         (media.retryCount >= 5 || media.errorMessage == 'ไม่พบไฟล์ในเครื่อง')) {
       return ChatDeliveryState.failed;
     }
-    final job = _media?.uploads.forMedia(media.mediaId);
-    // Cloud retry and transfer ACK are combined into exactly one indicator.
-    // Upload failures have nextAttempt and are retryable, never permanent.
-    if (job != null && job.state != UploadState.ready) {
-      return ChatDeliveryState.pending;
-    }
     return media.status == MediaStatus.delivered ||
             media.status == MediaStatus.received ||
-            media.status == MediaStatus.cloudReady
+            media.status == MediaStatus.cloudReady ||
+            message.status == MessageStatus.delivered ||
+            message.status == MessageStatus.synced
         ? ChatDeliveryState.delivered
         : ChatDeliveryState.pending;
   }
@@ -320,7 +526,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 17,
+                        fontSize: 18,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -474,6 +680,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           final media = message.type == MessageType.media
                               ? _media?.getCached(message.text)
                               : null;
+                          final sharedLocation =
+                              message.type == MessageType.message
+                              ? ChatLocationMessage.parse(message.text)
+                              : null;
                           return Padding(
                             padding: EdgeInsets.only(
                               top: sameAsPrevious ? 8 : 16,
@@ -481,6 +691,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                             child: ChatMessageBubble(
                               key: ValueKey(message.id),
                               isMine: mine,
+                              isMedia: message.type == MessageType.media,
                               time: timeFormatted,
                               status: _deliveryState(message, media),
                               route: service.receivedRoutes[message.id],
@@ -499,6 +710,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                   : () => _showMediaOptions(media),
                               child: message.type == MessageType.media
                                   ? MediaBubble(media: media, isMine: mine)
+                                  : sharedLocation != null
+                                  ? ChatLocationBubble(
+                                      location: sharedLocation,
+                                      isMine: mine,
+                                    )
                                   : Column(
                                       mainAxisSize: MainAxisSize.min,
                                       crossAxisAlignment:
@@ -513,13 +729,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                                   message.text,
                                                 ),
                                           style: TextStyle(
-                                            fontSize: 15,
+                                            fontSize: 16,
                                             height: 1.35,
-                                            color: mine
-                                                ? Colors.white
-                                                : Theme.of(
-                                                    context,
-                                                  ).colorScheme.onSurface,
                                           ),
                                         ),
                                         if (message.type == MessageType.sos &&
@@ -556,7 +767,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     Expanded(
                       child: TextField(
                         controller: _text,
-                        style: const TextStyle(fontSize: 15),
+                        style: const TextStyle(fontSize: 16),
                         focusNode: _focusNode,
                         minLines: 1,
                         maxLines: 4,
@@ -569,11 +780,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       ),
                     ),
                     IconButton(
-                      tooltip: _media != null
-                          ? 'แนบรูป/วิดีโอ'
-                          : 'แนบสื่อ (ยังไม่พร้อม)',
-                      onPressed: _sending || _media == null ? null : _sendMedia,
-                      icon: const Icon(Icons.add_photo_alternate_outlined),
+                      tooltip: 'แนบไฟล์',
+                      onPressed: _sending || !service.ready
+                          ? null
+                          : _showAttachments,
+                      icon: const Icon(Icons.attach_file_rounded),
+                    ),
+                    IconButton(
+                      tooltip: 'ถ่ายรูป',
+                      onPressed: _sending || _media == null || !service.ready
+                          ? null
+                          : _takePhoto,
+                      icon: const Icon(Icons.camera_alt_outlined),
                     ),
                     IconButton.filled(
                       onPressed: _sending ? null : _send,

@@ -114,6 +114,7 @@ class SosStore {
       }
       await _save(txn, alert, deleted: delete);
     });
+    database.syncRequested.value++;
   }
 
   Future<void> acknowledge(
@@ -263,6 +264,7 @@ class SosStore {
           category: local.alert.category,
           categories: local.alert.categories,
           details: local.alert.details,
+          emergencyInfo: local.alert.emergencyInfo,
           location: local.alert.location,
           updatedAt: DateTime.now().toUtc(),
         );
@@ -290,5 +292,6 @@ class SosStore {
         await txn.delete('sos_records', where: 'id = ?', whereArgs: [id]);
       }
     });
+    database.syncRequested.value++;
   }
 }

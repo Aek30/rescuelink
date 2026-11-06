@@ -66,7 +66,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     final email = _emailController.text.trim();
     try {
-      await auth.sendPasswordResetEmail(email).timeout(const Duration(seconds: 20));
+      await auth
+          .sendPasswordResetEmail(email)
+          .timeout(const Duration(seconds: 20));
       if (!mounted) return;
       setState(() {
         _currentStep = _ResetStep.verifyAndReset;
@@ -79,17 +81,17 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       setState(() {
         _error = switch (e.code) {
           'over_email_send_rate_limit' || 'over_request_rate_limit' => t(
-              'ส่งคำขอบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่',
-              'Too many requests. Please wait a moment and try again.',
-            ),
+            'ส่งคำขอบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่',
+            'Too many requests. Please wait a moment and try again.',
+          ),
           'user_not_found' => t(
-              'ไม่พบบัญชีที่ใช้อีเมลนี้ในระบบ',
-              'No account found with this email',
-            ),
+            'ไม่พบบัญชีที่ใช้อีเมลนี้ในระบบ',
+            'No account found with this email',
+          ),
           _ => t(
-              'ไม่สามารถส่งรหัสยืนยันได้ กรุณาตรวจอีเมลแล้วลองใหม่',
-              'Could not send verification code. Please check your email.',
-            ),
+            'ไม่สามารถส่งรหัสยืนยันได้ กรุณาตรวจอีเมลแล้วลองใหม่',
+            'Could not send verification code. Please check your email.',
+          ),
         };
       });
     } on SocketException {
@@ -147,8 +149,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         builder: (dialogContext) => PopScope(
           canPop: false,
           child: AlertDialog(
-            icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.green, size: 48),
-            title: Text(t('ตั้งรหัสผ่านใหม่สำเร็จ', 'Password Reset Successful')),
+            icon: const Icon(
+              Icons.check_circle_outline_rounded,
+              color: Colors.green,
+              size: 48,
+            ),
+            title: Text(
+              t('ตั้งรหัสผ่านใหม่สำเร็จ', 'Password Reset Successful'),
+            ),
             content: Text(
               t(
                 'คุณสามารถเข้าสู่ระบบด้วยรหัสผ่านใหม่ได้ทันที',
@@ -171,9 +179,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     } on AuthException catch (e) {
       setState(() {
         _error = switch (e.code) {
-          'otp_expired' => t('รหัสยืนยันหมดอายุแล้ว กรุณากดส่งรหัสใหม่', 'Code expired. Please request a new code.'),
-          'weak_password' => t('รหัสผ่านไม่ผ่านเกณฑ์ความปลอดภัย', 'Password is too weak'),
-          _ => t('รหัสยืนยันไม่ถูกต้อง หรือหมดอายุแล้ว', 'Invalid or expired verification code'),
+          'otp_expired' => t(
+            'รหัสยืนยันหมดอายุแล้ว กรุณากดส่งรหัสใหม่',
+            'Code expired. Please request a new code.',
+          ),
+          'weak_password' => t(
+            'รหัสผ่านไม่ผ่านเกณฑ์ความปลอดภัย',
+            'Password is too weak',
+          ),
+          _ => t(
+            'รหัสยืนยันไม่ถูกต้อง หรือหมดอายุแล้ว',
+            'Invalid or expired verification code',
+          ),
         };
       });
     } on SocketException {
@@ -207,16 +224,28 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       return t('กรุณากรอกรหัสผ่านใหม่', 'Please enter a new password');
     }
     if (value.length < 8) {
-      return t('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร', 'Use at least 8 characters');
+      return t(
+        'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร',
+        'Use at least 8 characters',
+      );
     }
     if (!RegExp(r'[a-z]').hasMatch(value)) {
-      return t('ต้องมีตัวพิมพ์เล็กอย่างน้อย 1 ตัว', 'Must contain at least one lowercase letter');
+      return t(
+        'ต้องมีตัวพิมพ์เล็กอย่างน้อย 1 ตัว',
+        'Must contain at least one lowercase letter',
+      );
     }
     if (!RegExp(r'[A-Z]').hasMatch(value)) {
-      return t('ต้องมีตัวพิมพ์ใหญ่อย่างน้อย 1 ตัว', 'Must contain at least one uppercase letter');
+      return t(
+        'ต้องมีตัวพิมพ์ใหญ่อย่างน้อย 1 ตัว',
+        'Must contain at least one uppercase letter',
+      );
     }
     if (!RegExp(r'[!@#\$&*~_.]').hasMatch(value)) {
-      return t('ต้องมีอักขระพิเศษอย่างน้อย 1 ตัว (!@#\$&*~_.)', 'Must contain at least one special character');
+      return t(
+        'ต้องมีอักขระพิเศษอย่างน้อย 1 ตัว (!@#\$&*~_.)',
+        'Must contain at least one special character',
+      );
     }
     return null;
   }
@@ -231,7 +260,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor, size: 20),
+          icon: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: textColor,
+            size: 20,
+          ),
           onPressed: _busy ? null : () => Navigator.of(context).pop(),
           tooltip: t('ย้อนกลับ', 'Back'),
         ),
@@ -249,9 +282,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(_english ? 'English' : 'ไทย', style: TextStyle(color: textColor)),
+                  Text(
+                    _english ? 'English' : 'ไทย',
+                    style: TextStyle(color: textColor),
+                  ),
                   const SizedBox(width: 4),
-                  Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: textColor),
+                  Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 18,
+                    color: textColor,
+                  ),
                 ],
               ),
             ),
@@ -305,7 +345,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 14,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF64748B),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -316,16 +358,25 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       decoration: BoxDecoration(
                         color: Colors.red.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                        border: Border.all(
+                          color: Colors.red.withValues(alpha: 0.3),
+                        ),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.error_outline_rounded, color: Colors.red, size: 20),
+                          const Icon(
+                            Icons.error_outline_rounded,
+                            color: Colors.red,
+                            size: 20,
+                          ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
                               _error!,
-                              style: const TextStyle(color: Colors.red, fontSize: 13),
+                              style: const TextStyle(
+                                color: Colors.red,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
                         ],
@@ -340,16 +391,25 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       decoration: BoxDecoration(
                         color: Colors.green.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                        border: Border.all(
+                          color: Colors.green.withValues(alpha: 0.3),
+                        ),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.check_circle_outline_rounded, color: Colors.green, size: 20),
+                          const Icon(
+                            Icons.check_circle_outline_rounded,
+                            color: Colors.green,
+                            size: 20,
+                          ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
                               _successMessage!,
-                              style: const TextStyle(color: Colors.green, fontSize: 13),
+                              style: const TextStyle(
+                                color: Colors.green,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
                         ],
@@ -387,7 +447,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               if (value == null || value.trim().isEmpty) {
                 return t('กรุณากรอกอีเมล', 'Email is required');
               }
-              if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value.trim())) {
+              if (!RegExp(
+                r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
+              ).hasMatch(value.trim())) {
                 return t('กรุณากรอกอีเมลที่ถูกต้อง', 'Enter a valid email');
               }
               return null;
@@ -398,11 +460,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               prefixIcon: const Icon(Icons.mail_outline_rounded, size: 21),
               filled: true,
               fillColor: isDark ? const Color(0xFF161C24) : Colors.white,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(13)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+              ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(13),
                 borderSide: BorderSide(
-                  color: isDark ? const Color(0xFF283442) : const Color(0xFFE3E1DE),
+                  color: isDark
+                      ? const Color(0xFF283442)
+                      : const Color(0xFFE3E1DE),
                 ),
               ),
               focusedBorder: OutlineInputBorder(
@@ -432,11 +498,17 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ? const SizedBox(
                       width: 22,
                       height: 22,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
                     )
                   : Text(
                       t('ส่งรหัสยืนยัน', 'Send verification code'),
-                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
             ),
           ),
@@ -445,7 +517,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             onPressed: _busy ? null : () => Navigator.of(context).pop(),
             child: Text(
               t('จำรหัสผ่านได้แล้ว? เข้าสู่ระบบ', 'Remember password? Log in'),
-              style: const TextStyle(color: orange, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                color: orange,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -472,7 +547,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 Expanded(
                   child: Text(
                     _emailController.text.trim(),
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -480,15 +558,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   onPressed: _busy
                       ? null
                       : () => setState(() {
-                            _currentStep = _ResetStep.requestOtp;
-                            _error = null;
-                            _successMessage = null;
-                          }),
+                          _currentStep = _ResetStep.requestOtp;
+                          _error = null;
+                          _successMessage = null;
+                        }),
                   style: TextButton.styleFrom(
                     visualDensity: VisualDensity.compact,
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                   ),
-                  child: Text(t('เปลี่ยน', 'Change'), style: const TextStyle(color: orange)),
+                  child: Text(
+                    t('เปลี่ยน', 'Change'),
+                    style: const TextStyle(color: orange),
+                  ),
                 ),
               ],
             ),
@@ -520,11 +601,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               prefixIcon: const Icon(Icons.link_rounded, size: 21),
               filled: true,
               fillColor: isDark ? const Color(0xFF161C24) : Colors.white,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(13)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+              ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(13),
                 borderSide: BorderSide(
-                  color: isDark ? const Color(0xFF283442) : const Color(0xFFE3E1DE),
+                  color: isDark
+                      ? const Color(0xFF283442)
+                      : const Color(0xFFE3E1DE),
                 ),
               ),
               focusedBorder: OutlineInputBorder(
@@ -545,19 +630,26 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               labelText: t('รหัสผ่านใหม่', 'New password'),
               prefixIcon: const Icon(Icons.lock_outline_rounded, size: 21),
               suffixIcon: IconButton(
-                onPressed: () => setState(() => _hiddenPassword = !_hiddenPassword),
+                onPressed: () =>
+                    setState(() => _hiddenPassword = !_hiddenPassword),
                 icon: Icon(
-                  _hiddenPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                  _hiddenPassword
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
                   size: 20,
                 ),
               ),
               filled: true,
               fillColor: isDark ? const Color(0xFF161C24) : Colors.white,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(13)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+              ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(13),
                 borderSide: BorderSide(
-                  color: isDark ? const Color(0xFF283442) : const Color(0xFFE3E1DE),
+                  color: isDark
+                      ? const Color(0xFF283442)
+                      : const Color(0xFFE3E1DE),
                 ),
               ),
               focusedBorder: OutlineInputBorder(
@@ -575,10 +667,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             autovalidateMode: AutovalidateMode.onUserInteraction,
             validator: (value) {
               if (value == null || value.isEmpty) {
-                return t('กรุณายืนยันรหัสผ่านใหม่', 'Confirm your new password');
+                return t(
+                  'กรุณายืนยันรหัสผ่านใหม่',
+                  'Confirm your new password',
+                );
               }
               if (value != _passwordController.text) {
-                return t('รหัสผ่านทั้งสองช่องไม่ตรงกัน', 'Passwords do not match');
+                return t(
+                  'รหัสผ่านทั้งสองช่องไม่ตรงกัน',
+                  'Passwords do not match',
+                );
               }
               return null;
             },
@@ -586,19 +684,26 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               labelText: t('ยืนยันรหัสผ่านใหม่', 'Confirm new password'),
               prefixIcon: const Icon(Icons.lock_outline_rounded, size: 21),
               suffixIcon: IconButton(
-                onPressed: () => setState(() => _hiddenConfirm = !_hiddenConfirm),
+                onPressed: () =>
+                    setState(() => _hiddenConfirm = !_hiddenConfirm),
                 icon: Icon(
-                  _hiddenConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                  _hiddenConfirm
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
                   size: 20,
                 ),
               ),
               filled: true,
               fillColor: isDark ? const Color(0xFF161C24) : Colors.white,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(13)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+              ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(13),
                 borderSide: BorderSide(
-                  color: isDark ? const Color(0xFF283442) : const Color(0xFFE3E1DE),
+                  color: isDark
+                      ? const Color(0xFF283442)
+                      : const Color(0xFFE3E1DE),
                 ),
               ),
               focusedBorder: OutlineInputBorder(
@@ -628,11 +733,17 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ? const SizedBox(
                       width: 22,
                       height: 22,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
                     )
                   : Text(
                       t('บันทึกรหัสผ่านใหม่', 'Save new password'),
-                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
             ),
           ),
@@ -644,7 +755,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 t('ไม่ได้รับรหัส? ', "Didn't receive code? "),
                 style: TextStyle(
                   fontSize: 13,
-                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  color: isDark
+                      ? const Color(0xFF94A3B8)
+                      : const Color(0xFF64748B),
                 ),
               ),
               TextButton(

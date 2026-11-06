@@ -9,6 +9,7 @@ import '../services/auth_service.dart';
 import '../services/emergency_profile_store.dart';
 import '../widgets/privacy_notice.dart';
 import 'nearby_test_screen.dart';
+import 'forgot_password_screen.dart';
 
 // ────────────────────────────────────────────────────────────
 // Helpers
@@ -337,6 +338,66 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _confirmHidden = true;
   bool _busy = false;
   String? _error;
+  Timer? _emailCheckTimer;
+  int _emailCheckGeneration = 0;
+  bool _checkingEmail = false;
+  bool? _emailRegistered;
+  String? _checkedEmail, _emailCheckError;
+
+  String get _normalizedEmail => _emailCtrl.text.trim().toLowerCase();
+
+  void _emailChanged(String value) {
+    _emailCheckTimer?.cancel();
+    _emailCheckGeneration++;
+    setState(() {
+      _checkingEmail = false;
+      _emailRegistered = null;
+      _checkedEmail = null;
+      _emailCheckError = null;
+    });
+    final email = value.trim().toLowerCase();
+    if (!_auth.canCheckRegistrationEmail ||
+        !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
+      return;
+    }
+    _emailCheckTimer = Timer(
+      const Duration(milliseconds: 700),
+      () => _checkEmail(email),
+    );
+  }
+
+  Future<bool> _checkEmail(String email) async {
+    _emailCheckTimer?.cancel();
+    final generation = ++_emailCheckGeneration;
+    setState(() {
+      _checkingEmail = true;
+      _emailCheckError = null;
+    });
+    try {
+      final registered = await _auth.emailRegistered(email);
+      if (!mounted ||
+          generation != _emailCheckGeneration ||
+          email != _normalizedEmail) {
+        return false;
+      }
+      setState(() {
+        _checkedEmail = email;
+        _emailRegistered = registered;
+      });
+      return registered != true;
+    } catch (_) {
+      if (mounted && generation == _emailCheckGeneration) {
+        setState(
+          () => _emailCheckError = 'ยังตรวจสอบอีเมลไม่ได้ กรุณาลองอีกครั้ง',
+        );
+      }
+      return false;
+    } finally {
+      if (mounted && generation == _emailCheckGeneration) {
+        setState(() => _checkingEmail = false);
+      }
+    }
+  }
 
   final _formKeys = [
     GlobalKey<FormState>(),
@@ -348,6 +409,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
+    _emailCheckTimer?.cancel();
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
     _confirmCtrl.dispose();
@@ -364,9 +426,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  void _next() {
-    if (_busy) return;
+  Future<void> _next() async {
+    if (_busy || _checkingEmail) return;
     if (!_formKeys[_step].currentState!.validate()) return;
+    if (_step == 0 && _auth.canCheckRegistrationEmail) {
+      if (_checkedEmail != _normalizedEmail &&
+          !await _checkEmail(_normalizedEmail)) {
+        return;
+      }
+      if (!mounted || _emailRegistered == true) return;
+    }
     if (_step < 2) {
       setState(() {
         _error = null;
@@ -548,11 +617,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _sectionLabel('ข้อมูลบัญชี', Icons.account_circle_outlined),
         TextFormField(
           controller: _emailCtrl,
+          key: const ValueKey('registration-email'),
+          onChanged: _emailChanged,
           enabled: !_busy,
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.next,
           autofillHints: const [AutofillHints.email],
-          decoration: _dec('อีเมล *', icon: Icons.mail_outline_rounded),
+          decoration: _dec('อีเมล *', icon: Icons.mail_outline_rounded)
+              .copyWith(
+                errorText: _emailRegistered == true
+                    ? 'อีเมลนี้มีบัญชีอยู่แล้ว'
+                    : _emailCheckError,
+                suffixIcon: _checkingEmail
+                    ? const Padding(
+                        padding: EdgeInsets.all(14),
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : null,
+              ),
           autovalidateMode: AutovalidateMode.onUserInteraction,
           validator: (v) {
             if (v == null || v.trim().isEmpty) return 'กรุณากรอกอีเมล';
@@ -562,6 +648,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
             return null;
           },
         ),
+        if (_emailRegistered == true)
+          Wrap(
+            spacing: 8,
+            children: [
+              TextButton(
+                onPressed: () =>
+                    Navigator.of(context).pop(_emailCtrl.text.trim()),
+                child: const Text('เข้าสู่ระบบด้วยบัญชีเดิม'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => ForgotPasswordScreen(
+                      auth: _auth,
+                      initialEmail: _emailCtrl.text.trim(),
+                    ),
+                  ),
+                ),
+                child: const Text('ลืมรหัสผ่าน'),
+              ),
+            ],
+          ),
         const SizedBox(height: 14),
         TextFormField(
           controller: _passwordCtrl,
@@ -776,7 +885,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         const SizedBox(height: 14),
         TextFormField(
           controller: _conditionsCtrl,
-          maxLength: 2000,
+          maxLength: 200,
           enabled: !_busy,
           maxLines: 2,
           textInputAction: TextInputAction.next,
@@ -789,7 +898,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         const SizedBox(height: 14),
         TextFormField(
           controller: _allergiesCtrl,
-          maxLength: 2000,
+          maxLength: 200,
           enabled: !_busy,
           maxLines: 2,
           textInputAction: TextInputAction.next,
@@ -802,7 +911,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         const SizedBox(height: 14),
         TextFormField(
           controller: _medicationsCtrl,
-          maxLength: 2000,
+          maxLength: 200,
           enabled: !_busy,
           maxLines: 2,
           textInputAction: TextInputAction.next,
@@ -814,7 +923,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         const SizedBox(height: 14),
         TextFormField(
           controller: _medNotesCtrl,
-          maxLength: 2000,
+          maxLength: 200,
           enabled: !_busy,
           maxLines: 2,
           textInputAction: TextInputAction.next,
@@ -1193,7 +1302,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 minimumSize: const Size.fromHeight(52),
                                 shape: const StadiumBorder(),
                               ),
-                              onPressed: _busy ? null : _next,
+                              onPressed:
+                                  _busy ||
+                                      _checkingEmail ||
+                                      (_step == 0 && _emailRegistered == true)
+                                  ? null
+                                  : _next,
                               child: _busy
                                   ? const SizedBox(
                                       width: 22,

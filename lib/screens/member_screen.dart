@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import '../services/member_service.dart';
 import '../services/app_preferences.dart';
 import '../services/sos_sync_service.dart';
+import '../services/chat_sync_service.dart';
 import '../theme/rescue_theme.dart';
 import '../widgets/rescue_ui.dart';
 import 'login_screen.dart';
@@ -83,6 +84,9 @@ class _MemberScreenState extends State<MemberScreen> {
   }
 
   Future<void> _load() => _run(() async {
+    if (AuthService.instance.session == null && widget.repository == null) {
+      return;
+    }
     if (repository is SupabaseMemberRepository) {
       _apply(await (repository as SupabaseMemberRepository).readLocal());
     }
@@ -90,7 +94,8 @@ class _MemberScreenState extends State<MemberScreen> {
   });
 
   Future<void> _editName() async {
-    final controller = TextEditingController(text: profile?.name ?? '');
+    final initial = profile?.name ?? AppPreferences.instance.displayName ?? '';
+    final controller = TextEditingController(text: initial);
     final sheetForm = GlobalKey<FormState>();
     final value = await showModalBottomSheet<String>(
       context: context,
@@ -112,7 +117,7 @@ class _MemberScreenState extends State<MemberScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  t('แก้ไขชื่อสมาชิก'),
+                  t('แก้ไขชื่อ'),
                   style: Theme.of(sheetContext).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 20),
@@ -123,12 +128,12 @@ class _MemberScreenState extends State<MemberScreen> {
                   maxLength: 80,
                   textInputAction: TextInputAction.done,
                   decoration: InputDecoration(
-                    labelText: t('ชื่อสมาชิก'),
+                    labelText: t('ชื่อที่แสดง'),
                     prefixIcon: const Icon(Icons.person_outline_rounded),
                     counterText: '',
                   ),
                   validator: (value) => value == null || value.trim().isEmpty
-                      ? t('กรุณาระบุชื่อสมาชิก')
+                      ? t('กรุณาระบุชื่อ')
                       : value.trim().length > 80
                       ? t('กรุณาระบุชื่อ 1–80 ตัวอักษร')
                       : null,
@@ -156,7 +161,12 @@ class _MemberScreenState extends State<MemberScreen> {
     await Future<void>.delayed(const Duration(milliseconds: 300));
     controller.dispose();
     if (value == null || !mounted) return;
-    await _run(() async => _apply(await repository.updateName(value)));
+    if (profile != null) {
+      await _run(() async => _apply(await repository.updateName(value)));
+    } else {
+      await AppPreferences.instance.saveLocalName(value);
+      if (mounted) setState(() {});
+    }
   }
 
   void _showStatusDetails() {
@@ -272,6 +282,182 @@ class _MemberScreenState extends State<MemberScreen> {
     });
   }
 
+  void _showGuestLoginDialog(String featureName) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: Text(t('เข้าสู่ระบบเพื่อใช้งาน')),
+        content: Text(
+          '$featureName เป็นฟีเจอร์ Cloud ที่ต้องเข้าสู่ระบบบัญชี RescueLink ก่อนใช้งาน',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(t('ปิด')),
+          ),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: RescueTheme.orange),
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              await widget.beforeExit?.call();
+              _login();
+            },
+            icon: const Icon(Icons.login_rounded, size: 18),
+            label: Text(t('เข้าสู่ระบบ')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _guestHeader(bool dark) {
+    final name = AppPreferences.instance.displayName?.trim();
+    final effectiveName = (name != null && name.isNotEmpty)
+        ? name
+        : t('ผู้ใช้งานทั่วไป (Guest)');
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: dark
+              ? [const Color(0xFF1E293B), RescueTheme.darkSurface]
+              : [RescueTheme.navy, const Color(0xFF24365C)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const CircleAvatar(
+            radius: 28,
+            backgroundColor: RescueTheme.peach,
+            child: Icon(
+              Icons.person_rounded,
+              color: RescueTheme.navy,
+              size: 32,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    effectiveName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    t('ใช้งานในเครื่องโดยไม่เข้าสู่ระบบ'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.white.withValues(alpha: .8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: t('แก้ไขชื่อ'),
+            onPressed: busy ? null : _editName,
+            icon: const Icon(Icons.edit_outlined),
+            color: Colors.white,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _guestCloudNotice(bool dark, Color ink) {
+    return Container(
+      margin: const EdgeInsets.only(top: 10, bottom: 4),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF1E2631) : const Color(0xFFF8F5F0),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: dark ? const Color(0xFF334155) : const Color(0xFFE2DDD5),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: RescueTheme.orange.withValues(alpha: .14),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.cloud_off_rounded,
+                  color: RescueTheme.orange,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  t('ฟีเจอร์ Cloud และการจัดการบัญชีต้องเข้าสู่ระบบก่อน'),
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: ink,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            t(
+              'เข้าสู่ระบบเพื่อซิงก์ข้อมูลสมาชิก คำขอ SOS และสำรองข้อมูลบน Cloud ได้จากทุกเครื่อง',
+            ),
+            style: TextStyle(
+              fontSize: 13,
+              color: dark ? RescueTheme.darkTextMuted : RescueTheme.muted,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            key: const ValueKey('member-login-button'),
+            style: FilledButton.styleFrom(
+              backgroundColor: RescueTheme.orange,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              minimumSize: const Size.fromHeight(46),
+            ),
+            onPressed: () async {
+              await widget.beforeExit?.call();
+              _login();
+            },
+            icon: const Icon(Icons.login_rounded, size: 20),
+            label: Text(
+              t('เข้าสู่ระบบ'),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
@@ -359,7 +545,11 @@ class _MemberScreenState extends State<MemberScreen> {
                         ),
                       ],
                     ),
-                  ),
+                  )
+                else ...[
+                  _guestHeader(dark),
+                  _guestCloudNotice(dark, ink),
+                ],
                 const SizedBox(height: 8),
                 _inlineStatus(ink),
                 RescueSectionLabel(t('ข้อมูลและความปลอดภัย')),
@@ -367,6 +557,16 @@ class _MemberScreenState extends State<MemberScreen> {
                 RescueSectionLabel(t('จัดการบัญชี')),
                 RescueGroup(
                   children: [
+                    if (profile == null)
+                      RescueTile(
+                        icon: Icons.login_rounded,
+                        label: t('เข้าสู่ระบบ'),
+                        accent: RescueTheme.orange,
+                        onTap: () async {
+                          await widget.beforeExit?.call();
+                          _login();
+                        },
+                      ),
                     RescueTile(
                       icon: Icons.logout_rounded,
                       label: t('ออกจากระบบ'),
@@ -391,6 +591,30 @@ class _MemberScreenState extends State<MemberScreen> {
   }
 
   Widget _inlineStatus(Color ink) {
+    if (profile == null) {
+      return Semantics(
+        liveRegion: true,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.person_outline_rounded,
+                size: 18,
+                color: RescueTheme.orange,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  t('ใช้งานในเครื่อง (Guest)'),
+                  style: TextStyle(fontSize: 12, color: ink),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final pending = profile?.pending == true;
     final offline = profile?.offline == true;
     final text = busy
@@ -446,45 +670,68 @@ class _MemberScreenState extends State<MemberScreen> {
           icon: Icons.person_outline_rounded,
           label: t('ซิงก์ข้อมูลสมาชิก'),
           subtitle: profile == null
-              ? t('ยังไม่มีข้อมูล')
+              ? t('ต้องเข้าสู่ระบบก่อน')
               : profile!.pending
               ? t('รอซิงก์ชื่อสมาชิก')
               : profile!.offline
               ? t('กำลังใช้ข้อมูลในเครื่อง')
               : t('ชื่อและข้อมูลบัญชี'),
-          onTap: busy ? null : _load,
+          onTap: profile == null
+              ? () => _showGuestLoginDialog(t('ซิงก์ข้อมูลสมาชิก'))
+              : (busy ? null : _load),
         ),
         if (sos != null)
           ListenableBuilder(
-            listenable: sos,
-            builder: (context, _) => RescueTile(
-              icon: sos.error != null
-                  ? Icons.sync_problem
-                  : Icons.cloud_sync_outlined,
-              label: t('การซิงก์ SOS'),
-              subtitle: sos.busy
-                  ? t('กำลังซิงก์ SOS…')
-                  : sos.error != null
-                  ? t('ซิงก์ SOS ไม่สำเร็จ')
-                  : syncAgo(sos.lastSuccess),
-              onTap: () => Navigator.push<void>(
-                context,
-                MaterialPageRoute(builder: (_) => SyncScreen(service: sos)),
-              ),
-            ),
+            listenable: Listenable.merge([sos, ChatSyncCoordinator.instance]),
+            builder: (context, _) {
+              final chat = ChatSyncCoordinator.instance.current;
+              DateTime? lastSuccess = sos.lastSuccess;
+              if (chat != null) {
+                final chatSuccess = chat.lastSuccess;
+                if (chatSuccess == null || lastSuccess == null) {
+                  lastSuccess = null;
+                } else if (chatSuccess.isBefore(lastSuccess)) {
+                  lastSuccess = chatSuccess;
+                }
+              }
+              return RescueTile(
+                icon: (sos.error != null || chat?.error != null)
+                    ? Icons.sync_problem
+                    : Icons.cloud_sync_outlined,
+                label: t('การซิงก์'),
+                subtitle: profile == null
+                    ? t('บันทึกในเครื่องเท่านั้น (Guest)')
+                    : (sos.busy || (chat?.busy ?? false))
+                    ? t('กำลังซิงก์ SOS และข้อความ…')
+                    : (sos.error != null || chat?.error != null)
+                    ? t('ซิงก์ข้อมูลบางส่วนไม่สำเร็จ')
+                    : syncAgo(lastSuccess),
+                onTap: profile == null
+                    ? () => _showGuestLoginDialog(t('การซิงก์'))
+                    : () => Navigator.push<void>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => SyncScreen(service: sos),
+                        ),
+                      ),
+              );
+            },
           ),
         RescueTile(
           icon: Icons.medical_information_outlined,
           accent: RescueTheme.danger,
           label: t('ข้อมูลส่วนตัวและสุขภาพฉุกเฉิน'),
-          onTap: busy
-              ? null
-              : () => Navigator.push<void>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const EmergencyProfileScreen(),
-                  ),
-                ),
+          subtitle: profile == null ? t('ต้องเข้าสู่ระบบก่อน') : null,
+          onTap: profile == null
+              ? () => _showGuestLoginDialog(t('ข้อมูลส่วนตัวและสุขภาพฉุกเฉิน'))
+              : (busy
+                    ? null
+                    : () => Navigator.push<void>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const EmergencyProfileScreen(),
+                        ),
+                      )),
         ),
       ],
     );

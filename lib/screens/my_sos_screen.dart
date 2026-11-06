@@ -65,148 +65,60 @@ class _MySosScreenState extends State<MySosScreen> {
     }
   }
 
-  Future<void> _edit(SosRecord record, {bool delete = false}) async {
+  Future<void> _delete(SosRecord record) async {
     final alert = record.alert;
-    final name = TextEditingController(text: alert.name);
-    final details = TextEditingController(text: alert.details);
-    final people = TextEditingController(text: '${alert.people}');
-    final categories = alert.categories.toSet();
-    final form = GlobalKey<FormState>();
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, update) => AlertDialog(
-          title: Text(delete ? 'ลบเหตุที่ยุติแล้ว?' : 'แก้ไขเหตุที่ยุติแล้ว'),
-          content: delete
-              ? Text(
-                  '${sosHistoryDisplayName(alert.name)}\n${alert.categoriesLabel}',
-                )
-              : SizedBox(
-                  width: 420,
-                  child: Form(
-                    key: form,
-                    child: SingleChildScrollView(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          TextFormField(
-                            controller: name,
-                            maxLength: 80,
-                            decoration: const InputDecoration(
-                              labelText: 'ชื่อผู้แจ้ง',
-                            ),
-                            validator: (v) => v == null || v.trim().isEmpty
-                                ? 'กรุณาระบุชื่อ'
-                                : null,
-                          ),
-                          TextFormField(
-                            controller: people,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'จำนวนคน',
-                            ),
-                            validator: (v) {
-                              final n = int.tryParse(v ?? '');
-                              return n == null || n < 1 || n > 999
-                                  ? 'ระบุ 1–999 คน'
-                                  : null;
-                            },
-                          ),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              for (final type in EmergencyType.values)
-                                FilterChip(
-                                  label: Text(type.shortLabel),
-                                  selected: categories.contains(type),
-                                  onSelected: (selected) => update(() {
-                                    if (!selected) {
-                                      if (categories.length > 1) {
-                                        categories.remove(type);
-                                      }
-                                    } else if (type == EmergencyType.other) {
-                                      categories
-                                        ..clear()
-                                        ..add(type);
-                                    } else {
-                                      categories
-                                        ..remove(EmergencyType.other)
-                                        ..add(type);
-                                    }
-                                  }),
-                                ),
-                            ],
-                          ),
-                          TextFormField(
-                            controller: details,
-                            maxLength: 1000,
-                            minLines: 2,
-                            maxLines: 5,
-                            decoration: const InputDecoration(
-                              labelText: 'รายละเอียด',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('ยกเลิก'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (delete || form.currentState!.validate()) {
-                  Navigator.pop(context, true);
-                }
-              },
-              child: Text(delete ? 'ลบ' : 'บันทึก'),
-            ),
-          ],
+      builder: (context) => AlertDialog(
+        title: const Text('ลบเหตุที่ยุติแล้ว?'),
+        content: Text(
+          '${sosHistoryDisplayName(alert.name)}\n${alert.categoriesLabel}',
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('ยกเลิก'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('ลบ'),
+          ),
+        ],
       ),
     );
-    if (confirmed == true && mounted) {
-      setState(() {
-        _busy = true;
-        _error = null;
-      });
-      try {
-        await widget.store.editClosed(
-          SosAlert(
-            incidentId: alert.incidentId,
-            revision: alert.revision + 1,
-            active: false,
-            name: name.text.trim(),
-            people: int.parse(people.text),
-            category: categories.first,
-            categories: categories.toList(),
-            details: details.text.trim(),
-            updatedAt: DateTime.now().toUtc(),
-            location: alert.location,
-          ),
-          delete: delete,
-        );
-        await _load();
-      } catch (e) {
-        if (mounted) {
-          setState(() {
-            _busy = false;
-            _error = e is StateError
-                ? e.message.toString()
-                : 'บันทึกไม่สำเร็จ กรุณาลองใหม่';
-          });
-        }
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.store.editClosed(
+        SosAlert(
+          incidentId: alert.incidentId,
+          revision: alert.revision + 1,
+          active: false,
+          name: alert.name,
+          people: alert.people,
+          category: alert.category,
+          categories: alert.categories,
+          details: alert.details,
+          emergencyInfo: alert.emergencyInfo,
+          updatedAt: DateTime.now().toUtc(),
+          location: alert.location,
+        ),
+        delete: true,
+      );
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = e is StateError
+              ? e.message.toString()
+              : 'ลบไม่สำเร็จ กรุณาลองใหม่';
+        });
       }
     }
-    // Dialog route finishes its exit animation before disposing its controllers.
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-    name.dispose();
-    details.dispose();
-    people.dispose();
   }
 
   @override
@@ -344,14 +256,13 @@ class _MySosScreenState extends State<MySosScreen> {
             ),
           );
         }
-        final editable =
+        final deletable =
             !_busy && !record.alert.active && record.conflict == null;
         children.add(
           SosHistoryCard(
             record: record,
             active: active,
-            onEdit: editable ? () => _edit(record) : null,
-            onDelete: editable ? () => _edit(record, delete: true) : null,
+            onDelete: deletable ? () => _delete(record) : null,
           ),
         );
       }

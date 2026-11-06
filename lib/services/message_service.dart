@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/message_model.dart';
+import '../models/nearby_device.dart';
 import '../models/responder_update.dart';
 import '../models/incoming_notice.dart';
 import '../models/relay_packet.dart';
@@ -23,10 +24,12 @@ class MessageService extends ChangeNotifier {
     this.mediaService,
     DateTime Function()? clock,
     this.captureRescueLocation,
+    this.restoreRescueLocationAutomatically = true,
   }) : database = database ?? LocalDatabaseService.instance,
        _clock = clock ?? DateTime.now;
   final DateTime Function() _clock;
   final Future<SosLocation> Function()? captureRescueLocation;
+  final bool restoreRescueLocationAutomatically;
   DateTime _now() => _clock().toUtc();
   final NearbyService nearbyService;
   final LocalDatabaseService database;
@@ -242,6 +245,32 @@ class MessageService extends ChangeNotifier {
       presence.values.where((p) => p.sos?.isActiveAt(_now()) == true).length;
   Set<String> _sosRecipients = {};
   Set<String> get sosRecipients => Set.unmodifiable(_sosRecipients);
+
+  /// Resolve the particular incident opened from a notification, even when
+  /// the sender has since published another SOS.
+  SosAlert? sosForIncident(String owner, String incidentId) {
+    SosAlert? latest = _remoteSos[owner]?[incidentId];
+    void consider(SosAlert? alert) {
+      if (alert?.incidentId == incidentId &&
+          (latest == null || alert!.revision > latest!.revision)) {
+        latest = alert;
+      }
+    }
+
+    consider(presence[owner]?.sos);
+    for (final message in messages) {
+      if (message.senderId != owner || message.type != MessageType.sos) {
+        continue;
+      }
+      try {
+        consider(SosAlert.fromJson(message.text));
+      } catch (_) {
+        // A malformed historical record must not prevent opening the notice.
+      }
+    }
+    return latest;
+  }
+
   List<MessageModel> get receivedSos {
     final latest = <String, MessageModel>{};
     for (final message in messages) {
@@ -287,6 +316,7 @@ class MessageService extends ChangeNotifier {
     required Set<String> recipients,
     SosLocation? location,
     bool active = true,
+    Map<String, String> emergencyInfo = const {},
   }) async {
     if (!ready || _disposed) throw StateError('Message service is not ready');
     if (_publishingSos) throw StateError('กำลังบันทึก SOS');
@@ -319,6 +349,7 @@ class MessageService extends ChangeNotifier {
         category: category,
         categories: categories,
         details: details.trim(),
+        emergencyInfo: emergencyInfo,
         location: location,
         updatedAt: updatedAt,
       );
@@ -364,6 +395,7 @@ class MessageService extends ChangeNotifier {
       category: alert.category,
       categories: alert.categories,
       details: alert.details,
+      emergencyInfo: alert.emergencyInfo,
       recipients: _sosRecipients,
       location: alert.location,
       active: false,
@@ -372,6 +404,11 @@ class MessageService extends ChangeNotifier {
 
   Timer? _timer;
   bool _disposed = false, _ticking = false;
+  bool _retryRequested = false;
+  final Map<String, DateTime> _lastIntroductions = {};
+  final Map<String, String> _introducedNames = {};
+  Future<void>? _refreshing;
+  bool _refreshRequested = false;
   Future<void> _incoming = Future.value();
   bool get ready => myId != null;
   bool isOnline(String peerId) => _endpointPeers.entries.any(
@@ -472,7 +509,9 @@ class MessageService extends ChangeNotifier {
         (_) => unawaited(retry()),
       );
       await retry();
-      if (rescueMode) unawaited(updateRescueLocation());
+      if (rescueMode && restoreRescueLocationAutomatically) {
+        unawaited(updateRescueLocation());
+      }
     } catch (e) {
       myId = null;
       error = 'Cannot open message storage: $e';
@@ -597,7 +636,21 @@ class MessageService extends ChangeNotifier {
     return (messages: combined, peers: peersMap, restoredIds: restoredIds);
   }
 
-  Future<void> _refresh() async {
+  Future<void> _refresh() {
+    _refreshRequested = true;
+    return _refreshing ??= _drainRefresh().whenComplete(
+      () => _refreshing = null,
+    );
+  }
+
+  Future<void> _drainRefresh() async {
+    while (_refreshRequested && !_disposed) {
+      _refreshRequested = false;
+      await _refreshData();
+    }
+  }
+
+  Future<void> _refreshData() async {
     if (_disposed) return;
     await _reloadCurrentSos();
     receivedRoutes = await database.getReceivedRoutes();
@@ -759,7 +812,7 @@ class MessageService extends ChangeNotifier {
       }
     }
     await _saveDirectory();
-    await _refresh();
+    _notify();
   }
 
   Iterable<String> _presencePackets(String receiver, PeerPresence local) sync* {
@@ -816,6 +869,8 @@ class MessageService extends ChangeNotifier {
     _connectedEndpoints = connected;
     _resetRelayBackoff = true;
     _endpointPeers.removeWhere((id, _) => !connected.contains(id));
+    _lastIntroductions.removeWhere((id, _) => !connected.contains(id));
+    _introducedNames.removeWhere((id, _) => !connected.contains(id));
     if (mediaService != null) unawaited(mediaService!.pauseDisconnected());
     _notify();
     for (final endpoint in added) {
@@ -833,6 +888,8 @@ class MessageService extends ChangeNotifier {
         endpoint,
         _packet(MessageType.deviceInfo).toJson(),
       );
+      _lastIntroductions[endpoint] = _now();
+      _introducedNames[endpoint] = nearbyService.deviceName;
     } catch (_) {
       // Normal retry will resend the introduction if the link is not ready yet.
     } finally {
@@ -886,12 +943,18 @@ class MessageService extends ChangeNotifier {
       _announcedSos == '${mySos!.incidentId}:${mySos!.revision}';
 
   Future<void> retry() async {
-    if (!ready || _disposed || _ticking) return;
+    if (!ready || _disposed) return;
+    if (_ticking) {
+      _retryRequested = true;
+      return;
+    }
+    _retryRequested = false;
     _ticking = true;
     try {
       await _drainRelayQueues();
       if (!_publishingSos) await _reloadCurrentSos();
       String? retryError;
+      var messagesChanged = false;
       _presenceSequence++;
       await database.setSetting('presenceSequence', '$_presenceSequence');
       final localState = PeerPresence(
@@ -901,44 +964,35 @@ class MessageService extends ChangeNotifier {
         sos: mySos,
         receivedAt: _now(),
       );
-      for (final device in nearbyService.connectedDevices.toList()) {
+      final history = await database.getOutgoingMessages(myId!);
+      final latestSos = <String, int>{};
+      if (mySos != null) latestSos[mySos!.incidentId] = mySos!.revision;
+      for (final m in history.where(
+        (m) => m.type == MessageType.sos && m.senderId == myId,
+      )) {
+        final alert = SosAlert.fromJson(m.text);
+        if ((latestSos[alert.incidentId] ?? 0) < alert.revision) {
+          latestSos[alert.incidentId] = alert.revision;
+        }
+      }
+      Future<void> sendToDevice(NearbyDevice device) async {
         try {
           if (_disposed) return;
-          // Repeat introductions so a packet lost during connection setup recovers.
-          await nearbyService.sendMessage(
-            device.endpointId,
-            _packet(MessageType.deviceInfo).toJson(),
-          );
+          final introduced = _lastIntroductions[device.endpointId];
+          if (_endpointPeers[device.endpointId] == null ||
+              introduced == null ||
+              _introducedNames[device.endpointId] != nearbyService.deviceName ||
+              _now().difference(introduced) >= const Duration(seconds: 30)) {
+            await _introduce(device.endpointId);
+          }
           final peer = _endpointPeers[device.endpointId];
-          if (peer == null) continue;
+          if (peer == null) return;
           for (final payload in _presencePackets(peer, localState)) {
             await nearbyService.sendMessage(device.endpointId, payload);
           }
           if (localState.sos != null) {
             _announcedSos =
                 '${localState.sos!.incidentId}:${localState.sos!.revision}';
-          }
-          // ─── ส่งสื่อที่ค้างไว้ (MediaService) ─────────────────────────────
-          if (mediaService != null) {
-            try {
-              await mediaService!.sendPendingForPeer(
-                peerId: peer,
-                endpointId: device.endpointId,
-              );
-            } catch (e) {
-              retryError = 'Media retry failed for ${device.name}: $e';
-            }
-          }
-          final history = await database.getMessages();
-          final latestSos = <String, int>{};
-          if (mySos != null) latestSos[mySos!.incidentId] = mySos!.revision;
-          for (final m in history.where(
-            (m) => m.type == MessageType.sos && m.senderId == myId,
-          )) {
-            final alert = SosAlert.fromJson(m.text);
-            if ((latestSos[alert.incidentId] ?? 0) < alert.revision) {
-              latestSos[alert.incidentId] = alert.revision;
-            }
           }
           for (final message in history) {
             if (_disposed) return;
@@ -969,6 +1023,7 @@ class MessageService extends ChangeNotifier {
                 message.id,
                 MessageStatus.sent,
               );
+              messagesChanged = true;
               continue;
             }
             await nearbyService.sendMessage(
@@ -976,18 +1031,38 @@ class MessageService extends ChangeNotifier {
               message.toJson(),
             );
             await database.updateMessageStatus(message.id, MessageStatus.sent);
+            messagesChanged = true;
+          }
+          if (mediaService != null) {
+            await mediaService!.sendPendingForPeer(
+              peerId: peer,
+              endpointId: device.endpointId,
+            );
           }
         } catch (e) {
           retryError = 'Waiting to retry ${device.name}: $e';
         }
       }
+
+      final devices = nearbyService.connectedDevices.toList();
+      for (var offset = 0; offset < devices.length; offset += 2) {
+        await Future.wait(devices.skip(offset).take(2).map(sendToDevice));
+      }
       error = retryError;
-      await _refresh();
+      if (messagesChanged) {
+        await _refresh();
+      } else {
+        _notify();
+      }
     } catch (e) {
       error = 'Waiting to retry: $e';
       _notify();
     } finally {
       _ticking = false;
+      if (_retryRequested && !_disposed) {
+        _retryRequested = false;
+        unawaited(retry());
+      }
     }
   }
 
@@ -1053,8 +1128,11 @@ class MessageService extends ChangeNotifier {
         }
         _notify();
         if (existing == null) unawaited(_introduce(endpointId));
-        await database.savePeer(packet.senderId, packet.senderName);
-        await _refresh();
+        if (peers[packet.senderId] != packet.senderName) {
+          await database.savePeer(packet.senderId, packet.senderName);
+          peers[packet.senderId] = packet.senderName;
+          _notify();
+        }
         if (existing == null) {
           _resetRelayBackoff = true;
           await retry();
@@ -1079,7 +1157,18 @@ class MessageService extends ChangeNotifier {
             await _learnSos(packet.senderId, packet.senderName, alert);
             await _saveDirectory();
           }
-          await _refresh();
+          try {
+            await nearbyService.sendMessage(
+              endpointId,
+              _packet(
+                MessageType.ack,
+                receiver: packet.senderId,
+                ackFor: packet.id,
+              ).toJson(),
+            );
+          } finally {
+            await _refresh();
+          }
           if (inserted && packet.type == MessageType.message) {
             _notice(
               IncomingNotice(
@@ -1090,22 +1179,11 @@ class MessageService extends ChangeNotifier {
               ),
             );
           }
-          await nearbyService.sendMessage(
-            endpointId,
-            _packet(
-              MessageType.ack,
-              receiver: packet.senderId,
-              ackFor: packet.id,
-            ).toJson(),
-          );
         case MessageType.ack:
-          final originals = await database.getMessages();
-          if (originals.any(
-            (m) =>
-                m.id == packet.ackFor &&
-                m.senderId == myId &&
-                m.receiverId == packet.senderId,
-          )) {
+          final original = await database.getMessage(packet.ackFor!);
+          if (original != null &&
+              original.senderId == myId &&
+              original.receiverId == packet.senderId) {
             await database.saveReceivedRoute(packet.ackFor!, [
               myId!,
               packet.senderId,

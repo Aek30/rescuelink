@@ -1,0 +1,23 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "RescueLink (Mobile - Galaxy S20)",
+            "request": "launch",
+            "type": "dart",
+            "program": "lib/main.dart",
+            "toolArgs": ["--dart-define-from-file=config/supabase.local.json"],
+            "deviceId": "RF8N20KPZXN"
+        },
+        {
+            "name": "RescueLink (Default Device)",
+            "request": "launch",
+            "type": "dart",
+            "program": "lib/main.dart",
+            "toolArgs": ["--dart-define-from-file=config/supabase.local.json"]
+        }
+    ]
+}

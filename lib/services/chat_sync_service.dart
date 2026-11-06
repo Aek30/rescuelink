@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'auth_service.dart';
+import 'auto_sync_trigger.dart';
 import 'local_database_service.dart';
 import 'chat_store.dart';
 import 'chat_attachment_restore.dart';
@@ -121,7 +122,7 @@ class ChatSyncService extends ChangeNotifier {
   Future<void> sync() async {
     if (busy || _stopped) return;
     busy = true;
-    error = null;
+    // Keep the last failure visible until a complete sync succeeds.
     _notify();
     try {
       await refreshStatus();
@@ -144,7 +145,8 @@ class ChatSyncService extends ChangeNotifier {
               .push(operation)
               .timeout(const Duration(seconds: 20));
           await store.acknowledge(operation, result);
-        } catch (_) {
+        } catch (failure, stack) {
+          debugPrint('Chat sync push failed: $failure\n$stack');
           await db.rawUpdate(
             'UPDATE chat_queue SET attempts = attempts + 1, error = ? WHERE operation_id = ?',
             ['เชื่อมต่อ Cloud ไม่สำเร็จ จะลองใหม่', operation['operation_id']],
@@ -167,7 +169,9 @@ class ChatSyncService extends ChangeNotifier {
         'chatLastSync',
         lastSuccess!.toUtc().toIso8601String(),
       );
-    } catch (_) {
+      error = null;
+    } catch (failure, stack) {
+      debugPrint('Chat sync failed: $failure\n$stack');
       error =
           'ซิงก์ไม่สำเร็จ ข้อมูลยังอยู่ในเครื่อง ตรวจสอบอินเทอร์เน็ตหรือเข้าสู่ระบบใหม่';
     } finally {
@@ -191,24 +195,47 @@ class ChatSyncService extends ChangeNotifier {
 class ChatSyncCoordinator extends ChangeNotifier with WidgetsBindingObserver {
   static final instance = ChatSyncCoordinator();
   ChatSyncService? current;
-  Timer? _timer;
+  bool _started = false;
+  bool _syncAfterCurrent = false;
+  late final _automatic = AutoSyncTrigger(sync: _syncAutomatically);
+
+  Future<void> _syncAutomatically() async {
+    final service = current;
+    if (service == null) return;
+    if (service.busy) {
+      _syncAfterCurrent = true;
+      return;
+    }
+    _syncAfterCurrent = false;
+    await service.sync();
+  }
+
+  void _serviceChanged() {
+    notifyListeners();
+    if (_syncAfterCurrent && current?.busy == false) _automatic.requestSync();
+  }
+
   String? _owner;
   void start() {
-    if (_timer != null) return;
+    if (_started) return;
+    _started = true;
     WidgetsBinding.instance.addObserver(this);
     AuthService.instance.addListener(_scopeChanged);
     _scopeChanged();
-    _timer = Timer.periodic(
-      const Duration(seconds: 15),
-      (_) => unawaited(current?.sync()),
-    );
+    _automatic.start();
+  }
+
+  void _localChanged() {
+    _syncAfterCurrent = true;
+    _automatic.requestSync();
   }
 
   void _scopeChanged() {
     final owner = AuthService.instance.session?.userId;
     final db = LocalDatabaseService.instance;
     if (_owner == owner && identical(current?.store.database, db)) return;
-    current?.removeListener(notifyListeners);
+    current?.store.database.syncRequested.removeListener(_localChanged);
+    current?.removeListener(_serviceChanged);
     current?.dispose();
     _owner = owner;
     current = ChatSyncService(
@@ -217,13 +244,19 @@ class ChatSyncCoordinator extends ChangeNotifier with WidgetsBindingObserver {
           ? null
           : SupabaseChatCloud(AuthService.instance, owner, database: db),
     );
-    current!.addListener(notifyListeners);
+    current!.addListener(_serviceChanged);
+    db.syncRequested.addListener(_localChanged);
     notifyListeners();
-    unawaited(current!.sync());
+    unawaited(
+      current!.refreshStatus().catchError((Object error) {
+        debugPrint('Local sync status: $error');
+      }),
+    );
+    _automatic.requestSync();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) unawaited(current?.sync());
+    if (state == AppLifecycleState.resumed) unawaited(_automatic.refresh());
   }
 }

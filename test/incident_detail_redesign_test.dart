@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rescuelink/models/peer_presence.dart';
+import 'package:rescuelink/models/message_model.dart';
 import 'package:rescuelink/models/sos_alert.dart';
 import 'package:rescuelink/screens/incident_detail_screen.dart';
 import 'package:rescuelink/widgets/bundled_offline_map.dart';
@@ -23,6 +24,78 @@ class IncidentMessages extends UiMessages {
 }
 
 void main() {
+  testWidgets(
+    'notification details retain the selected incident and update its status',
+    (tester) async {
+      final service = IncidentMessages();
+      final initial = SosAlert(
+        incidentId: 'selected',
+        revision: 1,
+        active: true,
+        name: 'ผู้แจ้งจากการแจ้งเตือน',
+        people: 3,
+        category: EmergencyType.medical,
+        details: 'ต้องการความช่วยเหลือ',
+        updatedAt: DateTime.now().toUtc(),
+      );
+      service.presence['peer'] = PeerPresence(
+        sequence: 1,
+        rescue: false,
+        receivedAt: DateTime.now(),
+        sos: SosAlert(
+          incidentId: 'different',
+          revision: 1,
+          active: true,
+          name: 'เหตุใหม่',
+          people: 9,
+          category: EmergencyType.fire,
+          details: 'อีกเหตุหนึ่ง',
+          updatedAt: DateTime.now().toUtc(),
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: IncidentDetailScreen(
+            service: service,
+            peerId: 'peer',
+            initialAlert: initial,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text(initial.name), findsOneWidget);
+      expect(find.text('3 คน'), findsOneWidget);
+      expect(find.text('เหตุใหม่'), findsNothing);
+      service.messages.add(
+        MessageModel(
+          id: 'cancel',
+          senderId: 'peer',
+          senderName: initial.name,
+          receiverId: 'me',
+          type: MessageType.sos,
+          timestamp: DateTime.now(),
+          text: SosAlert(
+            incidentId: initial.incidentId,
+            revision: 2,
+            active: false,
+            name: initial.name,
+            people: 3,
+            category: EmergencyType.medical,
+            details: 'ปลอดภัยแล้ว',
+            updatedAt: DateTime.now().toUtc(),
+          ).toJson(),
+        ),
+      );
+      service.notifyListeners();
+      await tester.pump();
+      expect(find.text('SOS ยกเลิกแล้ว'), findsOneWidget);
+      expect(find.text('เหตุใหม่'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      service.dispose();
+      service.nearbyService.dispose();
+    },
+  );
   for (final width in [320.0, 600.0]) {
     testWidgets('incident summary, sticky contact and live status at $width', (
       tester,
@@ -52,6 +125,7 @@ void main() {
           category: EmergencyType.other,
           categories: [EmergencyType.other, EmergencyType.supplies],
           details: 'ติดอยู่ชั้นสอง ต้องการน้ำดื่ม',
+          emergencyInfo: const {'allergies': 'แพ้ยาที่แจ้งไว้'},
           updatedAt: now,
           location: location,
         ),
@@ -66,6 +140,8 @@ void main() {
       expect(find.text('รายละเอียด SOS'), findsOneWidget);
       expect(find.text('สมชาย ใจดี'), findsOneWidget);
       expect(find.text('4 คน'), findsOneWidget);
+      expect(find.text('ข้อมูลฉุกเฉินที่แนบ'), findsOneWidget);
+      expect(find.textContaining('แพ้ยาที่แจ้งไว้'), findsOneWidget);
       expect(find.textContaining('อัปเดตเมื่อ'), findsOneWidget);
       expect(find.text('รายละเอียดทางเทคนิค'), findsNothing);
       expect(

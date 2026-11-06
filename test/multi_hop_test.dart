@@ -70,6 +70,9 @@ void main() {
     }
     // A knows C from previous pairing; remote directory discovery is not added.
     await dbs[0].savePeer(nodes[2].myId!, 'Phone C');
+    // The fixture writes after initialize(), so refresh its in-memory directory
+    // just as startup would when loading a previously paired peer.
+    nodes[0].peers = await dbs[0].getPeers();
     await link(0, 1);
     await link(1, 2);
   });
@@ -163,6 +166,43 @@ void main() {
       await link(0, 1);
       await receive(1, 0, raw);
       expect(relays(1), isEmpty);
+    },
+  );
+
+  test(
+    'A to B to C to D delivers once and ACK returns through both relays',
+    () async {
+      final database = LocalDatabaseService(
+        factory: databaseFactoryFfi,
+        path: '${dir.path}/3.db',
+      );
+      dbs.add(database);
+      wires.add(Wire());
+      nodes.add(MessageService(nearbyService: wires[3], database: database));
+      await nodes[3].initialize();
+      await link(2, 3);
+      await dbs[0].savePeer(nodes[3].myId!, 'Phone D');
+      nodes[0].peers = await dbs[0].getPeers();
+      await nodes[0].sendTextMessage(
+        receiverId: nodes[3].myId!,
+        text: 'ผ่านสองเครื่องกลาง',
+      );
+      await receive(1, 0, relays(0).single.$2);
+      await receive(2, 1, relays(1).single.$2);
+      final raw = relays(2).single.$2;
+      await receive(3, 2, raw);
+      await receive(3, 2, raw);
+      expect(nodes[3].messages, hasLength(1));
+      expect(nodes[3].messages.single.senderId, nodes[0].myId);
+      expect(nodes[1].messages, isEmpty);
+      expect(nodes[2].messages, isEmpty);
+      await receive(2, 3, acks(3).first.$2);
+      await receive(1, 2, acks(2).single.$2);
+      await receive(0, 1, acks(1).single.$2);
+      final route = nodes.map((node) => node.myId!).toList();
+      expect(nodes[0].messages.single.status, MessageStatus.delivered);
+      expect(nodes[0].receivedRoutes[nodes[0].messages.single.id], route);
+      expect(nodes[3].receivedRoutes[nodes[3].messages.single.id], route);
     },
   );
 

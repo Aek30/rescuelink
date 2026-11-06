@@ -4,6 +4,7 @@ import '../models/sos_alert.dart';
 import '../theme/rescue_theme.dart';
 import 'emergency_type_chip.dart';
 import 'incident_status_chip.dart';
+import 'sos_emergency_info_summary.dart';
 
 class SosStatusCard extends StatelessWidget {
   const SosStatusCard({
@@ -96,6 +97,7 @@ class SosStatusCard extends StatelessWidget {
                       style: const TextStyle(fontSize: 12),
                     ),
                     if (alert.details.isNotEmpty) Text(alert.details),
+                    SosEmergencyInfoSummary(info: alert.emergencyInfo),
                     Text(
                       alert.location == null
                           ? 'ไม่ได้แนบพิกัด'

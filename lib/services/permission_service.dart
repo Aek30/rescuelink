@@ -14,6 +14,7 @@ class PermissionService {
     'Wi-Fi': 'Not checked',
   };
   String? error;
+  bool _mapPermissionRequested = false;
 
   static bool statusIsReady(String status) => const {
     'Granted',
@@ -34,6 +35,13 @@ class PermissionService {
     if (sdk >= 33) Permission.nearbyWifiDevices,
   ];
 
+  // Request map location in the same flow, but do not make it a requirement
+  // for Nearby on Android 13+.
+  static List<Permission> requestedPermissions(int sdk) => [
+    ...requiredPermissions(sdk),
+    if (sdk >= 33) Permission.locationWhenInUse,
+  ];
+
   Future<bool> ensureReady() async {
     error = null;
     if (kIsWeb || !Platform.isAndroid) {
@@ -43,7 +51,12 @@ class PermissionService {
     try {
       final sdk = (await DeviceInfoPlugin().androidInfo).version.sdkInt;
       final required = requiredPermissions(sdk);
-      final results = await required.request();
+      final requested = requestedPermissions(sdk);
+      if (sdk >= 33 && _mapPermissionRequested) {
+        requested.remove(Permission.locationWhenInUse);
+      }
+      _mapPermissionRequested = true;
+      final results = await requested.request();
       bool granted(Permission p) => results[p]?.isGranted ?? false;
       final bluetooth =
           sdk < 31 ||

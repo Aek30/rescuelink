@@ -55,7 +55,12 @@ class _StartupScreenState extends State<_StartupScreen> {
   @override
   void initState() {
     super.initState();
-    _ready = AuthService.instance.initialize().then((_) async {
+    _ready = _initialize();
+  }
+
+  Future<void> _initialize() async {
+    await WidgetsBinding.instance.endOfFrame;
+    await AuthService.instance.initialize().then((_) async {
       await AppPreferences.instance.load().catchError((Object _) {});
       SosSyncCoordinator.instance.start();
       ChatSyncCoordinator.instance.start();
@@ -69,12 +74,13 @@ class _StartupScreenState extends State<_StartupScreen> {
     builder: (context, snapshot) {
       if (snapshot.connectionState == ConnectionState.done &&
           !snapshot.hasError) {
-        // Session restored → go to main screen. Otherwise → onboarding/login.
-        return AuthService.instance.signedIn
+        // Member session restored or Guest mode active → go to main screen. Otherwise → onboarding/login.
+        return (AuthService.instance.signedIn ||
+                AppPreferences.instance.guestMode)
             ? const NearbyTestScreen()
             : const OnboardingScreen();
       }
-      // Loading / error state — no Guest option.
+      // Loading / error state
       return Scaffold(
         body: SafeArea(
           child: Center(
@@ -103,7 +109,7 @@ class _StartupScreenState extends State<_StartupScreen> {
                     child: Text(
                       'กรุณาตรวจสอบอินเทอร์เน็ตหรือเปิดแอปใหม่อีกครั้ง\n'
                       'หากเคยเข้าสู่ระบบแล้ว ฟีเจอร์ Nearby และ SOS '
-                      'สามารถใช้งานได้โดยไม่ต้องออนไลน์',
+                      'สามารถใช้งานได้โดยไม่ต้องออนไลน์ หรือเลือกใช้งานแบบ Guest ได้ทันที',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 13,
@@ -116,12 +122,12 @@ class _StartupScreenState extends State<_StartupScreen> {
                   OutlinedButton.icon(
                     onPressed: () {
                       setState(() {
-                        _ready = AuthService.instance
-                            .initialize()
-                            .then((_) async {
-                          await AppPreferences.instance
-                              .load()
-                              .catchError((Object _) {});
+                        _ready = AuthService.instance.initialize().then((
+                          _,
+                        ) async {
+                          await AppPreferences.instance.load().catchError(
+                            (Object _) {},
+                          );
                           SosSyncCoordinator.instance.start();
                           ChatSyncCoordinator.instance.start();
                           MemberProfileSync.instance.start();
@@ -131,11 +137,26 @@ class _StartupScreenState extends State<_StartupScreen> {
                     icon: const Icon(Icons.refresh_rounded),
                     label: const Text('ลองใหม่'),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
+                  FilledButton.icon(
+                    onPressed: () async {
+                      await AuthService.instance.enterGuest();
+                      if (!context.mounted) return;
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const NearbyTestScreen(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.person_outline_rounded),
+                    label: const Text('ใช้งานโดยไม่เข้าสู่ระบบ'),
+                  ),
+                  const SizedBox(height: 6),
                   TextButton(
                     onPressed: () => Navigator.of(context).pushReplacement(
                       MaterialPageRoute<void>(
-                          builder: (_) => const LoginScreen()),
+                        builder: (_) => const LoginScreen(),
+                      ),
                     ),
                     child: const Text('ไปหน้าเข้าสู่ระบบ'),
                   ),

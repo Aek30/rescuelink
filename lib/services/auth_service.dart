@@ -39,6 +39,10 @@ abstract interface class AuthBackend {
   });
 }
 
+abstract interface class RegistrationEmailChecker {
+  Future<bool?> emailRegistered(String email);
+}
+
 abstract interface class SessionVault {
   Future<String?> read();
   Future<void> write(String value);
@@ -76,7 +80,7 @@ class SecurePkceStorage extends GotrueAsyncStorage {
       _storage.delete(key: _key(key));
 }
 
-class SupabaseAuthBackend implements AuthBackend {
+class SupabaseAuthBackend implements AuthBackend, RegistrationEmailChecker {
   SupabaseAuthBackend(
     this.url,
     this.key, {
@@ -101,6 +105,27 @@ class SupabaseAuthBackend implements AuthBackend {
   );
   AccountSession _convert(Session s) =>
       AccountSession(s.user.id, s.user.email ?? '', jsonEncode(s.toJson()));
+
+  @override
+  Future<bool?> emailRegistered(String email) async {
+    final client = _newClient();
+    try {
+      final result = await client.rpc(
+        'registration_email_exists',
+        params: {'p_email': email.trim().toLowerCase()},
+      );
+      if (result is! bool) throw const FormatException('Invalid email check');
+      return result;
+    } on PostgrestException catch (e) {
+      // Older deployments keep the existing signup flow until this optional
+      // endpoint is installed. Never pretend an unknown address is available.
+      if (e.code == 'PGRST202') return null;
+      rethrow;
+    } finally {
+      await client.dispose();
+    }
+  }
+
   @override
   Future<AccountSession?> authenticate(
     String email,
@@ -135,6 +160,12 @@ class SupabaseAuthBackend implements AuthBackend {
             password: password,
           );
     final user = response.user;
+    if (register && user?.identities?.isEmpty == true) {
+      throw const AuthException(
+        'User already registered',
+        code: 'user_already_exists',
+      );
+    }
     // Duplicate signup can return an obfuscated user. Never replace old data.
     if (register &&
         profile != null &&
@@ -318,9 +349,20 @@ class AuthService extends ChangeNotifier {
   bool busy = false;
   String? error;
   String? notice;
+  Future<void> Function()? beforeScopeChange;
   Future<void>? _initializing;
   bool get configured => backend != null;
+  bool get canCheckRegistrationEmail => backend is RegistrationEmailChecker;
+  Future<bool?> emailRegistered(String email) async {
+    final checker = backend;
+    if (checker is! RegistrationEmailChecker) return null;
+    return await (checker as RegistrationEmailChecker)
+        .emailRegistered(email)
+        .timeout(const Duration(seconds: 15));
+  }
+
   bool get signedIn => session != null;
+  bool get isGuest => !signedIn;
 
   Future<SupabaseClient>? _cloudAccess;
   bool _signingOut = false;
@@ -475,6 +517,7 @@ class AuthService extends ChangeNotifier {
       } else {
         await vault.clear();
       }
+      await beforeScopeChange?.call();
       final handle = await storage.select(result.userId, claimGuest: false);
       LocalDatabaseService.instance = handle;
       session = result;
@@ -555,11 +598,13 @@ class AuthService extends ChangeNotifier {
       try {
         await _cloudAccess;
       } catch (_) {}
+      await beforeScopeChange?.call();
       await vault
           .clear(); // Fail closed if persisted credentials cannot be removed.
       final guest = await storage.select(null);
       session = null;
       LocalDatabaseService.instance = guest;
+      await guest.setSetting('guestMode', 'false');
       AppPreferences.instance.reset();
       await AppPreferences.instance.load().catchError((Object _) {});
       error = null;
@@ -572,6 +617,29 @@ class AuthService extends ChangeNotifier {
                 .catchError((Object _) {}) ??
             Future<void>.value(),
       );
+    } finally {
+      _signingOut = false;
+    }
+  }
+
+  Future<void> enterGuest() async {
+    if (busy) return;
+    _signingOut = true;
+    try {
+      try {
+        await _cloudAccess;
+      } catch (_) {}
+      await beforeScopeChange?.call();
+      await vault.clear();
+      final guest = await storage.select(null);
+      session = null;
+      LocalDatabaseService.instance = guest;
+      await guest.setSetting('guestMode', 'true');
+      AppPreferences.instance.reset();
+      await AppPreferences.instance.load().catchError((Object _) {});
+      error = null;
+      notice = null;
+      notifyListeners();
     } finally {
       _signingOut = false;
     }

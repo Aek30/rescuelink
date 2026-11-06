@@ -19,6 +19,7 @@ class LocalDatabaseService {
   // Never mutate a handle while callbacks from a previous account can finish.
   static LocalDatabaseService instance = LocalDatabaseService();
   final cloudReceiptsChanged = ValueNotifier<int>(0);
+  final syncRequested = ValueNotifier<int>(0);
   final DatabaseFactory _factory;
   final String? path;
   final bool blocked;
@@ -534,6 +535,7 @@ class LocalDatabaseService {
         await txn.insert('messages', packet.toMap());
       }
     });
+    syncRequested.value++;
   }
 
   Future<Map<String, String>> getPeers() async => {
@@ -545,7 +547,7 @@ class LocalDatabaseService {
   };
   Future<bool> insertMessage(MessageModel message) async {
     final db = await database;
-    return db.transaction((txn) async {
+    final inserted = await db.transaction((txn) async {
       final existing = await txn.query(
         'messages',
         columns: ['id'],
@@ -575,6 +577,8 @@ class LocalDatabaseService {
       await ChatStore.capture(txn, saved);
       return existing.isEmpty;
     });
+    if (inserted) syncRequested.value++;
+    return inserted;
   }
 
   // Conditional updates prevent a fast ACK being overwritten by SENT.
@@ -596,6 +600,24 @@ class LocalDatabaseService {
   Future<List<MessageModel>> getMessages() async =>
       (await (await database).query(
         'messages',
+        orderBy: 'rowid ASC',
+      )).map(MessageModel.fromMap).toList();
+
+  Future<MessageModel?> getMessage(String id) async {
+    final rows = await (await database).query(
+      'messages',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : MessageModel.fromMap(rows.first);
+  }
+
+  Future<List<MessageModel>> getOutgoingMessages(String senderId) async =>
+      (await (await database).query(
+        'messages',
+        where: 'senderId = ? AND (type = ? OR (type = ? AND status IN (?, ?)))',
+        whereArgs: [senderId, 'sos', 'message', 'pending', 'sent'],
         orderBy: 'rowid ASC',
       )).map(MessageModel.fromMap).toList();
 
@@ -655,7 +677,7 @@ class LocalDatabaseService {
   // ─── Media CRUD ───────────────────────────────────────────────────────────
 
   Future<bool> saveMediaMessage(MediaFile media, MessageModel message) async {
-    return (await database).transaction((txn) async {
+    final inserted = await (await database).transaction((txn) async {
       final rows = await txn.query(
         'messages',
         where: 'id = ?',
@@ -688,6 +710,8 @@ class LocalDatabaseService {
       await ChatStore.capture(txn, message);
       return true;
     });
+    if (inserted) syncRequested.value++;
+    return inserted;
   }
 
   /// แทรก MediaFile ใหม่ — ถ้า mediaId ซ้ำให้ข้ามเพื่อป้องกัน duplicate
