@@ -1045,9 +1045,17 @@ class MessageService extends ChangeNotifier {
       }
 
       final devices = nearbyService.connectedDevices.toList();
-      for (var offset = 0; offset < devices.length; offset += 2) {
-        await Future.wait(devices.skip(offset).take(2).map(sendToDevice));
+      // Keep two radio operations active without making every later peer wait
+      // for the slower member of a fixed pair.
+      var nextDevice = 0;
+      Future<void> sendAvailable() async {
+        while (!_disposed && nextDevice < devices.length) {
+          final device = devices[nextDevice++];
+          await sendToDevice(device);
+        }
       }
+
+      await Future.wait([sendAvailable(), sendAvailable()]);
       error = retryError;
       if (messagesChanged) {
         await _refresh();

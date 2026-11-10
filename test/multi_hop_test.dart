@@ -123,6 +123,73 @@ void main() {
   }
 
   test(
+    'six-node cyclic mesh delivers a burst once and drains ACK traffic',
+    () async {
+      for (var i = 3; i < 6; i++) {
+        final db = LocalDatabaseService(
+          factory: databaseFactoryFfi,
+          path: '${dir.path}/$i.db',
+        );
+        dbs.add(db);
+        wires.add(Wire());
+        nodes.add(MessageService(nearbyService: wires[i], database: db));
+        await nodes[i].initialize();
+        await link(i - 1, i);
+      }
+      // Two cycles provide duplicate paths without a direct source/destination link.
+      await link(0, 2);
+      await link(2, 4);
+      await dbs[0].savePeer(nodes[5].myId!, 'Phone F');
+      nodes[0].peers = await dbs[0].getPeers();
+      final sourceLinks = wires[0].devices.toList();
+      wires[0].devices.clear();
+      for (var i = 0; i < 20; i++) {
+        await nodes[0].sendTextMessage(
+          receiverId: nodes[5].myId!,
+          text: 'burst-$i',
+        );
+      }
+      wires[0].devices.addAll(sourceLinks);
+      await nodes[0].retry();
+      var deliveries = 0;
+      for (var round = 0; round < 30; round++) {
+        final batch = <(int, int, String)>[];
+        for (var from = 0; from < wires.length; from++) {
+          for (final (to, raw) in wires[from].sent) {
+            final data = jsonDecode(raw) as Map;
+            if (data['type'] == 'message' || data['type'] == 'ack') {
+              batch.add((int.parse(to), from, raw));
+            }
+          }
+          wires[from].sent.clear();
+        }
+        if (batch.isEmpty) break;
+        deliveries += batch.length;
+        expect(
+          deliveries,
+          lessThan(5000),
+          reason: 'Relay loops must remain bounded',
+        );
+        for (final (to, from, raw) in batch) {
+          await receive(to, from, raw);
+        }
+      }
+      expect(nodes[5].messages, hasLength(20));
+      expect(nodes[5].messages.map((m) => m.text).toSet(), hasLength(20));
+      expect(nodes[0].messages, hasLength(20));
+      expect(
+        nodes[0].messages.every((m) => m.status == MessageStatus.delivered),
+        isTrue,
+      );
+      for (var i = 1; i < 5; i++) {
+        expect(nodes[i].messages, isEmpty);
+      }
+      expect(wires.every((w) => w.sent.isEmpty), isTrue);
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  test(
     'A to B to C and ACK preserve origin; duplicates and restart do not add chat rows',
     () async {
       final raw = await send();

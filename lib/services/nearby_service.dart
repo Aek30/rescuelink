@@ -22,6 +22,7 @@ class NearbyService extends ChangeNotifier {
   static const serviceId = 'com.rmutt.rescuelink';
   static const strategy = Strategy.P2P_CLUSTER;
   static const connectionTimeout = Duration(seconds: 12);
+  static const payloadSendTimeout = Duration(seconds: 5);
   static const callerFallbackDelay = Duration(seconds: 16);
   static const discoveryRefreshInterval = Duration(seconds: 12);
   final String _callerId = const Uuid().v4();
@@ -770,7 +771,11 @@ class NearbyService extends ChangeNotifier {
     }
     final bytes = Uint8List.fromList(utf8.encode(payload));
     if (bytes.length > 32768) throw ArgumentError('Packet exceeds 32 KB');
-    await _nearby.sendBytesPayload(endpointId, bytes);
+    // Bound native enqueue time, not radio delivery time. A late native send
+    // may still arrive; durable IDs and destination ACKs make retry safe.
+    await _nearby
+        .sendBytesPayload(endpointId, bytes)
+        .timeout(payloadSendTimeout);
   }
 
   /// ส่งไฟล์โดยตรง — คืน payloadId สำหรับติดตาม progress

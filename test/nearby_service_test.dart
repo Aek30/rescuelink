@@ -41,6 +41,7 @@ class TestNearby extends Fake implements Nearby {
   bool requestOk = true;
   bool acceptOk = true;
   bool sendFails = false;
+  Completer<void>? pendingSend;
   bool stopFails = false;
   int advertiseCalls = 0;
   int discoveryCalls = 0;
@@ -125,6 +126,7 @@ class TestNearby extends Fake implements Nearby {
   Future<void> sendBytesPayload(String id, Uint8List bytes) async {
     if (sendFails) throw StateError('Radio lost');
     sent = bytes;
+    await pendingSend?.future;
   }
 
   @override
@@ -179,6 +181,22 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     native.result('A', Status.CONNECTED);
   }
+
+  test(
+    'stalled native enqueue times out and the next send can recover',
+    () async {
+      await connect();
+      final blocked = native.pendingSend = Completer<void>();
+      await expectLater(
+        service.sendMessage('A', 'first'),
+        throwsA(isA<TimeoutException>()),
+      );
+      native.pendingSend = null;
+      await service.sendMessage('A', 'second');
+      expect(utf8.decode(native.sent!), 'second');
+      blocked.complete();
+    },
+  );
 
   test(
     'active background session retains payload delivery when paused and STOP releases it',

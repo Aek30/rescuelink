@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/message_service.dart';
+import '../theme/rescue_theme.dart';
 
 class IncidentStatusChip extends StatelessWidget {
   const IncidentStatusChip({
@@ -58,6 +59,7 @@ class PeerConnectionChip extends StatelessWidget {
         ? (dark ? const Color(0xFF8CDAC1) : const Color(0xFF166447))
         : (dark ? const Color(0xFFBCC7D1) : const Color(0xFF536572));
     final via = reachable ? service.relayViaName(peerId) : null;
+    final compactColor = via == null ? color : RescueTheme.accentFor(context);
     final path = via == null ? null : service.relayPathForPeer(peerId);
     final relayCount = path == null ? 1 : path.length - 2;
     final label = !reachable
@@ -75,7 +77,7 @@ class PeerConnectionChip extends StatelessWidget {
                   width: 7,
                   height: 7,
                   decoration: BoxDecoration(
-                    color: color,
+                    color: compactColor,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -86,7 +88,7 @@ class PeerConnectionChip extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: color,
+                      color: compactColor,
                       height: 1.4,
                     ),
                   ),

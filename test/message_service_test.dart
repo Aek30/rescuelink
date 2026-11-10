@@ -739,6 +739,56 @@ void main() {
     );
   });
   test(
+    'a slow first peer does not block later peers behind a fixed batch',
+    () async {
+      await connect();
+      for (var i = 1; i < 8; i++) {
+        transport.devices.add(
+          NearbyDevice(endpointId: 'endpoint-$i', name: 'Phone $i')
+            ..isConnected = true,
+        );
+        await service.handleIncomingPayload(
+          endpointId: 'endpoint-$i',
+          rawPayload: packet(
+            MessageType.deviceInfo,
+            sender: 'peer-$i',
+          ).toJson(),
+        );
+      }
+      final release = Completer<void>();
+      final started = Completer<void>();
+      final lastReached = Completer<void>();
+      var active = 0;
+      var peak = 0;
+      transport.onSend = (p) async {
+        active++;
+        if (active > peak) peak = active;
+        try {
+          if (p.receiverId == 'peer') {
+            if (!started.isCompleted) started.complete();
+            await release.future;
+          }
+          if (p.receiverId == 'peer-7' && !lastReached.isCompleted) {
+            lastReached.complete();
+          }
+        } finally {
+          active--;
+        }
+      };
+      final retry = service.retry();
+      try {
+        await started.future.timeout(const Duration(seconds: 2));
+        await lastReached.future.timeout(const Duration(seconds: 2));
+        expect(release.isCompleted, isFalse);
+        expect(peak, lessThanOrEqualTo(2));
+      } finally {
+        release.complete();
+        await retry;
+        transport.onSend = null;
+      }
+    },
+  );
+  test(
     'reconnect with a new endpoint routes old pending messages to the same peer',
     () async {
       await connect();
