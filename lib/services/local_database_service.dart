@@ -621,12 +621,38 @@ class LocalDatabaseService {
         orderBy: 'rowid ASC',
       )).map(MessageModel.fromMap).toList();
 
+  Future<void> hideHistory(Iterable<String> ids, {bool hidden = true}) async {
+    final batch = (await database).batch();
+    for (final id in ids) {
+      batch.insert('settings', {
+        'key': 'hiddenChatMessage:$id',
+        'value': hidden ? '1' : '0',
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  Future<Set<String>> hiddenMessageIds() async {
+    const prefix = 'hiddenChatMessage:';
+    final rows = await (await database).query(
+      'settings',
+      columns: ['key'],
+      where: "key GLOB ? AND value = '1'",
+      whereArgs: ['$prefix*'],
+    );
+    return {
+      for (final row in rows) (row['key'] as String).substring(prefix.length),
+    };
+  }
+
   Future<Map<String, int>> getUnreadCounts(String myId) async => {
     for (final row in await (await database).rawQuery(
       '''
       SELECT m.senderId AS peer, COUNT(*) AS total FROM messages m
       WHERE m.receiverId = ? AND m.senderId != ?
         AND m.type IN ('message', 'media', 'sos')
+        AND NOT EXISTS (SELECT 1 FROM chat_records c WHERE c.id = m.id AND c.deleted = 1)
+        AND NOT EXISTS (SELECT 1 FROM settings h WHERE h.key = 'hiddenChatMessage:' || m.id)
         AND m.rowid > COALESCE((SELECT CAST(value AS INTEGER) FROM settings
           WHERE key = 'chatRead:' || m.senderId), 0)
       GROUP BY m.senderId''',

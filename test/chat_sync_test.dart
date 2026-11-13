@@ -76,6 +76,20 @@ void main() {
     await dir.delete(recursive: true);
   });
 
+  test('hidden and deleted history leave new messages visible and unread', () async {
+    await db.insertMessage(message('old'));
+    await db.hideHistory(['old']);
+    await db.insertMessage(message('new'));
+    expect(await db.hiddenMessageIds(), {'old'});
+    expect(await db.getUnreadCounts('receiver'), {'sender': 1});
+    await store.deleteHistory(['old']);
+    await sync.sync();
+    expect(cloud.records['old']?['deleted'], true);
+    expect(cloud.records['new']?['deleted'], false);
+    await store.deleteHistory(['new']);
+    expect(await db.getUnreadCounts('receiver'), isEmpty);
+  });
+
   test(
     'failed sync remains visible during retries and clears only on success',
     () async {

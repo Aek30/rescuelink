@@ -1,3 +1,4 @@
+import 'chat_store.dart';
 import 'cloud_sync_receipts.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -76,6 +77,33 @@ class MessageService extends ChangeNotifier {
           MessageType.sos => 'คำขอ SOS',
           _ => ResponderUpdate.readableText(latest.text),
         };
+  }
+
+  Set<String> hiddenMessageIds = {};
+
+  Future<void> manageConversation(
+    String peer, {
+    required bool delete,
+    bool unhide = false,
+  }) async {
+    final ids = messages
+        .where(
+          (m) =>
+              (m.type == MessageType.message ||
+                  m.type == MessageType.sos ||
+                  m.type == MessageType.media) &&
+              ((m.senderId == myId && m.receiverId == peer) ||
+                  (m.receiverId == myId && m.senderId == peer)),
+        )
+        .map((m) => m.id)
+        .toList();
+    if (delete) {
+      await ChatStore(database).deleteHistory(ids);
+    } else {
+      await database.hideHistory(ids, hidden: !unhide);
+    }
+    await _refresh();
+    if ((unreadCounts[peer] ?? 0) == 0) onNoticeCancelled?.call('chat:$peer');
   }
 
   Future<void> markConversationRead(String peerId, String messageId) async {
@@ -489,8 +517,7 @@ class MessageService extends ChangeNotifier {
               id: media.messageId,
               peerId: media.senderId,
               name: media.senderName,
-              body:
-                  'ส่ง${media.isImage ? 'รูปภาพ' : 'วิดีโอ'}: ${media.fileName}',
+              body: media.isImage ? 'ส่งรูป' : 'ส่งวิดีโอ',
             ),
           );
         };
@@ -657,6 +684,7 @@ class MessageService extends ChangeNotifier {
     final localMessages = await database.getMessages();
     final localPeers = await database.getPeers();
     final merged = await _mergeCloudHistory(localMessages, localPeers);
+    hiddenMessageIds = await database.hiddenMessageIds();
     messages = merged.messages;
     cloudSyncedMessageIds = {
       ...await CloudSyncReceipts.messageIds(

@@ -159,6 +159,31 @@ class ChatStore {
   Future<List<Map<String, Object?>>> queue() async =>
       (await database.database).query('chat_queue', orderBy: 'seq');
 
+  Future<void> deleteHistory(Iterable<String> ids) async {
+    await (await database.database).transaction((txn) async {
+      for (final id in ids) {
+        final row = (await txn.query(
+          'chat_records',
+          where: 'id = ?',
+          whereArgs: [id],
+        )).single;
+        if (row['conflict'] != null) {
+          throw StateError('Unresolved chat conflict');
+        }
+        if (row['deleted'] == 1) continue;
+        await _save(
+          txn,
+          id,
+          row['payload'] as String,
+          row['version'] as int,
+          true,
+        );
+      }
+    });
+    database.cloudReceiptsChanged.value++;
+    database.syncRequested.value++;
+  }
+
   Future<void> edit(String id, {String? text, bool delete = false}) async {
     if (!delete &&
         (text == null ||

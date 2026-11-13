@@ -8,6 +8,8 @@ import '../services/app_preferences.dart';
 import '../services/chat_sync_service.dart';
 import 'chat_screen.dart';
 
+enum _ChatFilter { all, unread, hidden }
+
 class MessagesScreen extends StatefulWidget {
   const MessagesScreen({
     super.key,
@@ -22,7 +24,143 @@ class MessagesScreen extends StatefulWidget {
 
 class _MessagesScreenState extends State<MessagesScreen> {
   String query = '';
-  bool unreadOnly = false;
+  var filter = _ChatFilter.all;
+
+  Future<void> _manage(String id, String name) async {
+    final t = AppPreferences.instance.t;
+    final hidden = filter == _ChatFilter.hidden;
+    final delete = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (sheet) {
+        final colors = Theme.of(sheet).colorScheme;
+        return SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    name,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(sheet).textTheme.titleLarge,
+                  ),
+                ),
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: colors.secondaryContainer,
+                    child: Icon(
+                      hidden
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      color: colors.onSecondaryContainer,
+                    ),
+                  ),
+                  title: Text(
+                    hidden
+                        ? t('เลิกซ่อนแชท', 'Unhide chat')
+                        : t('ซ่อนแชท', 'Hide chat'),
+                  ),
+                  subtitle: Text(
+                    hidden
+                        ? t('ย้ายกลับไปที่ทั้งหมด', 'Move back to All')
+                        : t(
+                            'ซ่อนบนเครื่องนี้จนกว่าจะมีข้อความใหม่',
+                            'Hide on this device until the next message',
+                          ),
+                  ),
+                  onTap: () => Navigator.pop(sheet, false),
+                ),
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: colors.errorContainer,
+                    child: Icon(
+                      Icons.delete_outline_rounded,
+                      color: colors.onErrorContainer,
+                    ),
+                  ),
+                  title: Text(
+                    t('ลบประวัติแชทของฉัน', 'Delete my chat history'),
+                    style: TextStyle(color: colors.error),
+                  ),
+                  subtitle: Text(
+                    t(
+                      'อีกฝ่ายยังเห็นประวัติของเขา',
+                      'The other person keeps their copy',
+                    ),
+                  ),
+                  onTap: () => Navigator.pop(sheet, true),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (!mounted || delete == null) return;
+    if (delete) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialog) {
+          final colors = Theme.of(dialog).colorScheme;
+          return AlertDialog(
+            icon: Icon(Icons.delete_outline_rounded, color: colors.error),
+            title: Text(
+              t('ลบประวัติแชทกับ $name?', 'Delete chat history with $name?'),
+            ),
+            content: Text(
+              t(
+                'ข้อความ รูป พิกัด และ SOS ในห้องนี้จะหายจากประวัติของคุณ รวมถึงเครื่องอื่นเมื่อซิงก์บัญชีแล้ว การลบนี้ย้อนกลับไม่ได้',
+                'Messages, media, locations and SOS entries will disappear from your history and other devices after account sync. This cannot be undone.',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialog),
+                child: Text(t('ยกเลิก', 'Cancel')),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: colors.error,
+                  foregroundColor: colors.onError,
+                ),
+                onPressed: () => Navigator.pop(dialog, true),
+                child: Text(t('ลบประวัติ', 'Delete history')),
+              ),
+            ],
+          );
+        },
+      );
+      if (!mounted || confirmed != true) return;
+    }
+    String result;
+    try {
+      await widget.service.manageConversation(
+        id,
+        delete: delete,
+        unhide: hidden && !delete,
+      );
+      result = delete
+          ? t('ลบประวัติแชทแล้ว', 'Chat history deleted')
+          : hidden
+          ? t('ย้ายกลับไปที่ทั้งหมดแล้ว', 'Moved back to All')
+          : t('ซ่อนแชทแล้ว', 'Chat hidden');
+    } catch (_) {
+      result = t(
+        'จัดการแชทไม่สำเร็จ กรุณาตรวจสถานะการซิงก์แล้วลองอีกครั้ง',
+        'Could not update this chat. Check sync status and try again.',
+      );
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result)));
+    }
+  }
 
   String _formatTime(DateTime dateTime) {
     final local = dateTime.toLocal();
@@ -88,6 +226,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
       final isDark = Theme.of(context).brightness == Brightness.dark;
 
       final latest = <String, MessageModel>{};
+      final visiblePeers = <String>{};
       final waiting = <String>{};
       final sosPeers = <String>{};
 
@@ -101,6 +240,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
         }
         if (m.senderId != s.myId && m.receiverId != s.myId) continue;
         final peer = m.senderId == s.myId ? m.receiverId : m.senderId;
+        if (!s.hiddenMessageIds.contains(m.id)) visiblePeers.add(peer);
         if (m.type == MessageType.sos) sosPeers.add(peer);
         if (latest[peer] == null ||
             m.displayTime.isAfter(latest[peer]!.displayTime)) {
@@ -122,7 +262,13 @@ class _MessagesScreenState extends State<MessagesScreen> {
               .where(
                 (id) =>
                     name(id).toLowerCase().contains(query.toLowerCase()) &&
-                    (!unreadOnly || (s.unreadCounts[id] ?? 0) > 0),
+                    switch (filter) {
+                      _ChatFilter.hidden => !visiblePeers.contains(id),
+                      _ChatFilter.unread =>
+                        visiblePeers.contains(id) &&
+                            (s.unreadCounts[id] ?? 0) > 0,
+                      _ChatFilter.all => visiblePeers.contains(id),
+                    },
               )
               .toList()
             ..sort(
@@ -194,37 +340,37 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      children: [
-                        ChoiceChip(
-                          label: Text(t("ทั้งหมด")),
-                          labelStyle: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: !unreadOnly
-                                ? RescueTheme.orangeInk
-                                : isDark
-                                ? RescueTheme.darkTextMuted
-                                : RescueTheme.navy,
-                          ),
-                          selected: !unreadOnly,
-                          onSelected: (_) => setState(() => unreadOnly = false),
-                        ),
-                        ChoiceChip(
-                          label: Text(t("ยังไม่อ่าน")),
-                          labelStyle: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: unreadOnly
-                                ? RescueTheme.orangeInk
-                                : isDark
-                                ? RescueTheme.darkTextMuted
-                                : RescueTheme.navy,
-                          ),
-                          selected: unreadOnly,
-                          onSelected: (_) => setState(() => unreadOnly = true),
-                        ),
-                      ],
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (final tab in _ChatFilter.values)
+                            Padding(
+                              padding: const EdgeInsetsDirectional.only(end: 8),
+                              child: ChoiceChip(
+                                label: Text(switch (tab) {
+                                  _ChatFilter.all => t('ทั้งหมด'),
+                                  _ChatFilter.unread => t('ยังไม่อ่าน'),
+                                  _ChatFilter.hidden =>
+                                    AppPreferences.instance.t(
+                                      'ซ่อนแล้ว',
+                                      'Hidden',
+                                    ),
+                                }),
+                                labelStyle: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: filter == tab
+                                      ? RescueTheme.orangeInk
+                                      : isDark
+                                      ? RescueTheme.darkTextMuted
+                                      : RescueTheme.navy,
+                                ),
+                                selected: filter == tab,
+                                onSelected: (_) => setState(() => filter = tab),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -264,7 +410,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 ),
               ),
             Expanded(
-              child: s.ready && latest.isEmpty && showRestoreProgress
+              child:
+                  s.ready &&
+                      visiblePeers.isEmpty &&
+                      filter == _ChatFilter.all &&
+                      showRestoreProgress
                   ? const Center(
                       child: Padding(
                         padding: EdgeInsets.all(24),
@@ -274,7 +424,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         ),
                       ),
                     )
-                  : s.ready && latest.isEmpty
+                  : s.ready && visiblePeers.isEmpty && filter == _ChatFilter.all
                   ? Center(
                       child: SingleChildScrollView(
                         padding: const EdgeInsets.all(24),
@@ -365,7 +515,12 @@ class _MessagesScreenState extends State<MessagesScreen> {
                               ),
                               const SizedBox(height: 16),
                               Text(
-                                t("ไม่พบการสนทนา"),
+                                filter == _ChatFilter.hidden && query.isEmpty
+                                    ? AppPreferences.instance.t(
+                                        "ยังไม่มีแชทที่ซ่อน",
+                                        "No hidden chats",
+                                      )
+                                    : t("ไม่พบการสนทนา"),
                                 style: TextStyle(
                                   color: isDark
                                       ? RescueTheme.darkTextMuted
@@ -380,10 +535,12 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   : ListView.separated(
                       padding: const EdgeInsets.only(top: 4, bottom: 20),
                       itemCount: ids.length,
-                      separatorBuilder: (context, index) => Divider(
+                      separatorBuilder: (context, index) => Container(
                         height: 1,
-                        indent: 80,
-                        endIndent: 16,
+                        margin: const EdgeInsetsDirectional.only(
+                          start: 80,
+                          end: 16,
+                        ),
                         color: cardBorderColor,
                       ),
                       itemBuilder: (context, index) {
@@ -434,6 +591,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         return Material(
                           color: cardBg,
                           child: InkWell(
+                            onLongPress: () => _manage(id, name(id)),
                             onTap: () => Navigator.push(
                               context,
                               MaterialPageRoute<void>(
